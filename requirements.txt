@@ -1,0 +1,3 @@
+# Core has no runtime dependencies (standard library only).
+# Development dependencies:
+pytest>=8.0

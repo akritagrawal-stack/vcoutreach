@@ -1,0 +1,25 @@
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+.DS_Store
+
+# vcoutreach local working files.
+contacts*.csv
+# Keep the shipped example (repo root and the packaged copy). Must come after the rule above.
+!/contacts.sample.csv
+!vcoutreach/data/examples/contacts.sample.csv
+drafts/
+.vcoutreach/
+token.json
+client_secret*.json
+*.eml
+dist/
+build/
+*.egg-info/

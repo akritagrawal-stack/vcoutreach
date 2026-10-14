@@ -1,0 +1,6 @@
+id,name,email,org,role,facts,source_urls,lane,thread_subject,in_reply_to,references
+ines-marlowe,Ines Marlowe,ines.marlowe@example.com,Fernwick Studio,Operations Lead,your 2024 write-up on how Fernwick Studio retired three overlapping client spreadsheets | Fernwick Studio runs a small client services team that works in weekly cycles,https://example.com/fernwick/client-spreadsheets | https://example.com/fernwick/about,first_touch,,,
+tobias-wren,Tobias Wren,tobias.wren@example.org,Alderbank Press,Managing Editor,the interview where you described how Alderbank Press tracks every author conversation in one shared log,https://example.org/alderbank/interview,first_touch,,,
+priya-ostrander,Priya Ostrander,priya.ostrander@example.com,Tidewell Cooperative,Program Director,your talk at the 2025 community operations meetup on keeping volunteer lists current,https://example.com/tidewell/meetup-talk,first_touch,,,
+odalys-brandt,Odalys Brandt,odalys.brandt@example.org,Quillfeather Labs,Head of Partnerships,your newsletter issue on how Quillfeather Labs handles partner introductions,https://example.org/quillfeather/newsletter,follow_up,a note for Odalys,<sample-thread-001@example.com>,
+rhea-castellane,Rhea Castellane,rhea.castellane@example.org,Harbor Lantern Co,Founder,,,first_touch,,,

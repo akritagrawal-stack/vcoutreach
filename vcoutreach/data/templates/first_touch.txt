@@ -1,0 +1,9 @@
+Hi {first_name},
+
+{hook}
+
+{product_line} {traction_line}
+
+{ask_line}
+
+{signature}

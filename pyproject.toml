@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vcoutreach"
+dynamic = ["version"]
+description = "Turn a CSV of contacts and a sender profile into personalized, lint-clean email drafts."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+dependencies = []
+
+[project.optional-dependencies]
+gmail = [
+    "google-auth-oauthlib",
+    "google-api-python-client",
+]
+dev = [
+    "pytest>=8.0",
+]
+
+[project.scripts]
+vcoutreach = "vcoutreach.cli:main"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.dynamic]
+version = { attr = "vcoutreach.__version__" }
+
+[tool.setuptools.packages.find]
+include = ["vcoutreach*"]
+
+[tool.setuptools.package-data]
+vcoutreach = [
+    "data/templates/*.txt",
+    "data/examples/*",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "live: opt-in smoke test that talks to a real provider (needs PUBLIK_LIVE_SMOKE=1 and PUBLIK_API_KEY)",
+    "local_http: test that may talk to 127.0.0.1 only (fake gateway in a thread)",
+]

@@ -1,0 +1,21 @@
+{
+  "name": "Sam Rivera",
+  "title": "Founder",
+  "org": "Lumenlist",
+  "website": "https://example.com/lumenlist",
+  "signature": "Sam Rivera\nFounder, Lumenlist\nhttps://example.com/lumenlist",
+  "product_lines": [
+    "Lumenlist is a small tool that keeps a team's contact list in one place and warns you before the same person is contacted twice."
+  ],
+  "traction_lines": [
+    "About 40 small teams use it each week."
+  ],
+  "ask_line": "If it would help, I can send a short walkthrough, or you can pick a time at https://example.com/lumenlist/call.",
+  "approved_claims": {
+    "weekly_teams": "40 small teams use Lumenlist each week"
+  },
+  "forbidden_phrases": [
+    "game changer",
+    "revolutionary"
+  ]
+}

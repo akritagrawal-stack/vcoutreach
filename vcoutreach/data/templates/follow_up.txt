@@ -1,0 +1,9 @@
+Hi {first_name},
+
+Following up in case you missed my previous email. {hook}
+
+{product_line} {traction_line}
+
+{ask_line}
+
+{signature}
