@@ -339,7 +339,7 @@ def test_readme_first_step_checks_the_python_version_and_upgrades_pip(root):
 
 def test_readme_clones_into_an_explicit_folder(root):
     text = readme_text(root)
-    assert re.search(r"git clone \S+ vcoutreach\b", text), "git clone <repo-url> vcoutreach"
+    assert re.search(r"git clone \S+ vcoutreach\b", text), "git clone <url> vcoutreach"
     assert "cd vcoutreach" in text
     assert text.index("git clone") < text.index("python3 -m venv")
 
@@ -406,8 +406,13 @@ def test_readme_quickstart_ends_by_showing_the_first_sample_draft(root):
 
 # ----- README, round 2 of the first-user review (SPEC 20.11) ---------------------------------------------------------
 
-def test_readme_keeps_the_repo_url_placeholder(root):
-    assert "<repo-url>" in readme_text(root)
+CLONE_URL = "https://github.com/akritagrawal-stack/vcoutreach.git"
+
+
+def test_readme_quickstart_clones_the_real_repository_url_and_has_no_placeholder(root):
+    text = readme_text(root)
+    assert f"git clone {CLONE_URL} vcoutreach" in text
+    assert "<repo-url>" not in text
 
 
 def test_readme_explains_that_init_skips_files_that_already_exist(root):

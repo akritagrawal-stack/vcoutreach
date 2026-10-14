@@ -43,16 +43,12 @@ python3 --version
 ```
 
 If that prints 3.9 or older, stop and install a newer Python before continuing.
-macOS ships Python 3.9, which is too old, so on a Mac install a newer one (for
-example from python.org or with Homebrew). If your new interpreter has a
-versioned name such as `python3.12`, use that name in place of `python3` below.
-
-Replace `<repo-url>` with this repository's clone URL. The folder name
-`vcoutreach` is given explicitly, so the `cd` works whatever the repository is
-called.
+macOS ships Python 3.9, which is too old. On a Mac, run `brew install python`,
+then use the versioned name of what it installed (for example `python3.13`) in
+place of `python3` when you create the virtual environment below.
 
 ```
-git clone <repo-url> vcoutreach && cd vcoutreach
+git clone https://github.com/akritagrawal-stack/vcoutreach.git vcoutreach && cd vcoutreach
 python3 -m venv .venv && . .venv/bin/activate
 python3 -m pip install -U pip
 pip install -e .
@@ -61,18 +57,10 @@ vcoutreach draft --contacts contacts.sample.csv --sender sender.sample.json --of
 cat drafts/ines-marlowe.md
 ```
 
-On Windows PowerShell, activate the environment with `.venv\Scripts\Activate.ps1`
-instead of `. .venv/bin/activate`.
-
-The virtual environment only lasts for that terminal. In a new terminal, go back
-to the folder and re-activate it before using `vcoutreach`:
-
-```
-cd vcoutreach
-. .venv/bin/activate
-```
-
-(PowerShell: `.venv\Scripts\Activate.ps1`.)
+**Every new terminal, run `cd vcoutreach && . .venv/bin/activate` first, or you
+get `vcoutreach: command not found`.** The virtual environment only lasts for the
+terminal where you activated it. (Windows PowerShell: use
+`.venv\Scripts\Activate.ps1` instead of `. .venv/bin/activate`.)
 
 `vcoutreach init` copies `contacts.sample.csv`, `sender.sample.json` and
 `.env.example` into the current directory. It never overwrites a file that
@@ -82,19 +70,24 @@ that one. That is expected and harmless; the two sample files are still created.
 `--offline` forces the template provider, makes no network calls, and costs
 nothing.
 
-The draft command first prints a line like
-`wrote drafts/ (<n> drafts, <m> blocked, index.jsonl)` to stderr. `<n>` is the
-number of ok drafts written to the folder, `<m>` is the number of blocked drafts
-written to `drafts/blocked/`, and `index.jsonl` is the index file. For the sample
-that is `wrote drafts/ (4 drafts, 1 blocked, index.jsonl)`.
+The draft command prints, in this order: a `note: <id> blocked: <first issue
+message>` line on stderr for each blocked draft (these may appear first), then a
+line like `wrote drafts/ (<n> drafts, <m> blocked, index.jsonl)` on stderr, then
+the summary line on stdout. `<n>` is the number of ok drafts written to the
+folder, `<m>` is the number of blocked drafts written to `drafts/blocked/`, and
+`index.jsonl` is the index file. For the sample the `wrote` line is
+`wrote drafts/ (4 drafts, 1 blocked, index.jsonl)`.
 
-Then it prints the summary line, followed by one line for each blocked draft with
-its reason codes:
+The summary line is followed by one line for each blocked draft with its reason
+codes:
 
 ```
 drafted=4 blocked=1 provider=template
 blocked <contact_id>: <code>, <code>
 ```
+
+Offline hooks are placeholders: the next step is a provider key (see
+[Personalize with the Publik API](#personalize-with-the-publik-api)), not sending.
 
 In the sample, the one blocked draft is `rhea-castellane`, blocked with the code
 `insufficient_facts` because that row has no facts on purpose.
@@ -113,12 +106,11 @@ The sample contacts file has five fictional people at `example.com` and
 | 4 | `odalys-brandt` | follow_up, threaded to `<sample-thread-001@example.com>` | one | `drafts/odalys-brandt.md` |
 | 5 | `rhea-castellane` | first_touch | none, on purpose | blocked: `drafts/blocked/rhea-castellane.md` |
 
-### Using your own contacts
+### Next: your own contacts
 
-Do not type real people into `contacts.sample.csv`. It is the shipped example and
-git does not ignore it, so real names and addresses put there could be committed.
-Make a copy named `contacts.csv` first. Files named `contacts*.csv` are
-git-ignored.
+Never edit `contacts.sample.csv`. It is the shipped example and git does not
+ignore it, so real names and addresses put there could be committed. Make a copy
+named `contacts.csv` first. Files named `contacts*.csv` are git-ignored.
 
 ```
 cp contacts.sample.csv contacts.csv
@@ -127,7 +119,21 @@ cp contacts.sample.csv contacts.csv
 Then edit `contacts.csv` and point `--contacts` at it. You can copy
 `sender.sample.json` to `sender.json` the same way and put your own details in it.
 
+If your list comes from Excel or Google Sheets, use File, Save as, CSV (comma
+separated, UTF-8). The email column must hold only the bare address, not a display
+name like `Jane <jane@example.com>`.
+
+Write each fact as a short noun phrase, not a sentence:
+
+| Fact | Result |
+| --- | --- |
+| `your 2024 essay on X` | works |
+| `You wrote an essay on X` | blocked by the offline template (it is a sentence) |
+
 ### What a draft file looks like
+
+Re-running `draft` overwrites the drafts in the output folder, so copy a draft out
+before you edit it.
 
 Each draft is a Markdown file: a header block of `key: value` lines, one blank
 line, then the email body exactly as it would be sent. The header keys, in
@@ -352,7 +358,8 @@ never sent to a second host.
 Use your own model account instead of Publik.
 
 OpenAI-compatible (also works with any server that offers an OpenAI-style
-`/chat/completions` endpoint):
+`/chat/completions` endpoint). All three lines are required; there is no default
+model:
 
 ```
 OPENAI_API_KEY=your-key-here
@@ -360,7 +367,7 @@ OPENAI_BASE_URL=https://api.openai.com/v1
 OPENAI_MODEL=the-model-you-want
 ```
 
-Anthropic:
+Anthropic. Both lines are required; there is no default model:
 
 ```
 ANTHROPIC_API_KEY=your-key-here
@@ -476,8 +483,13 @@ fact the sender actually supplied and reacts to it honestly.
 
 ## Optional: sending with Gmail
 
-Sending is off the quickstart path and guarded. You can ignore this section and
-copy drafts into your mail client yourself.
+You do not need this to use the tool: copy the drafts into your own mail client
+and send them from there. Sending is off the quickstart path and guarded.
+
+Prerequisites, in one line: the optional Google libraries installed, a Google
+Cloud OAuth client file (desktop app) at `GMAIL_CLIENT_SECRETS_PATH`,
+`vcoutreach auth gmail` run once, `SENDER_EMAIL` set, and `TEST_RECIPIENT_EMAIL`
+set for test sends.
 
 **Only email people you are allowed to contact, and follow the anti-spam and
 privacy law that applies to you and to them** (for example CAN-SPAM, GDPR and

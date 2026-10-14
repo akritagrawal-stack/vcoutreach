@@ -113,3 +113,30 @@ def test_no_shipped_text_file_or_module_tells_people_to_install_the_bare_name_fr
 
 def test_the_gmail_requirements_file_is_still_in_the_repository_root(root):
     assert (root / "requirements-gmail.txt").is_file()
+
+
+# ----- first-user README fixes ---------------------------------------------------------------------------------------------------------
+
+def test_readme_tells_people_to_reactivate_the_virtual_environment_in_every_new_terminal(root):
+    text = readme_text(root)
+    lower = text.lower()
+    assert any(". .venv/bin/activate" in w and re.search(r"new terminal|every terminal|each terminal|new shell", w)
+               for w in windows(lower, r"command not found", radius=300)), \
+        "say that every new terminal needs . .venv/bin/activate, or vcoutreach: command not found appears"
+
+
+def test_readme_quickstart_copies_the_sample_contacts_to_contacts_csv(root):
+    text = readme_text(root)
+    clone = text.index("git clone ")
+    copy = text.index("cp contacts.sample.csv contacts.csv")
+    assert clone < copy, "the copy advice belongs to the quickstart, after the clone command"
+    gmail = re.search(r"## Optional: sending with Gmail", text)
+    assert gmail is None or copy < gmail.start(), "the copy advice comes before the Gmail section"
+
+
+def test_readme_gmail_section_says_it_is_not_needed_to_use_the_tool(root):
+    text = readme_text(root)
+    start = re.search(r"## (?:Optional: )?[Ss]ending with Gmail", text)
+    assert start, "a Gmail section heading"
+    assert re.search(r"you do not need this|not needed|not required|you don't need this", text[start.start(): start.start() + 500], re.I), \
+        "the Gmail section should open by saying it is not needed to use the tool"
