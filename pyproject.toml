@@ -37,6 +37,7 @@ include = ["vcoutreach*"]
 vcoutreach = [
     "data/templates/*.txt",
     "data/examples/*",
+    "data/ui/index.html",
 ]
 
 [tool.pytest.ini_options]

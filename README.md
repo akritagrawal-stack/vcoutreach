@@ -24,6 +24,7 @@ What it does:
 - Writes one draft per contact to `drafts/`, and `drafts/index.jsonl` with one JSON object per draft.
 - Blocks drafts that fail the checks and puts them in `drafts/blocked/` with the reasons.
 - Optionally sends drafts through your own Gmail account, with a plan-only default and a test-inbox default.
+- Offers a local browser app (`vcoutreach ui`) for the same drafting steps, with a send plan that is preview only. See [Use it in your browser](#use-it-in-your-browser-easiest).
 
 What it does not do, on purpose:
 
@@ -181,6 +182,88 @@ contact's first fact and writes the sentence below (the fact's trailing period i
 A leading `Your` in the fact is lower-cased to `your` so the sentence reads
 properly. Use offline mode to try the pipeline and check your CSV. For outreach you plan to
 send, use a real provider so the hook reads like a person wrote it.
+
+## Use it in your browser (easiest)
+
+If you would rather click than type commands, `vcoutreach ui` opens a small web
+app on your own computer. It walks you through five steps: **Sender** (who the
+note is from and the claims you are allowed to make), **Contacts** (the people and
+verified facts about them), **Draft** (pick a writer and write the first drafts),
+**Review** (read, edit and re-check each draft), and **Send plan** (a preview of
+what a send would do). It never sends email. The Send plan screen is a plan only;
+to actually send, use the command line (see
+[Optional: sending with Gmail](#optional-sending-with-gmail)).
+
+### On a Mac: one line
+
+Paste this into Terminal:
+
+```
+curl -fsSL https://raw.githubusercontent.com/akritagrawal-stack/vcoutreach/main/install-mac.sh | bash
+```
+
+What it does:
+
+- Installs the app into `~/vcoutreach` with its own private virtual environment,
+  so it does not touch the Python on the rest of your Mac.
+- Puts a double-clickable `Outreach.command` on your Desktop. Double-click it to
+  open the app in your browser. Close the Terminal window it opens to stop the app.
+- Keeps your contacts and drafts in `~/Documents/vcoutreach-workspace`, separate
+  from the app.
+- Needs Python 3.10 or newer. If the installer cannot find one and Homebrew is
+  installed, it asks whether to run `brew install python` for you.
+- Update by running the same line again. The previous copy is kept next to it as a
+  timestamped `.old` backup.
+- If macOS says `Outreach.command` is from an unidentified developer, right-click
+  it, choose Open, then confirm Open. You only need to do this once.
+- Uninstall with `bash "$HOME/vcoutreach/packaging/mac/uninstall-mac.sh"`. It
+  removes the app and the Desktop launcher and asks before deleting your workspace
+  (it keeps the workspace by default).
+
+The installer also accepts `--dry-run`, `--dir PATH`, `--workspace PATH`,
+`--ref REF` and `--no-launcher-on-desktop`. Add them after the line with
+`| bash -s -- --dry-run`. See [`packaging/mac/README.md`](packaging/mac/README.md)
+for the full details.
+
+### The manual way
+
+If you already followed the quickstart above (or are not on a Mac), activate your
+virtual environment and run this from the folder where you want your files to
+live:
+
+```
+vcoutreach ui
+```
+
+You do not need `vcoutreach init`. The app can load the sample sender and contacts
+for you with one button, and it never overwrites a file you already have. It
+prints a link that looks like `http://127.0.0.1:8765/#token=...` and opens it in
+your browser. Press Ctrl+C in the terminal to stop it. If the browser does not
+open, copy the printed link into it yourself.
+
+| Flag | Meaning |
+| --- | --- |
+| `--workspace DIR` | The folder that holds `contacts.csv`, `sender.json`, `drafts/` and `.env`. Default: the current folder. |
+| `--port N` | Use exactly this port. Without it, the app tries 8765, then the next 20 ports if that one is busy. |
+| `--no-browser` | Print the link without opening a browser. |
+
+### Safety notes
+
+- It listens on `127.0.0.1` only, so other computers on your network cannot reach
+  it.
+- The link contains a secret token created fresh each time you start the app. The
+  app refuses requests that do not carry it. Treat the link like a password and do
+  not share it.
+- It never sends email. The Send plan screen shows what the command line would do
+  and nothing more.
+- API keys you type in are saved only to the `.env` file in your workspace folder
+  (readable and writable by you alone, mode 0600). Saved keys are never shown again
+  in the app, and they are masked out of anything the app returns.
+- Everything stays in your workspace folder. The app refuses paths that leave it
+  and refuses symbolic links inside it.
+- If you pick a provider other than the free template, the contact facts and sender
+  details for those drafts are sent to that provider, exactly as with the command
+  line.
 
 ## Input files
 
@@ -624,6 +707,7 @@ You can also run `python -m vcoutreach`. Every flag has a help string:
 | `vcoutreach lint --drafts DIR [--sender FILE]` | Re-lints the `.md` drafts directly inside DIR. DIR is a directory, not a single file. It does not look inside `DIR/blocked`. |
 | `vcoutreach providers` | Lists providers and which are configured. Never prints keys. A provider with a key but no model shows `configured=no` and the missing variable name. |
 | `vcoutreach send --drafts DIR [--sender FILE] [--execute] [--live --confirm-live VALUE] [--limit N]` | Plans sends by default. See the Gmail section. |
+| `vcoutreach ui [--workspace DIR] [--port N] [--no-browser]` | Opens the local browser app (127.0.0.1 only, secret token in the link). Five steps: Sender, Contacts, Draft, Review, Send plan. It never sends email. See [Use it in your browser](#use-it-in-your-browser-easiest). |
 | `vcoutreach auth gmail` | Runs the local Gmail OAuth flow. |
 | `vcoutreach --version` | Prints the version. |
 
@@ -637,6 +721,14 @@ Flags for `draft`:
 | `--out DIR` | Where drafts are written. Default `drafts`. If it cannot be created or written you get `cannot write to --out <path>: <reason>` and exit 2. |
 | `--strict` | Exit 2 if any draft is blocked. Every draft is still written first, so the files are there to read. |
 | `--offline` | Use the template provider with zero network calls. |
+
+Flags for `ui`:
+
+| Flag | Meaning |
+| --- | --- |
+| `--workspace DIR` | Folder holding `contacts.csv`, `sender.json`, `drafts/` and `.env`. Default: the current folder. |
+| `--port N` | Use exactly this port (1 to 65535). Default: 8765, then the next 20 if busy. If no port is free, or `N` is in use, it exits 2 with a `cannot start ui` message. |
+| `--no-browser` | Print the link without opening a browser. |
 
 Flags for `lint`:
 

@@ -313,6 +313,15 @@ def _auth_gmail(args: argparse.Namespace) -> int:
     return 0
 
 
+def _ui(args: argparse.Namespace) -> int:
+    from vcoutreach.ui import serve
+
+    try:
+        return serve(args.workspace, port=args.port, no_browser=args.no_browser)
+    except KeyboardInterrupt:
+        return 0
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="vcoutreach", description="Draft grounded outreach emails.")
     parser.add_argument("--version", action="version", version=f"vcoutreach {__version__}",
@@ -341,6 +350,14 @@ def _parser() -> argparse.ArgumentParser:
 
     providers = commands.add_parser("providers", help="List providers and configuration status.")
     providers.set_defaults(handler=_providers)
+
+    ui = commands.add_parser("ui", help="Open the local browser workspace, with send planning only.")
+    ui.add_argument("--workspace", type=Path, default=Path("."),
+                    help="Workspace directory (default: current directory).")
+    ui.add_argument("--port", type=int, metavar="N",
+                    help="Use exactly this port (default: 8765, then the next 20 if busy).")
+    ui.add_argument("--no-browser", action="store_true", help="Print the link without opening a browser.")
+    ui.set_defaults(handler=_ui)
 
     send = commands.add_parser("send", help="Plan sends, or execute explicitly through Gmail.")
     send.add_argument("--drafts", type=Path, required=True, help="Directory of eligible top-level drafts.")
