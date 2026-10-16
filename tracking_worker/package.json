@@ -1,0 +1,14 @@
+{
+  "name": "publik-hosted-tracking-worker",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "description": "Cloudflare Worker and D1 implementation for opaque Publik tracking links, with isolated staging and test-production configurations.",
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "check": "node --check src/logic.mjs && node --check src/worker.ts && node --test test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

@@ -5,8 +5,10 @@ running from a source checkout (for example a plain pip install).
 """
 from __future__ import annotations
 
+import random
 import re
 import shutil
+import string
 import subprocess
 from pathlib import Path
 
@@ -93,14 +95,114 @@ def test_no_secret_shaped_strings_in_the_working_tree(root):
     assert not offenders, "possible secrets: " + ", ".join(offenders)
 
 
+# A token value that is plainly a made-up test constant is not a leaked credential. Public history holds one such
+# constant in a test file; a real-looking random key must still fail (see the self-tests below).
+FAKE_WORDS = ("test", "fake", "example", "dummy", "placeholder", "sample", "secret", "redacted", "changeme",
+              "notreal", "not-real", "mock", "demo", "your", "xxxx")
+SEQUENTIAL_RUNS = ("0123456789", "1234567890", "123456789", "987654321", "abcdefghij", "abcdef0123", "abcdef012345")
+
+
+def is_plainly_fake(token: str) -> bool:
+    lowered = token.lower()
+    if any(word in lowered for word in FAKE_WORDS):
+        return True
+    if any(run in lowered for run in SEQUENTIAL_RUNS):
+        return True
+    return bool(re.search(r"(.)\1{7,}", token))
+
+
+def secret_hits(text: str) -> list[tuple[str, str]]:
+    """(label, matched text) for every secret-shaped string whose value is not plainly fake."""
+    hits = []
+    for label, pattern in SECRET_PATTERNS.items():
+        for match in re.finditer(pattern, text):
+            token = match.group(0)
+            if label == "private key block" or not is_plainly_fake(token):
+                hits.append((label, token))
+    return hits
+
+
 def test_no_secret_shaped_strings_anywhere_in_git_history(root):
     if not is_git_checkout(root):
         pytest.skip("no git history to scan")
     proc = git(root, "log", "--all", "-p", "--no-color", timeout=300)
     if proc.returncode != 0:
         pytest.skip("git log failed")
-    hits = [label for label, pattern in SECRET_PATTERNS.items() if re.search(pattern, proc.stdout)]
+    hits = sorted({label for label, _ in secret_hits(proc.stdout)})
     assert not hits, "git history contains: " + ", ".join(hits)
+
+
+ALNUM = string.ascii_letters + string.digits
+
+
+def realistic_key(prefix: str, length: int, seed: int, alphabet: str = ALNUM + "_-") -> str:
+    """A random-looking key built at runtime, so this file never contains a secret-shaped literal."""
+    rng = random.Random(seed)
+    for _ in range(100):
+        body = "".join(rng.choice(alphabet) for _ in range(length))
+        if not is_plainly_fake(prefix + body):
+            return prefix + body
+    raise AssertionError("could not build a realistic key")
+
+
+def realistic_samples() -> dict[str, str]:
+    return {
+        "openai-style key": realistic_key(_joined("s", "k-"), 48, 1),
+        "google api key": realistic_key(_joined("A", "Iza"), 35, 2),
+        "github token": realistic_key(_joined("gh", "p_"), 36, 3, ALNUM),
+        "slack token": realistic_key(_joined("x", "oxb-"), 40, 4, ALNUM + "-"),
+        "aws key id": realistic_key(_joined("AK", "IA"), 16, 5, string.ascii_uppercase + string.digits),
+        "google oauth access token": realistic_key(_joined("ya", "29."), 60, 6),
+        "google oauth refresh token": realistic_key(_joined("1", "//"), 60, 7),
+        "oauth client secret": realistic_key(_joined("GOC", "SPX-"), 28, 8),
+    }
+
+
+def test_a_realistic_random_looking_key_is_never_treated_as_fake():
+    for label, key in realistic_samples().items():
+        assert not is_plainly_fake(key), label
+        assert (label, key) in secret_hits("value = '" + key + "'\n"), label
+
+
+def test_a_private_key_block_header_is_never_excused():
+    header = _joined("-----BEGIN ", "PRIVATE KEY-----")
+    assert secret_hits(header + "\nexample\n")
+
+
+def test_plainly_fake_test_constants_are_ignored():
+    fakes = [
+        _joined("s", "k-test-SUPER", "SECRET-0123456789abcdef"),
+        _joined("s", "k-fake-", "a" * 30),
+        _joined("s", "k-", "example", "-key-for-docs-only-0000"),
+        _joined("s", "k-", "dummydummydummydummydummy"),
+        _joined("s", "k-", "0123456789", "0123456789"),
+        _joined("A", "Iza", "x" * 35),
+        _joined("gh", "p_", "1" * 36),
+    ]
+    for fake in fakes:
+        assert is_plainly_fake(fake), fake
+        assert secret_hits(fake) == [], fake
+
+
+def test_the_history_scan_fails_for_a_real_shaped_key_and_passes_for_a_fake_one(tmp_path):
+    if shutil.which("git") is None:
+        pytest.skip("git is not installed")
+    repo = tmp_path / "scratch"
+    repo.mkdir()
+
+    def run(*args: str) -> subprocess.CompletedProcess:
+        return subprocess.run(["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@example.com",
+                               "-c", "commit.gpgsign=false", *args], capture_output=True, text=True, encoding="utf-8")
+
+    assert run("init", "-q").returncode == 0
+    (repo / "a.py").write_text("SECRET = '" + _joined("s", "k-test-SUPER", "SECRET-0123456789abcdef") + "'\n", encoding="utf-8")
+    run("add", "-A")
+    assert run("commit", "-q", "-m", "fake").returncode == 0
+    assert secret_hits(run("log", "--all", "-p", "--no-color").stdout) == []
+    (repo / "b.py").write_text("KEY = '" + realistic_samples()["openai-style key"] + "'\n", encoding="utf-8")
+    run("add", "-A")
+    assert run("commit", "-q", "-m", "real").returncode == 0
+    assert [label for label, _ in secret_hits(run("log", "--all", "-p", "--no-color").stdout)] == ["openai-style key"]
 
 
 def _joined(*pieces: str) -> str:
@@ -126,13 +228,22 @@ PACKAGE_FORBIDDEN = {
 PACKAGE_FORBIDDEN_SUFFIXES = {".db", ".sqlite", ".sqlite3", ".db-wal", ".db-shm", ".pkl", ".pickle"}
 
 
-def test_package_source_has_no_private_paths_third_party_data_ties_or_credential_store_access(root):
+def engine_files(root: Path):
+    """Every file of the engine package: vcoutreach/ except the bundled web app in vcoutreach/web/."""
     pkg = Path(vcoutreach.__file__).resolve().parent
-    names = {label: re.compile(r"\b" + re.escape(word) + r"\b", re.I) for label, word in PRIVATE_DATA_NAMES.items()}
-    offenders = []
     for path in pkg.rglob("*"):
         if not path.is_file() or "__pycache__" in path.parts or path.suffix in {".pyc", ".pyo"}:
             continue
+        if path.relative_to(pkg).parts[0] == "web":
+            continue
+        yield path
+
+
+def test_package_source_has_no_private_paths_third_party_data_ties_or_credential_store_access(root):
+    """The strict engine rule: it applies to the engine package only. The bundled web app has its own rules below."""
+    names = {label: re.compile(r"\b" + re.escape(word) + r"\b", re.I) for label, word in PRIVATE_DATA_NAMES.items()}
+    offenders = []
+    for path in engine_files(root):
         if path.suffix.lower() in PACKAGE_FORBIDDEN_SUFFIXES or path.name.endswith(("-wal", "-shm")):
             offenders.append(f"{path.relative_to(root)} (private data file)")
             continue
@@ -141,6 +252,148 @@ def test_package_source_has_no_private_paths_third_party_data_ties_or_credential
             if pattern.search(text):
                 offenders.append(f"{path.relative_to(root)} ({label})")
     assert not offenders, ", ".join(offenders)
+
+
+# ----- the bundled web app (vcoutreach/web/) and the tracking worker (tracking_worker/) ---------------------------------
+# Their features (embedded database, data providers, optional OS credential store, user-supplied keys) are intended.
+# What must stay out is anything private: owner paths and identifiers, real emails, raw secrets, vendored session data.
+
+WEB_SCOPES = (("vcoutreach", "web"), ("tracking_worker",))
+
+WEB_FORBIDDEN = {
+    "private home path": PACKAGE_FORBIDDEN["private home path"],
+    "windows user profile path": PACKAGE_FORBIDDEN["windows user profile path"],
+    "per-user application support folder": re.compile(r"[A]pplication[ _-]?[S]upport", re.I),
+}
+
+PUBLIC_REPO_URL_PART = "akritagrawal-stack/vcoutreach"
+OWNER_IDENTIFIERS = {
+    "owner university domain": re.compile(_joined(r"t", r"amu\.edu"), re.I),
+    "owner company identifier": re.compile(_joined(r"b", r"esquare"), re.I),
+    "owner handle": re.compile(_joined(r"a", r"kritagrawal"), re.I),
+    "owner facts file name": re.compile(_joined(r"a", r"krit_facts"), re.I),
+}
+
+EMAIL_RE = re.compile(r"(?<![\w.+-])[\w.+-]+@([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+)")
+PLACEHOLDER_EMAIL_DOMAINS = {"example.com", "example.org", "example.net", "firm.com", "domain.com"}
+PLACEHOLDER_EMAIL_SUFFIXES = (".example", ".test", ".invalid", ".local", ".localhost")
+
+FLASK_SECRET_LITERALS = [
+    re.compile(r"""(?i)\bsecret_key\b['"\]]*\s*(?:=|:)\s*(?:b?['"])[^'"\s]+['"]"""),
+    re.compile(r"""(?i)\bFLASK_SECRET_KEY\b['"\]]*\s*(?:=|:)\s*(?:b?['"])[^'"\s]+['"]"""),
+    re.compile(r"""(?i)\b(?:environ\.get|getenv|\.get)\(\s*['"]\w*SECRET_KEY['"]\s*,\s*['"][^'"]+['"]"""),
+]
+
+VENDORED_DATA_SUFFIXES = PACKAGE_FORBIDDEN_SUFFIXES | {".har", ".cookies", ".pem", ".p12", ".pfx", ".key"}
+DECK_SUFFIXES = {".pdf", ".pptx", ".ppt", ".key"}
+
+
+def real_looking_emails(text: str) -> list[str]:
+    found = []
+    for match in EMAIL_RE.finditer(text):
+        address, domain = match.group(0), match.group(1).lower()
+        if "..." in address or domain in PLACEHOLDER_EMAIL_DOMAINS or domain.endswith(PLACEHOLDER_EMAIL_SUFFIXES) \
+                or domain.endswith(tuple("." + d for d in PLACEHOLDER_EMAIL_DOMAINS if d.startswith("example."))):
+            continue
+        found.append(address)
+    return found
+
+
+def owner_identifier_hits(text: str) -> list[str]:
+    cleaned = text.replace(PUBLIC_REPO_URL_PART, "")
+    return [label for label, pattern in OWNER_IDENTIFIERS.items() if pattern.search(cleaned)]
+
+
+def hardcoded_flask_secret(text: str) -> bool:
+    return any(pattern.search(text) for pattern in FLASK_SECRET_LITERALS)
+
+
+def web_scope_paths(root: Path):
+    for path in root.rglob("*"):
+        rel = path.relative_to(root)
+        if not path.is_file() or any(part in SKIP_DIRS or part.endswith(".egg-info") for part in rel.parts):
+            continue
+        if any(rel.parts[:len(scope)] == scope for scope in WEB_SCOPES):
+            yield path
+
+
+def test_web_app_and_tracking_worker_have_no_private_paths_owner_identifiers_emails_or_flask_secret_literals(root):
+    offenders = []
+    for path, text in text_files(root):
+        rel = path.relative_to(root)
+        if not any(rel.parts[:len(scope)] == scope for scope in WEB_SCOPES):
+            continue
+        for label, pattern in WEB_FORBIDDEN.items():
+            if pattern.search(text):
+                offenders.append(f"{rel} ({label})")
+        for label in owner_identifier_hits(text):
+            offenders.append(f"{rel} ({label})")
+        for address in real_looking_emails(text):
+            offenders.append(f"{rel} (real-looking email {address})")
+        if hardcoded_flask_secret(text):
+            offenders.append(f"{rel} (hardcoded Flask secret literal)")
+    assert not offenders, ", ".join(offenders)
+
+
+def test_web_app_and_tracking_worker_contain_no_raw_secrets(root):
+    offenders = []
+    for path, text in text_files(root):
+        rel = path.relative_to(root)
+        if not any(rel.parts[:len(scope)] == scope for scope in WEB_SCOPES):
+            continue
+        for label, _token in secret_hits(text):
+            offenders.append(f"{rel} ({label})")
+    assert not offenders, ", ".join(offenders)
+
+
+def test_web_app_and_tracking_worker_ship_no_session_cookie_database_or_env_files(root):
+    offenders = []
+    for path in web_scope_paths(root):
+        name, suffix = path.name.lower(), path.suffix.lower()
+        rel = path.relative_to(root)
+        if suffix in VENDORED_DATA_SUFFIXES or name.endswith(("-wal", "-shm")):
+            offenders.append(f"{rel} (database, key or cookie file)")
+        elif name == ".env" or (name.startswith(".env.") and name != ".env.example") or name == ".ds_store":
+            offenders.append(f"{rel} (environment or finder file)")
+        elif suffix in {".json", ".txt", ".cookies", ".dat"} and re.search(r"cookie|session|storage_state|storagestate", name):
+            offenders.append(f"{rel} (session or cookie data)")
+    assert not offenders, ", ".join(offenders)
+
+
+def test_no_deck_pdf_or_presentation_file_is_shipped_anywhere_in_the_repository(root):
+    offenders = []
+    for path in root.rglob("*"):
+        rel = path.relative_to(root)
+        if not path.is_file() or any(part in SKIP_DIRS or part.endswith(".egg-info") for part in rel.parts):
+            continue
+        if path.suffix.lower() in DECK_SUFFIXES or "deck_assets" in rel.parts:
+            offenders.append(str(rel))
+    assert not offenders, ", ".join(offenders)
+
+
+def test_the_web_rules_catch_what_they_are_meant_to_catch_and_allow_what_they_should():
+    owner_domain = _joined("t", "amu.edu")
+    owner_company = _joined("Be", "Square")
+    owner_handle = _joined("akrit", "agrawal")
+    assert owner_identifier_hits("mail me at x@" + owner_domain)
+    assert owner_identifier_hits("verify." + owner_company.lower() + ".app")
+    assert owner_identifier_hits("github.com/" + owner_handle + "22")
+    assert owner_identifier_hits("see https://github.com/" + owner_handle + "-stack/vcoutreach and " + owner_handle)
+    assert not owner_identifier_hits("git clone https://github.com/" + owner_handle + "-stack/vcoutreach.git")
+    assert real_looking_emails("write to jane.doe@" + _joined("big", "firm.vc") + " today")
+    assert real_looking_emails("someone@gmail.com")
+    assert not real_looking_emails("a@example.com b@mail.example.org c@host.test d@localhost.local first@firm.com")
+    assert not real_looking_emails("<CABEbgnC...@mail.gmail.com>")
+    assert hardcoded_flask_secret("app.secret_key = 'dev-key'")
+    assert hardcoded_flask_secret('app.config["SECRET_KEY"] = "abc123"')
+    assert hardcoded_flask_secret("FLASK_SECRET_KEY = 'changeme'")
+    assert hardcoded_flask_secret("os.environ.get('FLASK_SECRET_KEY', 'fallback')")
+    assert not hardcoded_flask_secret("app.secret_key = workspace.env()['FLASK_SECRET_KEY']")
+    assert not hardcoded_flask_secret("'FLASK_SECRET_KEY': ''")
+    assert not hardcoded_flask_secret("app.secret_key = secrets.token_hex(32)")
+    home = _joined("/Us", "ers/someone/x")
+    assert WEB_FORBIDDEN["private home path"].search(home)
+    assert WEB_FORBIDDEN["per-user application support folder"].search(_joined("Application ", "Support/Publik"))
 
 
 def test_package_data_files_are_only_templates_and_examples(root):

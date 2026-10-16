@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+{% block page_id %}contact_form{% endblock %}
+{% block title %}Add contact / Publik Signal{% endblock %}
+{% block content %}
+<div class="crm-shell form-shell">
+  <header class="crm-hero"><div><div class="crm-eyebrow">RELATIONSHIP WORKSPACE</div><h1>Add contact.</h1><p>Save a contact and the source facts that will ground their draft.</p></div></header>
+  {% if errors %}<ul class="flash-list" aria-live="polite">{% for error in errors %}<li class="flash flash-error">{{ error }}</li>{% endfor %}</ul>{% endif %}
+  <form method="post" action="/crm/new" class="crm-panel settings-fields">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    {% for field, label in [('name','Full name'),('email','Email'),('org','Organization'),('role','Role'),('first_name','Greeting name')] %}
+    <label for="contact-{{ field }}">{{ label }}<input id="contact-{{ field }}" type="{{ 'email' if field == 'email' else 'text' }}" name="{{ field }}" value="{{ contact.get(field, '') }}" {% if field in ['name','email'] %}required{% endif %}></label>
+    {% endfor %}
+    <label for="contact-facts">Facts, separated by exactly space-pipe-space: <code> | </code><textarea id="contact-facts" name="facts" rows="4" aria-describedby="facts-hint">{{ contact.get('facts', '') }}</textarea></label>
+    <p id="facts-hint" class="crm-source-note">Example: your essay on accessibility | your work on developer tools. Include a space on each side of the pipe; a bare | does not split facts.</p>
+    <label for="contact-sources">Source URLs, separated by |<textarea id="contact-sources" name="source_urls" rows="3">{{ contact.get('source_urls', '') }}</textarea></label>
+    <label for="contact-stage">Stage<select id="contact-stage" name="stage">{% for stage in stages %}<option value="{{ stage }}" {% if contact.get('stage', 'prospect') == stage %}selected{% endif %}>{{ stage|replace('_',' ')|title }}</option>{% endfor %}</select></label>
+    <label for="contact-lane">Lane<select id="contact-lane" name="lane">{% for lane in ['first_touch','follow_up'] %}<option value="{{ lane }}" {% if contact.get('lane','first_touch') == lane %}selected{% endif %}>{{ lane|replace('_',' ')|title }}</option>{% endfor %}</select></label>
+    {% for field,label in [('thread_subject','Thread subject'),('in_reply_to','In reply to'),('references','References'),('tags','Tags'),('next_action','Next action')] %}<label for="contact-{{ field }}">{{ label }}<input id="contact-{{ field }}" name="{{ field }}" value="{{ contact.get(field, '') }}"></label>{% endfor %}
+    <label for="contact-notes">Notes<textarea id="contact-notes" name="notes" rows="4">{{ contact.get('notes', '') }}</textarea></label>
+    <div class="form-actions"><button type="submit" class="crm-button crm-button-primary">Add contact</button><a href="/crm">Cancel</a></div>
+  </form>
+</div>
+{% endblock %}

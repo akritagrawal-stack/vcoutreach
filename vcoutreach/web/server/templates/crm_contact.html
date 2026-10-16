@@ -1,0 +1,257 @@
+{% extends 'base.html' %}
+{% block page_id %}crm_contact{% endblock %}
+{% block title %}{{ partner.partner_name or partner.name or 'Contact' }} / Relationship CRM{% endblock %}
+
+{% block content %}
+<div class="crm-shell crm-contact-page">
+  <nav class="crm-breadcrumb" aria-label="Breadcrumb"><a href="{{ url_for('crm_dashboard') }}">Relationship CRM</a><span>/</span><span>{{ partner.partner_name or partner.name or 'Unknown contact' }}</span></nav>
+
+  <header class="crm-profile-hero">
+    <div>
+      <div class="crm-eyebrow"><span class="crm-led"></span> CONTACT PROFILE / LOCAL RECORD</div>
+      <h1>{{ partner.partner_name or partner.name or 'Unknown contact' }}</h1>
+      <p>{{ partner.firm or partner.company or 'Organization unknown' }} <span class="crm-profile-divider">/</span> {{ partner.email or 'Email unknown' }}</p>
+    </div>
+    <div class="crm-profile-status">
+      <span class="crm-stage-tag">{{ profile.get('stage')|replace('_', ' ')|title if profile.get('stage') else 'Stage unknown' }}</span>
+      <span class="crm-fit-tag">FIT / {{ profile.get('fit_grade') or 'Unknown' }}</span>
+      {% if profile.get('fit_rank') %}<span class="crm-fit-tag">REVIEW #{{ profile.get('fit_rank') }}</span>{% endif %}
+      {% if partner.firm %}<a class="crm-button crm-button-primary" href="{{ url_for('crm_alternate_investors', partner_id=partner.id) }}">Find more investors</a>{% endif %}
+    </div>
+  </header>
+
+  <section class="crm-panel" aria-label="Contact details">
+    <h2>Contact details</h2>
+    <dl class="crm-contact-details">
+      <dt>Role</dt><dd>{{ engine_contact.role or 'Not recorded' }}</dd>
+      <dt>Lane</dt><dd>{{ engine_contact.lane.value }}</dd>
+      <dt>Thread subject</dt><dd>{{ engine_contact.thread_subject or 'Not recorded' }}</dd>
+      <dt>Tags</dt><dd>{{ partner.tags or 'None' }}</dd>
+      <dt>Notes</dt><dd>{{ partner.notes or 'Not recorded' }}</dd>
+      <dt>Next action</dt><dd>{{ partner.next_action or 'Not recorded' }}</dd>
+    </dl>
+    <h3>Source URLs</h3><ul>{% for source in engine_contact.source_urls %}<li>{{ source }}</li>{% else %}<li>No source URLs recorded.</li>{% endfor %}</ul>
+  </section>
+
+  {% if profile.get('is_synthetic') or profile.get('integrity_note') %}
+  <aside class="crm-integrity-note">
+    <strong>{{ 'Synthetic test record' if profile.get('is_synthetic') else 'Record note' }}</strong>
+    <span>{{ profile.get('integrity_note') or 'This record is marked synthetic.' }}</span>
+  </aside>
+  {% endif %}
+
+  <section class="crm-panel crm-campaign-qualification">
+    <div class="crm-panel-heading">
+      <div><span class="crm-eyebrow">SOURCE-REVIEWED CAMPAIGN GATE</span><h2>Investor qualification</h2></div>
+      {% if profile.get('campaign_fit_review_present') %}<span class="crm-status-tag">Reviewed</span>{% else %}<span class="crm-status-tag">Not reviewed</span>{% endif %}
+    </div>
+    {% if profile.get('campaign_fit_review_present') %}
+    <p><strong>{{ profile.get('campaign_qualification_label') or 'Recommendation not recorded' }}</strong></p>
+    <div class="crm-readonly-grid">
+      <div class="crm-readonly-field"><span>FIT REVIEW</span><strong>{{ profile.get('campaign_qualification_notes') or 'No fit rationale recorded in the campaign review.' }}</strong></div>
+      <div class="crm-readonly-field"><span>CHECK SIZE / FUND STATUS</span><strong>{{ profile.get('campaign_check_size_notes') or 'Not recorded in the campaign review.' }}</strong></div>
+    </div>
+    <p class="crm-source-note">
+      {% if profile.get('campaign_qualification_observed_at') %}Reviewed {{ profile.get('campaign_qualification_observed_at') }}. {% endif %}
+      {% if profile.get('campaign_qualification_source_url') and profile.get('campaign_qualification_source_url').startswith('https://') %}<span class="source-reference">Open research source ↗ <span class="text-muted">({{ profile.get('campaign_qualification_source_url') }})</span> <button type="button" class="copy-source" data-copy-text="{{ profile.get('campaign_qualification_source_url') }}">Copy URL</button></span>
+      {% elif profile.get('campaign_qualification_source') %}Campaign source: {{ profile.get('campaign_qualification_source') }}
+      {% else %}Campaign source not recorded.{% endif %}
+    </p>
+    {% else %}
+    <p class="crm-source-note">No source-reviewed campaign qualification is linked to this contact. The manual fit grade below is a separate operator field.</p>
+    {% endif %}
+  </section>
+
+
+  <section class="crm-panel" aria-label="Send controls">
+    <div class="crm-panel-heading"><h2>Review and send</h2><a href="/partners/{{ partner.id }}">Open draft review and scheduling</a></div>
+    <p>Email verification: {{ partner.email_verification_status or 'unverified' }}{% if partner.email_verification_method %} ({{ partner.email_verification_method }}){% endif %}. LIVE sends require a verified address.</p>
+    {% for attempt in uncertain_sends %}
+    <div class="crm-panel">
+      <p>Uncertain {{ attempt.mode|upper }} attempt from {{ attempt.created_at }} to {{ attempt.target_email }} ({{ attempt.lane|replace('_',' ') }}). Check Gmail Sent for this message before allowing a retry.</p>
+      <form method="post" action="{{ url_for('crm_resolve_uncertain_send', partner_id=partner.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="attempt_id" value="{{ attempt.id }}">
+        <button type="submit" name="action" value="allow_retry" class="crm-button crm-button-secondary">I checked Sent, it did not go out, allow retry</button>
+      </form>
+    </div>
+    {% endfor %}
+    <form method="post" action="{{ url_for('partner_verify_email_manually', partner_id=partner.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button type="submit" class="crm-button crm-button-secondary">Mark email verified (I checked it myself)</button>
+    </form>
+    <div class="form-actions">
+      <form method="post" action="/partners/{{ partner.id }}/send-test"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit" class="crm-button crm-button-secondary">Send test</button></form>
+      <form method="post" action="/partners/{{ partner.id }}/send" class="settings-fields"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        {% if g_send_mode == 'live' %}<label for="contactSendConfirm">Type SEND TO {{ partner.email }}<input id="contactSendConfirm" name="confirm_text" autocomplete="off" required></label>{% endif %}
+        <button type="submit" class="crm-button crm-button-primary">{{ 'Send to contact' if g_send_mode == 'live' else 'Send in test mode' }}</button>
+      </form>
+    </div>
+  </section>
+
+  <div class="crm-detail-grid">
+    <div class="crm-detail-main">
+      {% if queue_entries %}
+      <section class="crm-panel">
+        <div class="crm-panel-heading"><div><span class="crm-eyebrow">NEXT OUTREACH / LOCAL REVIEW</span><h2>Queue position</h2></div><span class="crm-status-tag">Unsent</span></div>
+        {% for entry in queue_entries %}
+        <p class="crm-source-note"><strong>{{ entry.lane|replace('_', ' ')|title }} #{{ entry.queue_rank }}</strong> / {% if entry.lane == 'new_research' and entry.readiness == 'waiting' %}historical contact hold{% else %}{{ entry.readiness|replace('_', ' ') }}{% endif %}. {{ entry.rationale }}{% if entry.candidate_email %} Verified route: {{ entry.candidate_email }}.{% endif %} Source: {{ entry.evidence_source }}.</p>
+        {% endfor %}
+      </section>
+      {% endif %}
+      {% if prepared_followup %}
+      <section class="crm-panel">
+        <div class="crm-panel-heading"><div><span class="crm-eyebrow">PREPARED / LOCAL ONLY</span><h2>Follow-up for review</h2></div><span class="crm-status-tag">Unsent</span></div>
+        <p class="crm-source-note">{{ prepared_followup.status }}. Review the original Gmail thread before any separate, explicitly approved send.</p>
+        <details><summary>Read follow-up: {{ prepared_followup.subject }}</summary>
+          <pre class="crm-draft-preview">{{ prepared_followup.body }}</pre>
+          <p class="crm-source-note">Attachments: {{ prepared_followup.attachment_names|join(', ') }}</p>
+        </details>
+      </section>
+      {% endif %}
+      {% if prepared_new_investor %}
+      <section class="crm-panel">
+        <div class="crm-panel-heading"><div><span class="crm-eyebrow">NEW INVESTOR / LOCAL REVIEW</span><h2>First email for review</h2></div><span class="crm-status-tag">Unsent</span></div>
+        <p class="crm-source-note">{{ prepared_new_investor.status }}. Verify the source, route and firm history again before a separately approved live send.</p>
+        <details><summary>Read first email: {{ prepared_new_investor.subject }}</summary>
+          <pre class="crm-draft-preview">{{ prepared_new_investor.body }}</pre>
+          <p class="crm-source-note">Attachments: {{ prepared_new_investor.attachment_names|join(', ') }}</p>
+        </details>
+      </section>
+      {% endif %}
+      <section class="crm-panel">
+        <div class="crm-panel-heading">
+          <div><span class="crm-eyebrow">PROFILE / OPERATOR-MAINTAINED</span><h2>Fit and next step</h2></div>
+          <span class="crm-muted">Unknown values are left blank</span>
+        </div>
+        <form class="crm-form" method="post" action="{{ url_for('crm_profile_update', partner_id=partner.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          {% if stages is defined and stages %}
+          <label for="crm_contact-field-1"><span>RELATIONSHIP STAGE</span><select id="crm_contact-field-1" name="stage"><option value="">Keep current stage</option>{% for stage_name in stages %}<option value="{{ stage_name }}" {% if profile.get('stage') == stage_name %}selected{% endif %}>{{ stage_name|replace('_', ' ')|title }}</option>{% endfor %}</select></label>
+          {% else %}
+          <div class="crm-readonly-field"><span>RELATIONSHIP STAGE</span><strong>{{ profile.get('stage')|replace('_', ' ')|title if profile.get('stage') else 'Unknown' }}</strong></div>
+          {% endif %}
+          <label for="crm_contact-field-2"><span>FIT GRADE</span><select id="crm_contact-field-2" name="fit_grade">{% for grade in ['unreviewed', 'high', 'medium', 'low', 'not_fit'] %}<option value="{{ grade }}" {% if profile.get('fit_grade') == grade %}selected{% endif %}>{{ grade|replace('_', ' ')|title }}</option>{% endfor %}</select></label>
+          <label class="crm-field-wide" for="crm_contact-field-3"><span>INVESTOR UPDATE LIST</span><span><input id="crm_contact-field-3" type="checkbox" name="on_update_list" value="1" {% if profile.get('on_update_list') %}checked{% endif %}> Include this contact in investor updates</span></label>
+          <label class="crm-field-wide" for="crm_contact-field-4"><span>FIT RATIONALE</span><textarea id="crm_contact-field-4" name="fit_rationale" rows="3" placeholder="Add a source-grounded reason or leave unknown">{{ profile.get('fit_rationale') or '' }}</textarea></label>
+          <label for="crm_contact-field-5"><span>CHECK SIZE MIN</span><input id="crm_contact-field-5" type="number" name="check_size_min" min="0" step="1" value="{{ profile.get('check_size_min') if profile.get('check_size_min') is not none else '' }}" placeholder="Unknown"></label>
+          <label for="crm_contact-field-6"><span>CHECK SIZE MAX</span><input id="crm_contact-field-6" type="number" name="check_size_max" min="0" step="1" value="{{ profile.get('check_size_max') if profile.get('check_size_max') is not none else '' }}" placeholder="Unknown"></label>
+          <label for="crm_contact-field-7"><span>FUND STATUS</span><input id="crm_contact-field-7" type="text" name="fund_status" value="{{ profile.get('fund_status') or '' }}" placeholder="Unknown"></label>
+          <label for="crm_contact-field-8"><span>NEXT FOLLOW-UP</span><input id="crm_contact-field-8" type="datetime-local" name="next_follow_up_at" value="{{ profile.get('next_follow_up_at')[:16] if profile.get('next_follow_up_at') else '' }}"></label>
+          <label class="crm-field-wide" for="crm_contact-field-9"><span>FOLLOW-UP REASON</span><textarea id="crm_contact-field-9" name="follow_up_reason" rows="2" placeholder="Why is this follow-up due?">{{ profile.get('follow_up_reason') or '' }}</textarea></label>
+          <label for="contactTags"><span>Tags, comma separated</span><input id="contactTags" name="tags" maxlength="1000" value="{{ partner.tags or '' }}"></label>
+          <label for="contactNotes"><span>Notes</span><textarea id="contactNotes" name="notes" maxlength="10000">{{ partner.notes or '' }}</textarea></label>
+          <label for="contactNextAction"><span>Next action</span><input id="contactNextAction" name="next_action" maxlength="1000" value="{{ partner.next_action or '' }}"></label>
+          <div class="crm-form-footer"><span>Saving updates local relationship data only.</span><button class="crm-button crm-button-primary" type="submit">Save profile</button></div>
+        </form>
+      </section>
+
+      <section class="crm-panel crm-activity-panel">
+        <div class="crm-panel-heading">
+          <div><span class="crm-eyebrow">LOCAL ACTIVITY</span><h2>Record an interaction</h2></div>
+          <span class="crm-muted">Does not send email</span>
+        </div>
+        <form class="crm-form" method="post" action="{{ url_for('crm_activity_add', partner_id=partner.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <label for="crm_contact-field-10"><span>ACTIVITY TYPE</span><select id="crm_contact-field-10" name="activity_type"><option value="note">Note</option><option value="call">Call</option><option value="meeting">Meeting</option><option value="follow_up">Follow-up</option></select></label>
+          <label for="crm_contact-field-11"><span>SUBJECT</span><input id="crm_contact-field-11" type="text" name="subject" maxlength="180" placeholder="Short activity title"></label>
+          <label class="crm-field-wide" for="crm_contact-field-12"><span>SHORT SUMMARY</span><textarea id="crm_contact-field-12" name="snippet" rows="3" maxlength="600" placeholder="Add a brief CRM note. Do not paste full message bodies."></textarea></label>
+          <div class="crm-form-footer"><span>Only the short summary appears in the timeline.</span><button class="crm-button crm-button-secondary" type="submit">Save activity</button></div>
+        </form>
+      </section>
+
+      <section class="crm-panel">
+        <div class="crm-panel-heading"><div><span class="crm-eyebrow">TIMELINE / REDACTED VIEW</span><h2>Recent relationship activity</h2></div><span class="crm-muted">{{ timeline|length }} items</span></div>
+        <ol class="crm-timeline">
+          {% for item in timeline %}
+          <li class="crm-timeline-item">
+            <div class="crm-timeline-meta"><time>{{ item.date[:16]|replace('T', ' ') if item.date else 'Date unknown' }}</time><span>{{ item.type|replace('_', ' ')|title if item.type else 'Type unknown' }}</span><span class="crm-status-tag">{{ item.status|replace('_', ' ')|title if item.status else 'Status unknown' }}</span></div>
+            <h3>{{ item.subject or 'Activity subject unknown' }}</h3>
+            <p>{{ item.snippet or 'No short summary recorded.' }}</p>
+          </li>
+          {% else %}
+          <li class="crm-empty-state">No timeline activity is recorded.</li>
+          {% endfor %}
+        </ol>
+      </section>
+    </div>
+
+    <aside class="crm-detail-side">
+      <section class="crm-panel">
+        <div class="crm-panel-heading"><div><span class="crm-eyebrow">TASKS / FOLLOW-UP QUEUE</span><h2>Open tasks</h2></div><span class="crm-count-pill">{{ activities|length }}</span></div>
+        <div class="crm-task-list">
+          {% for activity in activities %}
+          <article class="crm-task-card">
+            <div class="crm-task-topline"><span>{{ activity.type|replace('_', ' ')|title if activity.type else 'Task' }}</span><span class="crm-status-tag">{{ activity.status|replace('_', ' ')|title if activity.status else 'Status unknown' }}</span></div>
+            <strong>{{ activity.title or activity.subject or 'Task title unknown' }}</strong>
+            <time>{{ activity.due_at[:16]|replace('T', ' ') if activity.due_at else (activity.next_follow_up_at[:16]|replace('T', ' ') if activity.next_follow_up_at else 'Due date unknown') }}</time>
+            {% if activity.id is defined and activity.status in ['open', 'due', 'pending'] %}
+            <form method="post" action="{{ url_for('crm_task_complete', task_id=activity.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <button class="crm-button crm-button-small crm-button-secondary" type="submit">Mark complete</button>
+            </form>
+            {% endif %}
+          </article>
+          {% else %}
+          <p class="crm-empty-state">No open CRM tasks are recorded.</p>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="crm-panel">
+        <div class="crm-panel-heading"><div><span class="crm-eyebrow">PUBLIC REFERENCE LINKS</span><h2>Research sources</h2></div></div>
+        <div class="crm-source-list">
+          <div><span>PITCHBOOK</span>{% if pitchbook_url and pitchbook_url.startswith('https://') %}<span class="source-reference">Open profile ↗ <span class="text-muted">({{ pitchbook_url }})</span> <button type="button" class="copy-source" data-copy-text="{{ pitchbook_url }}">Copy URL</button></span>{% else %}<strong>Unavailable</strong>{% endif %}</div>
+          <div><span>ENROW</span>{% if enrow_url and (enrow_url.startswith('https://') or enrow_url.startswith('/')) %}<span class="source-reference">Open verification workspace ↗ <span class="text-muted">({{ enrow_url }})</span> <button type="button" class="copy-source" data-copy-text="{{ enrow_url }}">Copy URL</button></span>{% else %}<strong>Unavailable</strong>{% endif %}</div>
+        </div>
+        <p class="crm-source-note">Copy a source URL to inspect its existing record. This page does not start a paid lookup.</p>
+        {% if tracking.status == 'tracked' %}
+        <div class="crm-source-note"><strong>Cloudflare signal for this contact:</strong> {{ tracking.action_count }} verified, activated local send action{{ '' if tracking.action_count == 1 else 's' }} in the last 30 days.</div>
+        <div class="crm-source-note">Open requests: {{ tracking.event_type_counts.open.automation_likely }} automation likely, {{ tracking.event_type_counts.open.unknown }} unknown, {{ tracking.event_type_counts.open.human_likely }} human likely. Click requests: {{ tracking.event_type_counts.click.automation_likely }} automation likely, {{ tracking.event_type_counts.click.unknown }} unknown, {{ tracking.event_type_counts.click.human_likely }} human likely. These are requests, not confirmed human reads or clicks.</div>
+        {% elif tracking.status == 'not_instrumented' %}
+        <div class="crm-source-note"><strong>Cloudflare signal for this contact:</strong> no verified, activated tracking action is linked in the last 30 days. This is not a zero-open result.</div>
+        {% else %}
+        <div class="crm-source-note"><strong>Cloudflare signal for this contact:</strong> unavailable. {{ tracking.get('reason') or 'A local action or Worker response could not be verified.' }} No zero counts are inferred.</div>
+        {% endif %}
+        <div class="crm-source-note">Provider acceptance is not proof of inbox delivery.</div>
+        <p class="crm-source-note"><a href="{{ url_for('crm_tracking') }}">View Cloudflare aggregate tracking</a>. The aggregate also covers other tracked campaigns.</p>
+      </section>
+
+      <section class="crm-panel">
+        <div class="crm-panel-heading"><div><span class="crm-eyebrow">ORGANIZATION / CONTACTS</span><h2>Related people</h2></div><span class="crm-muted">{{ related_contacts|length }} records</span></div>
+        <p class="crm-source-note">Search local relationship history, saved research, and the pinned official team page for another investor, principal, or general partner. Results are leads for review, not cleared sends.</p>
+        <a class="crm-button crm-button-secondary" href="{{ url_for('crm_alternate_investors', partner_id=partner.id) }}">Find more investors at this firm</a>
+        {% if partner.firm %}<p class="crm-source-note"><a href="{{ url_for('crm_dashboard', view='all', q=partner.firm) }}">Search all local contacts at {{ partner.firm }}</a> · <a href="{{ url_for('partners_list', q=partner.firm) }}">Search campaign research</a></p>{% endif %}
+        <div class="crm-related-list">
+          {% for contact in related_contacts %}
+          <a class="crm-related-person" href="{{ url_for('crm_contact', partner_id=contact.id) }}">
+            <strong>{{ contact.partner_name or 'Unknown contact' }}</strong>
+            <span>{{ contact.firm or 'Organization unknown' }}</span>
+            <span>{{ contact.stage|replace('_', ' ')|title if contact.stage else 'Stage unknown' }}</span>
+          </a>
+          {% else %}
+          <p class="crm-empty-state">No related contacts are recorded.</p>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="crm-panel">
+        <div class="crm-panel-heading"><div><span class="crm-eyebrow">ENRICHMENT / SOURCED FACTS</span><h2>Available context</h2></div><span class="crm-muted">{{ enrichment_facts|length }} facts</span></div>
+        <div class="crm-fact-list">
+          {% for fact in engine_contact.facts %}<article class="crm-fact-card"><p>{{ fact }}</p></article>{% endfor %}
+          {% for fact in enrichment_facts %}
+          <article class="crm-fact-card">
+            <div><span>{{ fact.source or 'Source unknown' }}</span>{% if fact.fetched_at %}<time>{{ fact.fetched_at[:10] }}</time>{% endif %}</div>
+            <p>{{ fact.fact or fact.value or fact.text or 'Fact value unknown' }}</p>
+            {% if fact.source_url and fact.source_url.startswith('https://') %}<span class="source-reference">View source ↗ <span class="text-muted">({{ fact.source_url }})</span> <button type="button" class="copy-source" data-copy-text="{{ fact.source_url }}">Copy URL</button></span>{% endif %}
+          </article>
+          {% else %}
+          <p class="crm-empty-state">{% if not engine_contact.facts %}No enrichment facts are recorded. Source context is unknown.{% else %}Contact facts are recorded above.{% endif %}</p>
+          {% endfor %}
+        </div>
+      </section>
+    </aside>
+  </div>
+  <footer class="crm-footer"><span>CONTACT {{ partner.id }}</span><span>LOCAL CRM DATA / INVESTOR SEND REQUIRES SEPARATE APPROVAL</span></footer>
+</div>
+{% endblock %}

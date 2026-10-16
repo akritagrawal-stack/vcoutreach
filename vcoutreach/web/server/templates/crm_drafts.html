@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+{% block page_id %}crm_drafts{% endblock %}
+{% block title %}Drafts (lint) / Publik Signal{% endblock %}
+{% block content %}
+<div class="crm-shell">
+  <header class="crm-hero">
+    <div><div class="crm-eyebrow">DRAFT REVIEW / WORKSPACE FILES</div><h1>Drafts (lint).</h1><p>Review each email, fix flagged issues, and check the recipient before sending.</p></div>
+    <div class="form-actions"><a class="crm-button crm-button-secondary" href="/crm/send-plan">View send plan</a><a class="crm-button crm-button-secondary" href="/partners">Review batch send</a></div>
+  </header>
+  <section class="crm-panel">
+    <h2>Write drafts</h2>
+    <form method="post" action="/crm/drafts/write" class="crm-filters">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label for="draftProvider">Provider</label>
+      <select id="draftProvider" name="provider">{% for provider in providers %}<option value="{{ provider }}">{{ provider|title }}</option>{% endfor %}</select>
+      <button class="crm-button crm-button-primary" type="submit">Write drafts for everyone without one</button>
+    </form>
+    <p class="crm-source-note">{{ provider_status }} Without a configured key, Auto uses a placeholder template.</p>
+  </section>
+  <form class="crm-filters" method="get" action="/crm/drafts">
+    <label for="draftSearch">Search drafts<input id="draftSearch" type="search" name="q" value="{{ query }}"></label>
+    <label for="draftStatus">Status<select id="draftStatus" name="status"><option value="">All statuses</option>{% for status in ['ok','blocked'] %}<option value="{{ status }}" {% if status_filter == status %}selected{% endif %}>{{ status|title }}</option>{% endfor %}</select></label>
+    <button type="submit" class="crm-button crm-button-secondary">Apply filters</button>
+  </form>
+  <section class="crm-panel">
+    <div class="crm-panel-heading"><h2>Review queue</h2><span>{{ draft_count }} drafts</span></div>
+    <div class="crm-table-wrap"><table class="crm-table">
+      <caption class="sr-only">Workspace drafts and lint results</caption>
+      <thead><tr><th>Contact</th><th>Subject</th><th>Status</th><th>Issues</th><th>Words</th><th>Action</th></tr></thead>
+      <tbody>{% for item in drafts %}<tr>
+        <td>{{ item.recipient_name }}<span class="crm-table-subline">{{ item.recipient_email }}</span></td>
+        <td>{{ item.subject }}</td><td><span class="badge {{ 'badge-danger' if item.status == 'blocked' else 'badge-success' }}">{{ item.status }}</span></td>
+        <td>{% for issue in item.issues %}<span class="issue-chip">{{ issue.message|default(issue.code) }}</span>{% else %}No issues{% endfor %}</td>
+        <td>{{ item.word_count }}</td><td><a href="/crm/drafts/{{ item.slug|urlencode }}">Edit draft</a>
+          {% if item.partner_id %}
+          <form method="post" action="/partners/{{ item.partner_id }}/send-test"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit" class="crm-button crm-button-small crm-button-secondary">Send test</button></form>
+          <form method="post" action="/partners/{{ item.partner_id }}/send" class="settings-fields"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            {% if g_send_mode == 'live' %}<label for="draft-send-{{ item.slug }}">Type SEND TO {{ item.recipient_email }}<input id="draft-send-{{ item.slug }}" name="confirm_text" autocomplete="off" required></label>{% endif %}
+            <button type="submit" class="crm-button crm-button-small crm-button-secondary">{{ 'Send to contact' if g_send_mode == 'live' else 'Send in test mode' }}</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>{% else %}<tr><td colspan="6" class="crm-empty-row">No drafts in this view. <a href="/crm/new">Add your first contact</a>, then write a draft.</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </section>
+</div>
+{% endblock %}

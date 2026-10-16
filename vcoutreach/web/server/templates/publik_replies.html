@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% block page_id %}publik_replies{% endblock %}
+{% block title %}Publik responses / {{ g_workspace.workspace_name }}{% endblock %}
+
+{% block content %}
+<div class="control-console publik-responses">
+  <header class="control-hero compact-hero">
+    <div>
+      <div class="control-kicker"><span class="live-pixel"></span> CONVERSATION INTELLIGENCE / ALL REPLIES</div>
+      <h1>Capture every response.<br><span>Accelerate every conversation.</span></h1>
+      <p>Match replies to the current investor pipeline, keep hot conversations visible, and never lose the next follow-up in Gmail.</p>
+    </div>
+  </header>
+  <section class="console-panel">
+    <div class="panel-heading"><div><span class="panel-index">A / DEAL EXECUTION</span><h2>Keep every investor conversation moving</h2></div><span class="status-chip sample">{{ rows|length }} LOCAL MATCHES</span></div>
+    <div class="data-table-wrap">
+      <table class="data-table publik-response-table"><caption class="sr-only">Publik Replies records</caption>
+        <thead><tr><th>Investor</th><th>Firm</th><th>Subject</th><th>Classification</th><th>Received</th></tr></thead>
+        <tbody>
+          {% for row in rows %}
+          <tr><td><strong>{{ row.partner_name or row.from_name or 'Matched recipient' }}</strong></td><td>{{ row.firm or 'Firm unavailable' }}</td><td>{{ row.subject or 'No subject' }}</td><td><span class="status-chip sample">{{ (row.user_label or row.label or 'other')|replace('_', ' ')|upper }}</span></td><td>{{ (row.received_at or row.discovered_at or '')[:16]|replace('T', ' ') }}</td></tr>
+          {% else %}
+          <tr><td colspan="5" class="empty-state"><strong>No replies are recorded yet.</strong><br>Refresh the Gmail inbox to match replies to your contacts.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  <footer class="control-footer"><span>EXACT MAILBOX-HASH MATCHING</span><span>ARCHIVED CAMPAIGNS EXCLUDED</span></footer>
+</div>
+{% endblock %}

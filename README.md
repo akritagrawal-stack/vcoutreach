@@ -24,13 +24,18 @@ What it does:
 - Writes one draft per contact to `drafts/`, and `drafts/index.jsonl` with one JSON object per draft.
 - Blocks drafts that fail the checks and puts them in `drafts/blocked/` with the reasons.
 - Optionally sends drafts through your own Gmail account, with a plan-only default and a test-inbox default.
-- Offers a local browser app (`vcoutreach ui`) for the same drafting steps, with a send plan that is preview only. See [Use it in your browser](#use-it-in-your-browser-easiest).
+- Offers a local browser app (`vcoutreach ui`) for the same drafting steps, with the Overview, drafts, replies, verification, enrichment, scheduling and a guarded TEST/LIVE send flow. See [The browser app](#the-browser-app).
 
 What it does not do, on purpose:
 
-- No contact enrichment, scraping, or lead lists. You bring the contacts and the facts.
-- No CRM, no reply reading, no reply classification.
-- No bulk auto-send. Sending is optional, narrow, and off the quickstart path.
+- No lead lists and no scraping of your own. You bring the contacts and the facts.
+  The command-line core does no enrichment. The browser app adds optional
+  enrichment, email verification, reply reading and a small CRM, each run only when
+  you click it, with your own keys and accounts.
+- No bulk auto-send. Sending is optional, narrow, and off the quickstart path. The
+  command line plans by default. The browser app starts in TEST mode every run, and
+  live sends need typed confirmations, a daily cap and a duplicate journal. Its
+  scheduler is off unless you set `OUTREACH_SCHEDULER=1`.
 - No verification that your facts are true. The tool checks that a hook only uses
   facts you gave it. Verify each fact yourself and keep a source URL for it.
 - No real contact data ships with this repository. The samples are fictional.
@@ -183,16 +188,13 @@ A leading `Your` in the fact is lower-cased to `your` so the sentence reads
 properly. Use offline mode to try the pipeline and check your CSV. For outreach you plan to
 send, use a real provider so the hook reads like a person wrote it.
 
-## Use it in your browser (easiest)
+## The browser app
 
-If you would rather click than type commands, `vcoutreach ui` opens a small web
-app on your own computer. It walks you through five steps: **Sender** (who the
-note is from and the claims you are allowed to make), **Contacts** (the people and
-verified facts about them), **Draft** (pick a writer and write the first drafts),
-**Review** (read, edit and re-check each draft), and **Send plan** (a preview of
-what a send would do). It never sends email. The Send plan screen is a plan only;
-to actually send, use the command line (see
-[Optional: sending with Gmail](#optional-sending-with-gmail)).
+`vcoutreach ui` opens a full local web app on your own computer. It is the same
+drafting engine as the command line, plus a contacts table, a draft editor, reply
+reading, email verification, enrichment, analytics, scheduled sends and a guarded
+send flow. It runs from your own workspace folder and only talks to a service when
+you click a button for it.
 
 ### On a Mac: one line
 
@@ -204,63 +206,144 @@ curl -fsSL https://raw.githubusercontent.com/akritagrawal-stack/vcoutreach/main/
 
 What it does:
 
-- Installs the app into `~/vcoutreach` with its own private virtual environment,
-  so it does not touch the Python on the rest of your Mac.
+- Installs the app with `pip install -e ".[web,gmail]"` into `~/vcoutreach`, in its
+  own private virtual environment, so it does not touch the Python on the rest of
+  your Mac. The `web` extra is Flask; the `gmail` extra is the Google libraries.
 - Puts a double-clickable `Outreach.command` on your Desktop. Double-click it to
   open the app in your browser. Close the Terminal window it opens to stop the app.
-- Keeps your contacts and drafts in `~/Documents/vcoutreach-workspace`, separate
-  from the app.
-- Needs Python 3.10 or newer. If the installer cannot find one and Homebrew is
-  installed, it asks whether to run `brew install python` for you.
-- Update by running the same line again. The previous copy is kept next to it as a
-  timestamped `.old` backup.
-- If macOS says `Outreach.command` is from an unidentified developer, right-click
-  it, choose Open, then confirm Open. You only need to do this once.
-- Uninstall with `bash "$HOME/vcoutreach/packaging/mac/uninstall-mac.sh"`. It
+- Keeps your contacts, drafts, database and keys in
+  `~/Documents/vcoutreach-workspace`, separate from the app.
+- Needs Python 3.10 or newer. macOS ships 3.9, which is too old. If the installer
+  cannot find a newer one and Homebrew is installed, it asks whether to run
+  `brew install python` for you. Otherwise install Python from
+  https://www.python.org/downloads/macos/ and run the line again.
+- Updates by running the same line again. The previous copy is kept next to it as a
+  timestamped `.old` backup. Your workspace is not touched.
+- Uninstalls with `bash "$HOME/vcoutreach/packaging/mac/uninstall-mac.sh"`. It
   removes the app and the Desktop launcher and asks before deleting your workspace
   (it keeps the workspace by default).
+- If macOS says `Outreach.command` is from an unidentified developer, right-click
+  it, choose Open, then confirm Open. You only need to do this once.
 
 The installer also accepts `--dry-run`, `--dir PATH`, `--workspace PATH`,
 `--ref REF` and `--no-launcher-on-desktop`. Add them after the line with
 `| bash -s -- --dry-run`. See [`packaging/mac/README.md`](packaging/mac/README.md)
-for the full details.
+for the full details. Gemini, Claude and PitchBook need one more optional install,
+`pip install -e ".[integrations]"` (see [docs/integrations.md](docs/integrations.md)).
 
 ### The manual way
 
-If you already followed the quickstart above (or are not on a Mac), activate your
-virtual environment and run this from the folder where you want your files to
-live:
+If you already followed the quickstart above (or are not on a Mac), install the
+extras and run this from the folder where you want your files to live:
 
 ```
+pip install -e ".[web,gmail]"
 vcoutreach ui
 ```
 
-You do not need `vcoutreach init`. The app can load the sample sender and contacts
-for you with one button, and it never overwrites a file you already have. It
-prints a link that looks like `http://127.0.0.1:8765/#token=...` and opens it in
-your browser. Press Ctrl+C in the terminal to stop it. If the browser does not
-open, copy the printed link into it yourself.
+It prints a line like `Open this link: http://127.0.0.1:8765/?token=...` and opens
+it in your browser. The link works once. The app exchanges it for a browser session
+and moves you to a page address without the token. Press Ctrl+C in the terminal to
+stop it. If the browser does not open, copy the printed link into it yourself. A
+used or old link is refused; stop the app and start it again to get a new one.
 
 | Flag | Meaning |
 | --- | --- |
-| `--workspace DIR` | The folder that holds `contacts.csv`, `sender.json`, `drafts/` and `.env`. Default: the current folder. |
+| `--workspace DIR` | The folder that holds `contacts.csv`, `sender.json`, `drafts/`, `data/` (the database), `outputs/` and `.env`. Default: the current folder. |
 | `--port N` | Use exactly this port. Without it, the app tries 8765, then the next 20 ports if that one is busy. |
 | `--no-browser` | Print the link without opening a browser. |
 
-### Safety notes
+### What each page does
 
-- It listens on `127.0.0.1` only, so other computers on your network cannot reach
-  it.
-- The link contains a secret token created fresh each time you start the app. The
-  app refuses requests that do not carry it. Treat the link like a password and do
-  not share it.
-- It never sends email. The Send plan screen shows what the command line would do
-  and nothing more.
-- API keys you type in are saved only to the `.env` file in your workspace folder
-  (readable and writable by you alone, mode 0600). Saved keys are never shown again
-  in the app, and they are masked out of anything the app returns.
-- Everything stays in your workspace folder. The app refuses paths that leave it
-  and refuses symbolic links inside it.
+The top bar links to every page.
+
+| Page | What it does |
+| --- | --- |
+| Overview (`/crm`) | Your contacts as a pipeline, with filters, import and export of the contacts CSV, a form to add a contact, and a contact page with notes, tasks and its draft. The first screen offers the sample when the workspace is empty. |
+| Drafts (lint) | Lists the drafts in your workspace `drafts/` folder with word counts and issue chips from the engine's linter. Open one to edit the subject and body, save, and see the draft re-checked. "Write drafts" runs the engine with the provider you pick. |
+| Analytics | Counts from your own records: contacts by stage, drafts, sends, replies. Tracking numbers appear only if you connected a tracking Worker. |
+| Partners | The reviewable contact table: approve, reject, edit the hook, enrich, generate a hook, send a test, send. |
+| Verification | Checks an email address with Enrow or Apollo, using your own key, one contact at a time. You apply or dismiss each result. |
+| Replies | Replies you have recorded or pulled from Gmail, with a label (for example interested or needs more info) you can change and a reviewed flag. "Poll replies" reads Gmail. |
+| Candidates | Co-investor candidates found through PitchBook backtracing (needs your own PitchBook session). You tick the ones to import and they become contacts. |
+| Enrichment | Status of the enrichment sources, and results per contact (web search, PitchBook when enabled). |
+| Scheduled | Sends you scheduled for later, with a cancel button. Nothing runs from this list unless the scheduler is turned on (see below). |
+| Send plan | A read-only preview from the engine's send gate: who would be sent, who is held and why. Nothing is sent from this screen. |
+| Settings (`/settings`) | Your sender profile (including the first-touch subject), workspace identity, a write-only form for keys and connection settings, the PitchBook browser session, and the Gmail connection state. |
+| Tracking | Read-only open, click and deck-view counts from your own Cloudflare tracking Worker, if you deployed one. Empty otherwise. |
+
+### TEST mode and LIVE mode
+
+The send flow has two modes, shown in the top bar.
+
+- **TEST** (the default). The app starts in TEST every run, even if you left it in
+  LIVE last time. Every message goes to `TEST_RECIPIENT_EMAIL`, never to the real
+  contact. There is no default for that address: set your own test inbox in
+  Settings, under "Keys and connection settings", first, otherwise a send is refused with a one-line message.
+- **LIVE** sends to real contacts. Switching to it means typing the phrase
+  `GO LIVE`. After that, each action needs its own typed phrase, so a stray click
+  cannot send anything:
+  - one contact: `SEND TO <email>` with that contact's address;
+  - a batch of approved drafts, from Partners: `SEND BATCH OF <n>`, where
+    `<n>` is how many drafts are selected;
+  - a scheduled send: `SCHEDULE LIVE FOR <n>`.
+- A send journal records every attempt before the message leaves, so the same
+  contact and lane is never sent live twice, even after a restart. If an attempt is
+  uncertain (for example a network drop), it stays blocked until you check your
+  Gmail Sent folder. If it did not go out, open the contact page and click
+  "I checked Sent, it did not go out, allow retry". The check is logged and the
+  uncertain attempt stays in history as retryable.
+- A daily cap limits live sends per day (default 20 in the app; change it with
+  `DAILY_SEND_CAP` in Settings, between 1 and 10000).
+- The scheduler is off unless you start the app with `OUTREACH_SCHEDULER=1`. With
+  it off, scheduled rows just wait, including when the executor is called directly.
+  A scheduled live send still needs its typed phrase when you schedule it.
+  The contact page's Send test and Send in test mode buttons work independently
+  of this switch and use the same send journal as other manual sends.
+
+Run a TEST send to your own inbox and read it before you ever type `GO LIVE`.
+**Only email people you are allowed to contact, and follow the anti-spam and privacy
+law that applies to you and to them** (CAN-SPAM, GDPR and ePrivacy rules, CASL).
+You are responsible for consent and an opt-out path. This is not legal advice.
+
+### Connecting services
+
+Everything beyond local drafting is optional and uses your own accounts and keys:
+Gmail, Enrow, Apollo, PitchBook, Gemini, Claude and a Cloudflare tracking Worker.
+[docs/integrations.md](docs/integrations.md) lists, for each one, what it needs,
+what it does in the app, and what it costs or requires from you.
+
+### Try it with the sample
+
+On an empty workspace, "Load the sample" puts a sender profile, five contacts at
+`example.com` addresses (the last one is a thin row on purpose), the first-email
+structure the engine uses, and one recorded reply into the workspace. It then drafts
+locally with the offline template provider, so you get four ok drafts and one
+blocked draft without any key or network call. It refuses to run if the workspace
+already has contacts, a sender profile or drafts. Every contact in it is fictional.
+
+Replace the sample sender profile, company and claims with your own before real use.
+
+**The sample is for learning the screens.** Every name, number and claim in a real
+email must be your own and verified by you before you send it. The checks reduce
+invented facts; they cannot tell whether a fact you typed is true.
+
+### Safety
+
+- The app listens on `127.0.0.1` only, so other computers on your network cannot
+  reach it, and it rejects requests with a different Host header.
+- The link carries a one-time token. After the first use the app switches to an
+  HttpOnly, SameSite=Strict session cookie and every page needs it.
+- Every form that changes anything carries a CSRF token, checked on the server.
+- Keys you type are written only to the `.env` file in your workspace (mode 0600),
+  from an allowlist of names. They are never shown again and never appear in pages
+  or error messages. On macOS the app can also read a key from your Keychain.
+- Nothing is sent out until you click. The app makes an outbound call only for the
+  button you pressed, to a fixed service address or to the Worker address you
+  entered yourself. The scheduler is the one exception, and it is off by default.
+- Pages load no external scripts, fonts or images, and errors are one short line
+  without file paths.
+- Everything stays in your workspace folder. The app refuses paths that leave it.
 - If you pick a provider other than the free template, the contact facts and sender
   details for those drafts are sent to that provider, exactly as with the command
   line.
@@ -622,8 +705,9 @@ Safeguards:
   protection.
 - Live sends honor `DAILY_SEND_CAP` (default 20 per UTC day). Drafts past the cap
   are reported as `daily_cap`. `--limit N` caps one run.
-- The Gmail integration requests the single `gmail.send` scope and never reads
-  your mailbox. The token file is created with owner-only permissions and is
+- The command-line Gmail integration requests the single `gmail.send` scope and
+  never reads your mailbox. (The browser app uses its own, broader token so it can
+  read replies; see [docs/integrations.md](docs/integrations.md).) The token file is created with owner-only permissions and is
   never logged.
 
 Set up, with the virtual environment active. Install the optional Google
@@ -707,7 +791,7 @@ You can also run `python -m vcoutreach`. Every flag has a help string:
 | `vcoutreach lint --drafts DIR [--sender FILE]` | Re-lints the `.md` drafts directly inside DIR. DIR is a directory, not a single file. It does not look inside `DIR/blocked`. |
 | `vcoutreach providers` | Lists providers and which are configured. Never prints keys. A provider with a key but no model shows `configured=no` and the missing variable name. |
 | `vcoutreach send --drafts DIR [--sender FILE] [--execute] [--live --confirm-live VALUE] [--limit N]` | Plans sends by default. See the Gmail section. |
-| `vcoutreach ui [--workspace DIR] [--port N] [--no-browser]` | Opens the local browser app (127.0.0.1 only, secret token in the link). Five steps: Sender, Contacts, Draft, Review, Send plan. It never sends email. See [Use it in your browser](#use-it-in-your-browser-easiest). |
+| `vcoutreach ui [--workspace DIR] [--port N] [--no-browser]` | Opens the local browser app (127.0.0.1 only, one-time token in the link). It starts in TEST mode and sends nothing until you type the confirmation phrases. See [The browser app](#the-browser-app). |
 | `vcoutreach auth gmail` | Runs the local Gmail OAuth flow. |
 | `vcoutreach --version` | Prints the version. |
 
@@ -727,7 +811,7 @@ Flags for `ui`:
 | Flag | Meaning |
 | --- | --- |
 | `--workspace DIR` | Folder holding `contacts.csv`, `sender.json`, `drafts/` and `.env`. Default: the current folder. |
-| `--port N` | Use exactly this port (1 to 65535). Default: 8765, then the next 20 if busy. If no port is free, or `N` is in use, it exits 2 with a `cannot start ui` message. |
+| `--port N` | Use exactly this port (1024 to 65535). Default: 8765, then the next 20 if busy. If no port is free, or `N` is in use, it exits 2 with a `cannot start ui` message. |
 | `--no-browser` | Print the link without opening a browser. |
 
 Flags for `lint`:
@@ -890,6 +974,9 @@ cannot be created or written. Pick another folder with `--out`.
 
 ## Contributing, security, license
 
+- More on the browser app: [docs/web-app.md](docs/web-app.md) (workspace and settings) and
+  [docs/integrations.md](docs/integrations.md) (Gmail, Enrow, Apollo, PitchBook, Gemini,
+  Claude, Cloudflare tracking).
 - Contributions: see [CONTRIBUTING.md](CONTRIBUTING.md). Real contact data,
   credentials, scraping, and anything that bypasses the send safeguards will not
   be accepted.

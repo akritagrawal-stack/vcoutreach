@@ -1,0 +1,32 @@
+# Copy locally to wrangler.toml and enter your own resource identifiers.
+name = "outreach-signal-tracking"
+main = "src/worker.ts"
+compatibility_date = "2026-07-30"
+workers_dev = true
+
+[vars]
+PUBLIC_ORIGIN = "https://YOUR-WORKER.YOUR-SUBDOMAIN.workers.dev"
+DESTINATION_ORIGINS = "https://example.com"
+DESTINATION_MAP_JSON = '{"publik_home":"https://example.com/","deck":"https://example.com/deck.pdf"}'
+
+[triggers]
+crons = ["0 * * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "YOUR_DATABASE_NAME"
+database_id = "YOUR_DATABASE_ID"
+migrations_dir = "migrations"
+
+# Optional private deck assets. Stage your own PDF before enabling this section.
+# [assets]
+# directory = "./deck_assets"
+# binding = "ASSETS"
+# run_worker_first = true
+# DECK_ASSET_PATH defaults to /deck.pdf.
+
+# Secrets are set with wrangler secret put, never committed:
+# TRACKING_SIGNING_KEY, INTERNAL_API_KEY, ACTIVATION_SIGNING_KEY,
+# DASHBOARD_ACCESS_SECRET
+# Optional Cloudflare Access authentication:
+# ACCESS_TEAM_DOMAIN, ACCESS_AUD, ACCESS_JWKS_JSON

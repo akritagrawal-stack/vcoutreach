@@ -57,6 +57,7 @@ class SenderProfile:
     ask_line: str = ""                   # approved closing ask, may contain a calendar link
     approved_claims: Mapping[str, str] = field(default_factory=dict)
     forbidden_phrases: tuple[str, ...] = ()
+    first_touch_subject: str = ""
 
 @dataclass(frozen=True)
 class PersonalizationRequest:

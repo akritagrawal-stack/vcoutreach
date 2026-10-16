@@ -6,15 +6,14 @@ Paste this one line into Terminal:
 curl -fsSL https://raw.githubusercontent.com/akritagrawal-stack/vcoutreach/main/install-mac.sh | bash
 ```
 
-The installer downloads the app, finds Python 3.10 or newer, and installs it in ~/vcoutreach.
-If needed, it offers to install Python with an existing Homebrew installation.
-Your contacts and drafts stay in ~/Documents/vcoutreach-workspace.
-Double-click Outreach.command on your Desktop to open the app in your browser.
-Close the Terminal window to stop the app.
-To update, run the same line again. Previous installs get timestamped .old backups.
+The installer downloads the app, finds Python 3.10 or newer, and installs it with `.[web,gmail]` in ~/vcoutreach.
+If needed, it offers to install Python with an existing Homebrew installation (`brew install python`).
+Your contacts, drafts and keys stay in ~/Documents/vcoutreach-workspace.
+Double-click Outreach.command on your Desktop. It opens the app in your browser, always in TEST mode.
+Close the Terminal window to stop the app. To update, run the same line again (old copies get .old backups).
 Options: --dry-run, --dir PATH, --workspace PATH, --ref REF, --no-launcher-on-desktop, --help.
-With options, end the installer line with `| bash -s -- --dir "$HOME/My Outreach"`.
-The --ref option selects a GitHub branch (default: main).
+With options, end the line with `| bash -s -- --dir "$HOME/My Outreach"`. --ref selects a GitHub branch.
+Gemini, Claude and PitchBook need one more step: `~/vcoutreach/.venv/bin/python -m pip install -e "$HOME/vcoutreach[integrations]"`.
 
 - **Python too old:** Install a current Python from https://www.python.org/downloads/macos/ and retry.
 - **Permission denied:** Choose a folder you own with --dir; do not use sudo.
@@ -22,4 +21,4 @@ The --ref option selects a GitHub branch (default: main).
 - **Cannot be opened because it is from an unidentified developer:** Right-click Outreach.command, choose Open, then confirm Open.
 
 To uninstall, run `bash "$HOME/vcoutreach/packaging/mac/uninstall-mac.sh"`.
-It removes the app and Desktop launcher, asks before deleting the workspace, and keeps it by default. Use --dir and --workspace for custom folders.
+It removes the app and Desktop launcher, asks before deleting the workspace, and keeps it by default.

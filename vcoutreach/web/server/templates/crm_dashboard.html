@@ -1,0 +1,192 @@
+{% extends 'base.html' %}
+{% block page_id %}crm_dashboard{% endblock %}
+{% block title %}Relationship CRM / {{ g_workspace.workspace_name }}{% endblock %}
+
+{% block content %}
+<div class="crm-shell crm-dashboard">
+  <header class="crm-hero">
+    <div>
+      <div class="crm-eyebrow"><span class="crm-led"></span> RELATIONSHIP WORKSPACE</div>
+      <h1>Outreach overview.</h1>
+      <p>Counts below are recalculated from the local CRM when this page loads. Inbox matches update after a Gmail mailbox refresh.</p>
+    </div>
+    <div class="crm-hero-meta">
+      <span class="crm-source-tag">SOURCE / LOCAL RECORDS</span>
+      <a class="crm-button crm-button-primary" href="{{ url_for('crm_drafts') }}">Review drafts</a>
+      <a class="crm-button crm-button-secondary" href="{{ url_for('crm_analytics') }}">Analytics</a>
+      <a class="crm-button crm-button-secondary" href="{{ url_for('crm_tracking') }}">Cloudflare tracking</a>
+      <form method="post" action="{{ url_for('crm_refresh_inbox_route') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="crm-button crm-button-secondary" type="submit">Refresh Gmail inbox</button>
+      </form>
+    </div>
+  </header>
+
+
+  <section class="crm-panel" aria-label="Manage contacts">
+    <div class="crm-panel-heading"><h2>Your contacts</h2><div class="form-actions"><a class="crm-button crm-button-primary" href="/crm/new">Add contact</a><a class="crm-button crm-button-secondary" href="/crm/export.csv">Export CSV</a></div></div>
+    {% if not rows and not filters.q and not filters.stage %}
+    <div class="crm-empty-state"><p>Add contacts to begin researching and drafting.</p><form method="post" action="/sample/load"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit" class="crm-button crm-button-primary">Load the sample</button></form></div>
+    {% endif %}
+    <details><summary>Import contacts from CSV</summary>
+      <form method="post" action="/crm/import" enctype="multipart/form-data" class="settings-fields import-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <label for="contactCsv">Choose a CSV file<input id="contactCsv" type="file" name="file" accept=".csv,text/csv"></label>
+        <label for="contactCsvText">Or paste CSV<textarea id="contactCsvText" name="csv_text" rows="6" placeholder="id,name,email,org"></textarea></label>
+        <p class="crm-source-note">Every row is validated before any contacts are saved.</p>
+        <button type="submit" class="crm-button crm-button-primary">Import contacts</button>
+      </form>
+    </details>
+  </section>
+
+  <section class="crm-metrics" aria-label="Relationship overview">
+    <div class="crm-metric"><span>CURRENT CONTACTS</span><strong>{{ counts.current or 0 }}</strong><small>Contacts in the relationship workspace</small></div>
+    <div class="crm-metric"><span>CONFIRMED SENDS</span><strong>{{ confirmed_send_count }}</strong><small>Provider-confirmed messages linked to CRM contacts</small></div>
+    <div class="crm-metric"><span>INBOUND MATCHES</span><strong>{{ inbound_match_count }}</strong><small>Exact sender-address matches, including automated mail</small></div>
+    <div class="crm-metric"><span>UPDATE LIST</span><strong>{{ counts.investor_list or 0 }}</strong><small>Contacts marked for updates</small></div>
+  </section>
+
+  <p class="crm-source-note">Gmail inbox: {% if inbox_sync_status %}checked {{ inbox_sync_status.checked_at }} ({{ inbox_sync_status.scanned_messages }} messages, {% if inbox_sync_status.scan_complete %}complete{% else %}message cap reached{% endif %}){% else %}no saved refresh yet{% endif %}. Other mailboxes are not included in this inbox count. <a href="{{ url_for('crm_tracking') }}">View live Cloudflare request tracking</a>.</p>
+
+  <section class="crm-panel crm-hot-leads-panel">
+    <div class="crm-panel-heading">
+      <div><span class="crm-eyebrow">ENGAGEMENT / LIKELY PERSON SIGNAL</span><h2>Hot leads</h2></div>
+      <a class="crm-button crm-button-small crm-button-secondary" href="{{ url_for('crm_analytics') }}">Open analytics</a>
+    </div>
+    {% if hot_leads_preview %}
+    <div class="crm-hot-leads-list">
+      {% for lead in hot_leads_preview %}
+      <a class="crm-hot-lead-row" href="{{ url_for('crm_contact', partner_id=lead.partner_id) }}">
+        <div>
+          <strong>{{ lead.name or 'Unknown contact' }}</strong>
+          <span>{{ lead.firm or 'Organization not recorded' }}</span>
+        </div>
+        <span class="crm-table-subline">{{ lead.reasons|join('; ') }}</span>
+        <span class="crm-count-pill">Score {{ lead.score }}</span>
+      </a>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="crm-empty-state">No hot leads right now. Untracked recent sends may still be interested; open Analytics for the full breakdown.</p>
+    {% endif %}
+    <p class="crm-source-note">{{ replied_count or 0 }} contacts have an incoming message after their latest send. Those are conversations to answer, not leads to score; see them on the Analytics page.</p>
+  </section>
+
+  <nav class="crm-segments" aria-label="Contact segments">
+    {% for view_key, view_label in [('current', 'Current'), ('followup_next', 'Prepared review queue'), ('followup_watchlist', 'Follow-up watchlist'), ('new_research', 'New investor research'), ('hot', 'Hot'), ('warm', 'Warm'), ('due', 'Due'), ('follow_up_candidates', 'Follow-up candidates'), ('investor_list', 'Contact updates'), ('best_fit', 'Best fit'), ('best_fit_awaiting', 'Best fit awaiting reply'), ('reviewed_fit', 'Reviewed fit'), ('new_outreach', 'New outreach'), ('sent', 'Sent email history'), ('unreplied', 'No reply recorded'), ('all', 'All contacts')] %}
+    <a class="crm-segment {% if filters.view == view_key or (not filters.view and view_key == 'current') %}active{% endif %}"
+       href="{{ url_for('crm_dashboard', view=view_key, q=filters.q, stage=filters.stage) }}">{{ view_label }}</a>
+    {% endfor %}
+  </nav>
+  {% if filters.view == 'best_fit_awaiting' %}<p class="crm-source-note">Ranked, confirmed sends with no reply or incoming-address match recorded. Recent sends are not follow-up candidates until enough time has passed.</p>{% endif %}
+  {% if filters.view == 'followup_watchlist' %}<p class="crm-source-note">Contacts across warm relationships and confirmed sends. Review the list before following up. Recent sends wait for the normal follow-up interval.</p>{% endif %}
+  {% if filters.view == 'followup_next' %}<p class="crm-source-note">This is a historical review roster, not a live send queue. Check <a href="{{ url_for('crm_drafts', type='follow_up') }}">current local follow-up copies</a> and each contact's latest send evidence before a reply.</p>{% endif %}
+  {% if filters.view == 'new_research' %}<p class="crm-source-note">Research prospects only. A verified address does not by itself clear investor fit, prior-firm history, or email copy.</p>{% endif %}
+  {% if filters.view in ['sent', 'sent_emails'] %}<p class="crm-source-note">Includes provider-confirmed evidence and older local records marked sent. The date column shows the recorded last-sent date when available.</p>{% endif %}
+
+  <form class="crm-filters" method="get" action="{{ url_for('crm_dashboard') }}">
+    <input type="hidden" name="view" value="{{ filters.view or 'current' }}">
+    <label class="crm-search-field" for="crm_dashboard-field-1">
+      <span>SEARCH CONTACTS</span>
+      <input id="crm_dashboard-field-1" type="search" name="q" value="{{ filters.q or '' }}" placeholder="Name, organization, or email">
+    </label>
+    <label for="crm_dashboard-field-2">
+      <span>STAGE</span>
+      <select id="crm_dashboard-field-2" name="stage">
+        <option value="">All stages</option>
+        {% for stage_name in stages %}
+        <option value="{{ stage_name }}" {% if filters.stage == stage_name %}selected{% endif %}>{{ stage_name|replace('_', ' ')|title }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label for="contactTag"><span>TAG</span><input id="contactTag" name="tag" value="{{ filters.tag }}"></label>
+    <label for="draftStatus"><span>DRAFT STATUS</span><select id="draftStatus" name="draft"><option value="">All drafts</option>{% for value in ['ok','blocked','none'] %}<option value="{{ value }}" {% if filters.draft == value %}selected{% endif %}>{{ value|title }}</option>{% endfor %}</select></label>
+    <button class="crm-button crm-button-primary" type="submit">Apply filters</button>
+    {% if filters.q or filters.stage %}<a class="crm-clear-filter" href="{{ url_for('crm_dashboard', view=filters.view or 'current') }}">Clear</a>{% endif %}
+  </form>
+
+  <section class="crm-panel"><h2>Import batches</h2><ul>{% for batch in batches %}<li>{{ batch.name }} / {{ batch.created_at }}</li>{% else %}<li>No import batches yet.</li>{% endfor %}</ul></section>
+  <section class="crm-panel crm-contact-table-panel">
+    <div class="crm-panel-heading">
+      <div><span class="crm-eyebrow">CONTACTS / {{ rows|length }} OF {{ counts.matching }} MATCHES</span><h2>Relationship records</h2></div>
+      <span class="crm-muted">Local records only</span>
+    </div>
+    <div class="crm-table-wrap">
+      <table class="crm-table"><caption class="sr-only">Crm Dashboard records</caption>
+        <thead>
+          <tr><th>Contact / organization</th><th>Stage</th><th>Fit</th><th>Next follow-up</th><th>{{ 'Last sent' if filters.view in ['sent', 'sent_emails'] else 'Last activity' }}</th><th>Latest signal</th></tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+          <tr>
+            <td>
+              <a class="crm-contact-link" href="{{ url_for('crm_contact', partner_id=row.partner_id) }}">{{ row.name or 'Unknown contact' }}</a>
+              <span class="crm-table-subline">{{ row.firm or 'Organization not recorded' }}</span>
+              {% if row.firm %}<a class="crm-table-subline crm-firm-action" href="{{ url_for('crm_alternate_investors', partner_id=row.partner_id) }}">Find more investors ↗</a>{% endif %}
+              <span class="crm-table-subline">{{ row.new_research_email if filters.view == 'new_research' and row.new_research_email else (row.email or 'Email unknown') }}</span>
+            </td>
+            <td><span class="crm-stage-tag">{{ row.stage|replace('_', ' ')|title if row.stage else 'Unknown' }}</span></td>
+            <td>
+              <span>Manual fit: {{ (row.fit_grade or 'unreviewed')|replace('_', ' ')|title }}</span>
+              {% if row.fit_rank %}<span class="crm-table-subline">Manual rank #{{ row.fit_rank }}</span>{% endif %}
+              {% if row.campaign_fit_review_present %}<span class="crm-table-subline">Campaign gate: {{ row.campaign_qualification_label or 'Reviewed, recommendation not recorded' }}</span>
+              {% else %}<span class="crm-table-subline">Campaign gate: Not reviewed</span>{% endif %}
+            </td>
+            <td>
+              {% if row.next_follow_up_at %}<time>{{ row.next_follow_up_at[:16]|replace('T', ' ') }}</time>{% else %}<span class="crm-unknown">Not scheduled</span>{% endif %}
+            </td>
+            <td>
+              {% if filters.view in ['sent', 'sent_emails'] %}
+                {% if row.last_sent_at %}<time>{{ row.last_sent_at[:16]|replace('T', ' ') }}</time>{% else %}<span class="crm-unknown">No confirmed send date recorded</span>{% endif %}
+              {% elif row.last_activity_at %}<time>{{ row.last_activity_at[:16]|replace('T', ' ') }}</time>{% else %}<span class="crm-unknown">No activity recorded</span>{% endif %}
+            </td>
+            <td>
+              <span class="crm-signal-label">{{ 'Reply / ' ~ (row.latest_reply_label|replace('_', ' ')|title) if row.latest_reply_label else 'No reply recorded' }}</span>
+              {% if row.latest_send_evidence_status %}<span class="crm-table-subline">Outbound / {{ row.latest_send_evidence_status|replace('_', ' ')|title }}</span>
+              {% elif row.latest_draft_status %}<span class="crm-table-subline">Local draft / {{ row.latest_draft_status|replace('_', ' ')|title }}</span>
+              {% else %}<span class="crm-table-subline">Outbound not synced</span>{% endif %}
+              {% if row.last_mail_evidence_at %}<span class="crm-table-subline">Incoming address match / {{ row.last_mail_evidence_at[:10] }}</span>{% endif %}
+              {% if filters.view == 'followup_watchlist' %}<span class="crm-table-subline">Follow-up priority #{{ row.watchlist_rank }}</span>{% endif %}
+              {% if filters.view == 'followup_next' %}<span class="crm-table-subline">Queue #{{ row.next_followup_rank }} / {{ 'local copy staged' if row.next_followup_readiness == 'review_ready' else (row.next_followup_readiness|replace('_', ' ')) }}</span>{% endif %}
+              {% if filters.view == 'new_research' %}<span class="crm-table-subline">Research #{{ row.new_research_rank }} / {{ row.new_research_label }}</span>{% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6" class="crm-empty-row">No contacts match these filters. Try another segment or clear the search.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if counts.pages > 1 %}
+    <nav class="crm-segments" aria-label="Contact pages">
+      {% if counts.page > 1 %}<a class="crm-segment" href="{{ url_for('crm_dashboard', view=filters.view, q=filters.q, stage=filters.stage, tag=filters.tag, draft=filters.draft, page=counts.page - 1) }}">Previous</a>{% endif %}
+      <span class="crm-segment active">Page {{ counts.page }} of {{ counts.pages }}</span>
+      {% if counts.page < counts.pages %}<a class="crm-segment" href="{{ url_for('crm_dashboard', view=filters.view, q=filters.q, stage=filters.stage, tag=filters.tag, draft=filters.draft, page=counts.page + 1) }}">Next</a>{% endif %}
+    </nav>
+    {% endif %}
+  </section>
+
+  <section class="crm-panel crm-followup-panel">
+    <div class="crm-panel-heading">
+      <div><span class="crm-eyebrow">NEXT STEPS / SAVED DATES</span><h2>Follow-ups in this view</h2></div>
+      <span class="crm-count-pill">{{ counts.due or 0 }} due</span>
+    </div>
+    <div class="crm-followup-list">
+      {% for row in rows if row.next_follow_up_at %}
+      <article class="crm-followup-row">
+        <div class="crm-followup-date"><span>FOLLOW UP</span><time>{{ row.next_follow_up_at[:16]|replace('T', ' ') }}</time></div>
+        <div class="crm-followup-person">
+          <a href="{{ url_for('crm_contact', partner_id=row.partner_id) }}">{{ row.name or 'Unknown contact' }}</a>
+          <span>{{ row.firm or 'Organization unknown' }}</span>
+        </div>
+        <span class="crm-stage-tag">{{ row.stage|replace('_', ' ')|title if row.stage else 'Stage unknown' }}</span>
+      </article>
+      {% else %}
+      <p class="crm-empty-state">No follow-up dates are recorded in the current view.</p>
+      {% endfor %}
+    </div>
+  </section>
+
+  <footer class="crm-footer"><span>UNKNOWN MEANS NOT RECORDED</span><span>REVIEW THE SEND GATES BEFORE DELIVERY</span></footer>
+</div>
+{% endblock %}

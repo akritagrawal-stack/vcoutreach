@@ -1,0 +1,6 @@
+id,name,email,org,role,facts,source_urls,lane,thread_subject,in_reply_to,references
+contact-one,Contact One,one@example.com,Example Ventures,Partner,your essay on accessible software,https://example.com/research/accessible,first_touch,,,
+contact-two,Contact Two,two@example.com,Example Studio,Founder,your guide to community product testing,https://example.com/research/testing,first_touch,,,
+contact-three,Contact Three,three@example.com,Example Fund,Investor,your research on developer distribution,https://example.com/research/distribution,first_touch,,,
+contact-thin,Contact Four,four@example.com,Example Labs,Partner,,,first_touch,,,
+contact-follow-up,Contact Five,five@example.com,Example Partners,Partner,your article about software maintenance,https://example.com/research/maintenance,follow_up,Previous conversation,<sample-original@example.com>,<sample-original@example.com>

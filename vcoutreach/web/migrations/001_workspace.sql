@@ -1,0 +1,1 @@
+-- Fresh installs use schema.sql. Reserved for future workspace upgrades.

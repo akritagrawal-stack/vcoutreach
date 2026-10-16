@@ -16,9 +16,8 @@ _SUBJECT_FIELDS = frozenset({"first_name", "org"})
 class SenderProfileWithSubject(SenderProfile):
     """SenderProfile plus the optional ``subject_template`` from the JSON file.
 
-    The frozen SenderProfile contract has no subject field, so load_sender returns
-    this subclass only when the file sets ``subject_template``. Everything else
-    receives a plain SenderProfile.
+    load_sender returns this subclass only when the file sets the legacy
+    ``subject_template`` field. Everything else receives a plain SenderProfile.
     """
 
     subject_template: str = ""
@@ -111,6 +110,26 @@ def _check_subject_template(template: str, label: str) -> None:
             )
 
 
+def _first_touch_subject(data: Dict[str, Any], label: str) -> str:
+    value = data.get("first_touch_subject", "")
+    if not isinstance(value, str):
+        raise SenderProfileError("%s: 'first_touch_subject' must be a string" % label)
+    if len(value) > 120:
+        raise SenderProfileError("%s: 'first_touch_subject' must be at most 120 characters" % label)
+    if any(ord(ch) < 32 or ord(ch) == 127 or ch in "\x85\u2028\u2029" for ch in value):
+        raise SenderProfileError("%s: 'first_touch_subject' must be a single line without control characters" % label)
+    if "!" in value:
+        raise SenderProfileError("%s: 'first_touch_subject' must not contain exclamation marks" % label)
+    try:
+        parsed = list(string.Formatter().parse(value))
+    except ValueError as exc:
+        raise SenderProfileError("%s: 'first_touch_subject' is malformed: %s" % (label, exc))
+    for _literal, field_name, spec, conversion in parsed:
+        if field_name is not None and (field_name != "first_name" or spec or conversion):
+            raise SenderProfileError("%s: 'first_touch_subject' may only use {first_name}" % label)
+    return value.strip()
+
+
 def load_sender(path: Path) -> SenderProfile:
     """Read a sender profile JSON file. ``name`` is required."""
     path = Path(path)
@@ -149,6 +168,7 @@ def load_sender(path: Path) -> SenderProfile:
         ask_line=_text(data, "ask_line", label),
         approved_claims=_claims(data, label),
         forbidden_phrases=_text_list(data, "forbidden_phrases", label),
+        first_touch_subject=_first_touch_subject(data, label),
     )
 
     subject_template = _text(data, "subject_template", label)

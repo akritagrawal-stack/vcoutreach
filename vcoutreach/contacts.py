@@ -4,10 +4,19 @@ from __future__ import annotations
 import csv
 import io
 import re
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from .types import Contact, ContactsError, Lane
+
+
+@dataclass(frozen=True)
+class ContactWithSubject(Contact):
+    """Keep an explicit CSV subject without changing the base Contact contract."""
+
+    subject: str = ""
+
 
 MAX_PROBLEMS = 25
 
@@ -199,13 +208,18 @@ def _build_contact(
             lane = None
 
     thread_subject = get("thread_subject")
+    subject = get("subject")
     in_reply_to = get("in_reply_to")
-    for label, text in (("thread_subject", thread_subject), ("in_reply_to", in_reply_to)):
+    for label, text in (
+        ("thread_subject", thread_subject),
+        ("in_reply_to", in_reply_to),
+        ("subject", values.get("subject", "")),
+    ):
         if "\n" in text or "\r" in text:
             fail("%s must be a single line" % label)
             if label == "thread_subject":
                 thread_subject = ""
-            else:
+            elif label == "in_reply_to":
                 in_reply_to = ""
     references = _clean(get("references"))
 
@@ -223,8 +237,10 @@ def _build_contact(
     if problems or lane is None:
         return None, problems
 
+    contact_type = ContactWithSubject if subject else Contact
+    subject_fields = {"subject": subject} if subject else {}
     return (
-        Contact(
+        contact_type(
             id=contact_id,
             name=person,
             email=email,
@@ -237,6 +253,7 @@ def _build_contact(
             in_reply_to=in_reply_to,
             references=references,
             preferred_name=_clean(get("first_name")),
+            **subject_fields,
         ),
         problems,
     )

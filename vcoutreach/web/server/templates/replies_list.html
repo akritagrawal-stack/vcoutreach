@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+{% block page_id %}replies_list{% endblock %}
+{% block title %}Replies / {{ g_workspace.workspace_name }}{% endblock %}
+{% block content %}
+{% set rows = replies|default(rows|default([])) %}
+<div class="crm-shell">
+  <header class="crm-hero">
+    <div><div class="crm-eyebrow">CONVERSATIONS / ALL CONTACTS</div><h1>Replies.</h1><p>Review incoming conversations, set a label, and record which replies you have read.</p></div>
+    <form action="/poll-replies" method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit" class="crm-button crm-button-primary">Poll Gmail now</button></form>
+  </header>
+  <section class="crm-panel"><h2>Add a reply</h2>
+    <form method="post" action="/replies/add" class="crm-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label for="replyFrom">From email<input id="replyFrom" type="email" name="from_email" required></label>
+      <label for="replySubject">Subject<input id="replySubject" name="subject"></label>
+      <label for="replyBody">Body<textarea id="replyBody" name="body" rows="4"></textarea></label>
+      <button type="submit" class="crm-button crm-button-primary">Add a reply</button>
+    </form>
+  </section>
+  <nav class="crm-segments" aria-label="Reply labels">
+    <a class="crm-segment {% if not label_filter %}active{% endif %}" href="/replies">All replies</a>
+    {% for label in labels|default(['interested','needs_more_info','pass','out_of_office','bounce','auto_reply','other','unclassified']) %}<a class="crm-segment {% if label_filter == label %}active{% endif %}" href="/replies?label={{ label|urlencode }}">{{ label|replace('_',' ')|title }}</a>{% endfor %}
+  </nav>
+  <section class="crm-panel">
+    <div class="crm-panel-heading"><h2>Reply inbox</h2><span>{{ rows|length }} replies</span></div>
+    <div class="crm-table-wrap"><table class="crm-table">
+      <caption class="sr-only">Incoming replies, classification and review state</caption>
+      <thead><tr><th>Contact</th><th>Subject and message</th><th>Received</th><th>Label</th><th>Review</th><th>Action</th></tr></thead>
+      <tbody>{% for row in rows %}
+        {% set effective_label = row.get('user_label') or row.get('label') or 'unclassified' %}
+        <tr class="{% if not row.get('user_reviewed') %}row-unreviewed{% endif %}">
+          <td>{% if row.get('partner_id') %}<a class="crm-contact-link" href="/crm/{{ row.partner_id }}">{{ row.get('partner_name') or row.get('from_name') or row.get('from_email') or 'Unknown contact' }}</a>{% else %}<strong>{{ row.get('from_name') or row.get('from_email') or 'Unknown contact' }}</strong>{% endif %}<span class="crm-table-subline">{{ row.get('from_email') or '' }}</span></td>
+          <td><a href="/replies/{{ row.id }}">{{ row.get('subject') or 'No subject' }}</a><span class="crm-table-subline">{{ (row.get('snippet') or '')[:160] }}</span></td>
+          <td><time>{{ (row.get('received_at') or row.get('discovered_at') or '')[:16]|replace('T',' ') }}</time></td>
+          <td><span class="badge {{ 'badge-success' if effective_label == 'interested' else 'badge-danger' if effective_label in ['pass','bounce'] else 'badge-default' }}">{{ effective_label|replace('_',' ')|title }}</span>
+            <form method="post" action="/replies/{{ row.id }}/update-label" class="reply-label-form">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <label class="sr-only" for="reply-label-{{ row.id }}">Label for reply from {{ row.get('from_email') or 'unknown contact' }}</label>
+              <select id="reply-label-{{ row.id }}" name="user_label" class="form-control"><option value="">Use automatic label</option>{% for label in labels|default(['interested','needs_more_info','pass','out_of_office','bounce','auto_reply','other','unclassified']) %}<option value="{{ label }}" {% if row.get('user_label') == label %}selected{% endif %}>{{ label|replace('_',' ')|title }}</option>{% endfor %}</select>
+              <button type="submit" class="crm-button crm-button-small crm-button-secondary">Save label</button>
+            </form>
+          </td>
+          <td>{% if row.get('user_reviewed') %}<span class="badge badge-default">Reviewed</span><form method="post" action="/replies/{{ row.id }}/mark-reviewed"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit" class="crm-button crm-button-small crm-button-secondary">Mark unread</button></form>{% else %}<form method="post" action="/replies/{{ row.id }}/mark-reviewed"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit" class="crm-button crm-button-small crm-button-secondary">Mark reviewed</button></form>{% endif %}</td>
+          <td><a href="/replies/{{ row.id }}">View conversation</a></td>
+        </tr>
+      {% else %}<tr><td colspan="6" class="crm-empty-row">{% if label_filter %}No replies match this label. <a href="/replies">Show all replies</a>.{% else %}No replies recorded yet. Poll Gmail to load conversations.{% endif %}</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </section>
+</div>
+{% endblock %}

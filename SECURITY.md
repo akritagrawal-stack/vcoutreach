@@ -24,6 +24,10 @@ Useful reports include:
 - a lint or grounding bypass that lets a fabricated claim through
 - a contact id or other imported field that writes outside the output directory
 - unsafe handling of untrusted CSV, JSON, or provider response data
+- for the browser app (`vcoutreach ui`): reaching it from another machine or
+  Host name, skipping the one-time token link or the CSRF check, a key shown after
+  it was saved, a live send without its typed confirmation, the scheduler starting
+  without `OUTREACH_SCHEDULER=1`, or reading and writing files outside the workspace
 
 ## Operational guidance
 

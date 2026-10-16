@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en" data-theme="">
+<head>
+<meta charset="utf-8">
+<meta name="csrf-token" content="{{ csrf_token }}">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}{{ g_workspace.workspace_name }}{% endblock %}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=20260922-crm3">
+
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+</head>
+<body data-page="{% block page_id %}{% endblock %}">
+<a class="skip-link" href="#main-content">Skip to content</a>
+
+<!-- Send-mode banner -->
+{% if g_send_mode == 'test' %}
+<div class="send-banner mode-test">
+  <span><strong>TEST MODE</strong> / sends route to the configured test mailbox / requires a configured test mailbox</span>
+  <span class="banner-toggle-wrap">
+    <button class="btn-banner-toggle" id="bannerGoLiveToggle" data-toggle="goLiveForm" aria-controls="goLiveForm" aria-expanded="false">Switch to LIVE mode</button>
+    <form id="goLiveForm" method="POST" action="/toggle-send-mode" class="banner-confirm-form" hidden>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label class="sr-only" for="goLiveConfirmation">Type GO LIVE to confirm live delivery</label>
+      <input id="goLiveConfirmation" type="text" name="confirm_text" class="banner-confirm-input" placeholder='Type "GO LIVE" to confirm' required pattern="GO LIVE" autocomplete="off" style="font-family:inherit;">
+      <button type="submit" class="btn-banner-go-live">Confirm: GO LIVE</button>
+    </form>
+  </span>
+</div>
+{% else %}
+<div class="send-banner mode-live">
+  <span><strong>LIVE MODE</strong> / real partner delivery armed / verify the typed confirmation before sending</span>
+  <form method="POST" action="/toggle-send-mode" style="display:inline;margin-left:12px;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button type="submit" class="btn-banner-toggle btn-banner-revert">Switch back to TEST</button>
+  </form>
+</div>
+{% endif %}
+
+<!-- Top navigation -->
+<nav class="nav">
+  <div class="nav-inner">
+    <a class="nav-brand" href="/">
+      <span class="logo-mark">P</span>
+      <span>publik<span class="brand-dot">.</span></span>
+      <span class="brand-product">SIGNAL</span>
+    </a>
+
+    <ul class="nav-links">
+      <li>
+        <a class="nav-link {% if active_page == 'crm' %}active{% endif %}" href="/crm">
+          Overview
+        </a>
+      </li>
+      <li>
+        <a class="nav-link {% if active_page == 'tracking' %}active{% endif %}" href="/crm/tracking">
+          Tracking
+        </a>
+      </li>
+      <li>
+        <a class="nav-link {% if active_page == 'drafts' %}active{% endif %}" href="/crm/drafts">
+          Drafts
+        </a>
+      </li>
+      <li>
+        <a class="nav-link {% if active_page == 'analytics' %}active{% endif %}" href="/crm/analytics">
+          Analytics
+        </a>
+      </li>
+      <li>
+        <a class="nav-link {% if active_page == 'partners' %}active{% endif %}" href="/partners">
+          Partners
+        </a>
+      </li>
+      <li>
+        <a class="nav-link {% if active_page == 'verification' %}active{% endif %}" href="/email-verification">
+          Verification
+        </a>
+      </li>
+      <li>
+        <a class="nav-link {% if active_page == 'replies' %}active{% endif %}" href="/replies">
+          Replies
+          {% if unread_replies > 0 %}
+            {% if unread_interested > 0 %}
+              <span class="nav-badge" style="background:#dc2626;">{{ unread_replies }}</span>
+            {% else %}
+              <span class="nav-badge">{{ unread_replies }}</span>
+            {% endif %}
+          {% endif %}
+        </a>
+      </li>
+      <li><a class="nav-link" href="/candidates">Candidates</a></li>
+      <li><a class="nav-link" href="/enrichment">Enrichment</a></li>
+      <li><a class="nav-link" href="/scheduled">Scheduled</a></li>
+      <li><a class="nav-link" href="/crm/send-plan">Send plan</a></li>
+      <li>
+        <a class="nav-link {% if active_page == 'settings' %}active{% endif %}" href="/knowledge">
+          Settings
+        </a>
+      </li>
+    </ul>
+
+    <div class="nav-right">
+      <button class="theme-toggle" id="themeToggle" title="Toggle dark/light mode" aria-label="Toggle theme">
+        <!-- Sun icon (shown in dark mode) -->
+        <svg class="icon-sun" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+          <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+        </svg>
+        <!-- Moon icon (shown in light mode) -->
+        <svg class="icon-moon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+</nav>
+
+<main class="main" id="main-content">
+  <!-- Flash messages -->
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <ul class="flash-list" aria-live="polite" aria-label="Notifications">
+        {% for category, message in messages %}
+          <li class="flash flash-{{ 'error' if category == 'error' else 'warning' if category == 'warning' else 'info' if category == 'info' else 'success' }}">
+            <span>{{ message }}</span>
+            <button type="button" class="flash-close" data-dismiss-flash aria-label="Dismiss notification">&times;</button>
+          </li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+  {% endwith %}
+
+  {% block content %}{% endblock %}
+</main>
+
+
+
+{% block scripts %}{% endblock %}
+</body>
+</html>

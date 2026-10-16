@@ -1,0 +1,34 @@
+{% extends 'base.html' %}
+{% block page_id %}crm_alternate_investors{% endblock %}
+{% block title %}Other investors at {{ result.firm or 'this firm' }} / Relationship CRM{% endblock %}
+{% block content %}
+<div class="crm-shell crm-contact-page">
+  <nav class="crm-breadcrumb" aria-label="Breadcrumb"><a href="{{ url_for('crm_contact', partner_id=result.source_partner_id) }}">Contact profile</a><span>/</span><span>Other investors</span></nav>
+  <header class="crm-profile-hero">
+    <div><div class="crm-eyebrow"><span class="crm-led"></span> FIRM RESEARCH / LOCAL RECORDS</div><h1>{{ result.firm or 'Firm unknown' }}</h1><p>Investors, principals, and general partners to research at this firm.</p></div>
+    <div class="crm-profile-status"><span class="crm-stage-tag">{{ result.candidates|length }} leads</span></div>
+  </header>
+  <section class="crm-panel">
+    <div class="crm-panel-heading"><div><span class="crm-eyebrow">RESEARCH WORKFLOW</span><h2>Other people at this firm</h2></div></div>
+    <p class="crm-source-note">This action checks local records and the firm's official team page where a verified source is available. Official-team scan: {{ result.official_status|replace('_', ' ') }}. It does not run a paid lookup, verify an email, draft a message, or send one. Confirm current role, fit, email, and firm-contact policy before outreach.</p>
+    {% if result.official_homepage %}<p class="crm-source-note"><span class="source-reference">Open official firm site ↗ <span class="text-muted">({{ result.official_homepage }})</span> <button type="button" class="copy-source" data-copy-text="{{ result.official_homepage }}">Copy URL</button></span>{% if result.official_search_url %} · <span class="source-reference">Search for the official team page ↗ <span class="text-muted">({{ result.official_search_url }})</span> <button type="button" class="copy-source" data-copy-text="{{ result.official_search_url }}">Copy URL</button></span>{% endif %}</p>
+    {% elif result.official_search_url %}<p class="crm-source-note"><span class="source-reference">Search for the official team page ↗ <span class="text-muted">({{ result.official_search_url }})</span> <button type="button" class="copy-source" data-copy-text="{{ result.official_search_url }}">Copy URL</button></span></p>{% endif %}
+    {% if result.firm_contacted %}<p class="crm-integrity-note">Someone at this firm has already been contacted. Review the existing conversation and timing before approaching another person.</p>{% endif %}
+    {% if result.candidates %}
+    <div class="crm-alternate-list">
+      {% for candidate in result.candidates %}
+      <article class="crm-alternate-card">
+        <div><strong>{{ candidate.name }}</strong><span>{{ candidate.role or 'Role needs research' }}</span></div>
+        <div><span class="crm-status-tag">{{ candidate.contact_status|replace('_', ' ') }}</span>{% if candidate.suppressed %}<span class="crm-status-tag">Do not contact</span>{% elif candidate.needs_firm_policy_review %}<span class="crm-status-tag">Review same-firm outreach</span>{% endif %}</div>
+        <p>{{ candidate.email or 'Email not found' }} · {{ candidate.email_verification_status|replace('_', ' ') }} · {{ candidate.role_evidence_status|replace('_', ' ') }}</p>
+        {% if candidate.email_conflict %}<p class="crm-integrity-note">Conflicting email addresses in saved records. Resolve before using either address.</p>{% endif %}
+        <div class="crm-source-list">{% for url in candidate.source_urls %}<span class="source-reference">Source {{ loop.index }} ↗ <span class="text-muted">({{ url }})</span> <button type="button" class="copy-source" data-copy-text="{{ url }}">Copy URL</button></span>{% endfor %}</div>
+        {% if candidate.partner_id %}<a href="{{ url_for('crm_contact', partner_id=candidate.partner_id) }}">Open contact profile ↗</a>{% endif %}
+        {% if candidate.partner_id and not candidate.person_contacted %}<a href="{{ url_for('email_verification', q=candidate.name) }}">Research and verify email ↗</a>{% elif not candidate.partner_id %}<p class="crm-source-note">No CRM contact or verified email yet. Use the official profile to confirm identity before adding a contact.</p>{% endif %}
+      </article>
+      {% endfor %}
+    </div>
+    {% else %}<p class="crm-empty-state">{{ result.reason }} The scan did not find a named alternative, so verify people on the firm's official team page before adding a contact.</p>{% endif %}
+  </section>
+</div>
+{% endblock %}

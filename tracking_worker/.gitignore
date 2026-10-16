@@ -1,0 +1,5 @@
+# The real pitch-deck PDF is staged locally with scripts/stage_deck_asset.mjs
+# and served through the Worker's static-assets binding. It is never checked
+# in: only the empty directory ships with the repository.
+deck_assets/*
+!deck_assets/.gitkeep

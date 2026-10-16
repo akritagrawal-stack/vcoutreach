@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+{% block page_id %}crm_tracking{% endblock %}
+{% block title %}Cloudflare tracking / Relationship CRM{% endblock %}
+
+{% block content %}
+<div class="crm-shell crm-dashboard">
+  <nav class="crm-breadcrumb" aria-label="Breadcrumb"><a href="{{ url_for('crm_dashboard') }}">Relationship CRM</a><span>/</span><span>Cloudflare tracking</span></nav>
+  <header class="crm-hero">
+    <div>
+      <div class="crm-eyebrow"><span class="crm-led"></span> PRODUCTION WORKER / AGGREGATE VIEW</div>
+      <h1>Cloudflare tracking</h1>
+      <p>Observed requests from tracked email links and pixels. Scanners and mail proxies can create these events, so they do not prove a person opened or read a message.</p>
+    </div>
+    <div class="crm-hero-meta">
+      <span class="source-reference">Open protected Worker dashboard <span class="text-muted">({{ tracking_dashboard_url }})</span> <button type="button" class="copy-source" data-copy-text="{{ tracking_dashboard_url }}">Copy URL</button></span>
+      <a class="crm-button crm-button-secondary" href="{{ url_for('crm_tracking') }}">Refresh snapshot</a>
+    </div>
+  </header>
+
+  {% if error %}
+  <section class="crm-panel"><h2>Snapshot unavailable</h2><p class="crm-source-note">{{ error }}. No zero counts are inferred.</p><a href="/settings">Configure tracking in Settings</a></section>
+  {% else %}
+  <p class="crm-source-note">Window: {{ snapshot.starts_at[:16]|replace('T', ' ') }} to {{ snapshot.ends_at[:16]|replace('T', ' ') }} UTC. Read {{ snapshot.as_of[:16]|replace('T', ' ') }} UTC.{% if snapshot.stale %} Latest event is older than 24 hours.{% endif %}</p>
+  <section class="crm-metrics" aria-label="Tracking overview">
+    <div class="crm-metric"><span>ACTIVATED TRACKED ACTIONS</span><strong>{{ snapshot.sent_action_count }}</strong><small>Tracking activation after provider acceptance, not inbox delivery</small></div>
+    <div class="crm-metric"><span>ACTIONS WITH OBSERVED EVENTS</span><strong>{{ snapshot.observed_unique_action_count }}</strong><small>Includes scanner and uncertain requests</small></div>
+    <div class="crm-metric"><span>HUMAN LIKELY CLICK ACTIONS</span><strong>{{ snapshot.human_likely_click_unique_action_count }}</strong><small>Classifier estimate, not confirmed people</small></div>
+  </section>
+  <section class="crm-panel">
+    <div class="crm-panel-heading"><div><span class="crm-eyebrow">REQUEST CLASSIFICATION</span><h2>Open and click events</h2></div></div>
+    <div class="crm-table-wrap"><table class="crm-table"><caption class="sr-only">Crm Tracking records</caption><thead><tr><th>Event</th><th>Automation likely</th><th>Unknown</th><th>Human likely</th></tr></thead><tbody>
+      {% for kind in ['open', 'click'] %}
+      <tr><td>{{ kind|title }}</td><td>{{ snapshot.event_type_counts[kind].automation_likely }}</td><td>{{ snapshot.event_type_counts[kind].unknown }}</td><td>{{ snapshot.event_type_counts[kind].human_likely }}</td></tr>
+      {% endfor %}
+    </tbody></table></div>
+    <p class="crm-source-note">This is a 30 day aggregate. Contact profiles show classified request counts only when a verified local activation links that contact to an opaque Cloudflare action. Scanner and proxy requests are not a reply or reliable human-interest signal.</p>
+  </section>
+  {% endif %}
+  <footer class="crm-footer"><span>PRODUCTION CLOUDFLARE WORKER</span><span>OPAQUE ACTIONS / LOCAL IDENTITY JOIN</span></footer>
+</div>
+{% endblock %}

@@ -13,6 +13,8 @@ license-files = ["LICENSE"]
 dependencies = []
 
 [project.optional-dependencies]
+web = ["Flask>=3.1,<4"]
+integrations = ["google-genai", "anthropic", "curl_cffi", "playwright", "beautifulsoup4", "requests", "dnspython"]
 gmail = [
     "google-auth-oauthlib",
     "google-api-python-client",
@@ -37,7 +39,12 @@ include = ["vcoutreach*"]
 vcoutreach = [
     "data/templates/*.txt",
     "data/examples/*",
-    "data/ui/index.html",
+    "web/schema.sql",
+    "web/migrations/*.sql",
+    "web/server/templates/*.html",
+    "web/server/static/*",
+    "web/sample/*",
+    "web/scripts/*",
 ]
 
 [tool.pytest.ini_options]

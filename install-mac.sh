@@ -213,7 +213,7 @@ run mkdir -p "$(dirname "$INSTALL_DIR")"
 run mv -- "$TEMP_DIR/source" "$INSTALL_DIR"
 say "Installing in $INSTALL_DIR."
 run "$PYTHON" -m venv "$INSTALL_DIR/.venv"
-run "$INSTALL_DIR/.venv/bin/python" -m pip --disable-pip-version-check install --quiet -e "$INSTALL_DIR"
+run "$INSTALL_DIR/.venv/bin/python" -m pip --disable-pip-version-check install --quiet -e "${INSTALL_DIR}[web,gmail]"
 run "$INSTALL_DIR/.venv/bin/vcoutreach" --version
 run mkdir -p "$WORKSPACE"
 
@@ -225,7 +225,7 @@ write_launcher() {
     printf 'set -euo pipefail\n'
     printf 'WORKSPACE=%q\n' "$WORKSPACE"
     printf 'cd -- "$WORKSPACE"\n'
-    printf 'printf '\''Close this window to stop.\\n'\''\n'
+    printf 'printf '\''Outreach opens in your browser and starts in TEST mode. Close this window to stop.\\n'\''\n'
     printf 'exec %q ui --workspace "$WORKSPACE"\n' "$INSTALL_DIR/.venv/bin/vcoutreach"
 }
 if [ "$DRY_RUN" -eq 1 ]; then
@@ -265,3 +265,4 @@ say 'curl -fsSL https://raw.githubusercontent.com/akritagrawal-stack/vcoutreach/
 printf 'Remove the app and workspace: rm -rf -- %q %q\n' "$INSTALL_DIR" "$WORKSPACE"
 printf 'Remove the Desktop shortcut: rm -f -- %q\n' "$DESKTOP/Outreach.command"
 say 'To keep your workspace, use packaging/mac/uninstall-mac.sh inside the install folder.'
+printf 'Optional extras for Gemini, Claude and PitchBook: %q -m pip install -e %q\n' "$INSTALL_DIR/.venv/bin/python" "${INSTALL_DIR}[integrations]"

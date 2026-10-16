@@ -313,8 +313,27 @@ def _auth_gmail(args: argparse.Namespace) -> int:
     return 0
 
 
+def _auth_gmail_web(args: argparse.Namespace) -> int:
+    from vcoutreach.web.config import configure_workspace
+    from vcoutreach.web.gmail.api import GmailAuthNotReady, run_oauth_flow
+
+    try:
+        workspace = configure_workspace(args.workspace)
+        workspace.initialize()
+        _gmail_dependencies()
+        run_oauth_flow()
+    except (GmailAuthNotReady, ProviderError) as exc:
+        print(f"vcoutreach: {_one_line(exc)}", file=sys.stderr)
+        return 3
+    except Exception:
+        print("vcoutreach: Gmail web authorization failed. Check data/.gmail_credentials.json in the workspace and retry `vcoutreach auth gmail-web --workspace DIR`.", file=sys.stderr)
+        return 3
+    print("Gmail web authorization complete. Token saved at data/.gmail_token.json (mode 0600).")
+    return 0
+
+
 def _ui(args: argparse.Namespace) -> int:
-    from vcoutreach.ui import serve
+    from vcoutreach.web import serve
 
     try:
         return serve(args.workspace, port=args.port, no_browser=args.no_browser)
@@ -351,7 +370,7 @@ def _parser() -> argparse.ArgumentParser:
     providers = commands.add_parser("providers", help="List providers and configuration status.")
     providers.set_defaults(handler=_providers)
 
-    ui = commands.add_parser("ui", help="Open the local browser workspace, with send planning only.")
+    ui = commands.add_parser("ui", help="Open the local browser workspace, with draft review and guarded sending.")
     ui.add_argument("--workspace", type=Path, default=Path("."),
                     help="Workspace directory (default: current directory).")
     ui.add_argument("--port", type=int, metavar="N",
@@ -374,6 +393,10 @@ def _parser() -> argparse.ArgumentParser:
     auth_commands = auth.add_subparsers(dest="auth_command", required=True)
     gmail = auth_commands.add_parser("gmail", help="Run the Gmail send-only OAuth flow.")
     gmail.set_defaults(handler=_auth_gmail)
+    gmail_web = auth_commands.add_parser("gmail-web", help="Authorize the browser app with Gmail read, reply and send access.")
+    gmail_web.add_argument("--workspace", type=Path, default=Path(os.environ.get("OUTREACH_HOME") or "."),
+                           help="Workspace containing data/.gmail_credentials.json (default: OUTREACH_HOME or current directory).")
+    gmail_web.set_defaults(handler=_auth_gmail_web)
     return parser
 
 

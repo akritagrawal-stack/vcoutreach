@@ -44,6 +44,14 @@ def render_subject(contact: Contact, sender: SenderProfile) -> str:
     """Follow ups reuse the original thread subject; first touch uses the template."""
     if contact.lane == Lane.FOLLOW_UP and contact.thread_subject.strip():
         return contact.thread_subject.strip()
+    if contact.lane == Lane.FIRST_TOUCH:
+        explicit = getattr(contact, "subject", "").strip()
+        if explicit:
+            return explicit
+        if sender.first_touch_subject:
+            subject = " ".join(sender.first_touch_subject.format(first_name=contact.first_name).split())
+            if subject:
+                return subject
     template = getattr(sender, "subject_template", "") or DEFAULT_SUBJECT
     values = {"first_name": contact.first_name, "org": contact.org}
     subject = " ".join(_fill(template, values).split())

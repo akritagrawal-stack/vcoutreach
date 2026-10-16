@@ -1,0 +1,165 @@
+{% extends 'base.html' %}
+{% block page_id %}email_verification{% endblock %}
+{% block title %}Email verification / {{ g_workspace.workspace_name }}{% endblock %}
+
+{% block content %}
+<div class="verification-shell">
+  <header class="verification-hero">
+    <div>
+      <span class="control-kicker"><span class="live-pixel"></span> CONTACT INTELLIGENCE LEDGER</span>
+      <h1>Find the person.<br><span>Prove the address.</span></h1>
+      <p>Apollo enriches named contacts. Enrow finds or verifies business email. Every result is retained in SQLite with its source, status, confidence, cost signal, and effect on the send gate.</p>
+    </div>
+    <div class="verification-guardrail">
+      <span>AUTHORITY BOUNDARY</span>
+      <strong>NO EMAIL DELIVERY</strong>
+      <p>Provider calls can use credits. They cannot draft, approve, connect a mailbox, or send. Finder results require review before replacing an address.</p>
+      <a href="/knowledge#dataProviders">MANAGE PROVIDER KEYS</a>
+    </div>
+  </header>
+
+  <section class="verification-provider-grid" aria-label="Provider status">
+    {% for provider in data_providers %}
+    {% set health = data_provider_health.get(provider.id, {}) %}
+    {% set totals = provider_summary.get(provider.id, {}) %}
+    <article class="verification-provider-card">
+      <div class="verification-provider-title">
+        <div><span>{{ provider.id|upper }}</span><h2>{{ provider.label }}</h2></div>
+        <span class="status-chip {{ 'active' if health.get('health_status') == 'connected' else 'working' if provider.configured else 'idle' }}">
+          {{ 'CONNECTED' if health.get('health_status') == 'connected' else 'KEY READY' if provider.configured else 'ADD KEY' }}
+        </span>
+      </div>
+      <p>{{ provider.capability }}</p>
+      <div class="verification-provider-metrics">
+        <div><span>ATTEMPTS</span><strong>{{ totals.get('attempts', 0) }}</strong></div>
+        <div><span>FOUND</span><strong>{{ totals.get('found', 0) }}</strong></div>
+        <div><span>REVIEW</span><strong>{{ totals.get('needs_review', 0) }}</strong></div>
+        <div><span>{{ 'CREDITS' if provider.id == 'enrow' else 'LAST CHECK' }}</span><strong>{{ health.get('credits_remaining') if provider.id == 'enrow' and health.get('credits_remaining') is not none else (health.get('checked_at', 'NOT TESTED')[:10] if health.get('checked_at') else 'NOT TESTED') }}</strong></div>
+      </div>
+    </article>
+    {% endfor %}
+  </section>
+
+  <section class="verification-workspace">
+    <div class="verification-workspace-head">
+      <div>
+        <span>01 / CONTACT DATABASE</span>
+        <h2>Current contacts and verification state</h2>
+      </div>
+      <form class="verification-filters" method="get" action="/email-verification">
+        <input aria-label="Q" name="q" value="{{ filters.q }}" placeholder="Search name, firm, or email">
+        <select aria-label="Status" name="status">
+          <option value="" {% if not filters.status %}selected{% endif %}>All contacts</option>
+          <option value="needs_review" {% if filters.status == 'needs_review' %}selected{% endif %}>Needs review</option>
+          <option value="verified" {% if filters.status == 'verified' %}selected{% endif %}>Send-gate verified</option>
+          <option value="unverified" {% if filters.status == 'unverified' %}selected{% endif %}>Not deliverability verified</option>
+          <option value="never_checked" {% if filters.status == 'never_checked' %}selected{% endif %}>No provider history</option>
+        </select>
+        <button type="submit">FILTER</button>
+      </form>
+    </div>
+
+    <div class="verification-table-wrap">
+      <table class="verification-table"><caption class="sr-only">Email Verification records</caption>
+        <thead>
+          <tr><th>CONTACT</th><th>CURRENT EMAIL</th><th>DELIVERABILITY</th><th>LATEST PROVIDER</th><th>PROVIDER ACTIONS</th></tr>
+        </thead>
+        <tbody>
+          {% for contact in contacts %}
+          {% set address_verified = contact.email_verification_status in ['valid', 'deliverable', 'pb_verified'] %}
+          <tr>
+            <td>
+              <strong>{{ contact.partner_name }}</strong>
+              <span>{{ contact.firm or 'Firm not set' }}</span>
+              <small>{{ contact.firm_domain or 'DOMAIN REQUIRED FOR FINDER' }}</small>
+            </td>
+            <td><code>{{ contact.email }}</code></td>
+            <td>
+              <span class="verification-state {{ 'verified' if address_verified else 'held' }}">{{ contact.email_verification_status or 'UNVERIFIED' }}</span>
+              <small>{{ 'ADDRESS VERIFIED; FIT AND HISTORY STILL REQUIRED' if address_verified else 'FINDER EVIDENCE IS NOT ENOUGH' }}</small>
+            </td>
+            <td>
+              {% if contact.latest_provider %}
+              <strong>{{ contact.latest_provider|upper }} / {{ (contact.latest_provider_state or 'unknown')|upper }}</strong>
+              <span>{{ contact.provider_email_status or 'No provider email status' }}</span>
+              <small>{{ contact.provider_observed_at[:10] if contact.provider_observed_at else '' }}</small>
+              {% else %}
+              <span>NO PROVIDER HISTORY</span>
+              {% endif %}
+            </td>
+            <td>
+              <div class="verification-actions">
+                <form method="post" action="/email-verification/{{ contact.id }}/run">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                  <input type="hidden" name="provider" value="apollo">
+                  <input type="hidden" name="operation" value="person_enrich">
+                  <button type="submit" {% if not contact.can_apollo_enrich %}disabled{% endif %}>APOLLO ENRICH <small>0 TO 1 CREDIT</small></button>
+                </form>
+                <form method="post" action="/email-verification/{{ contact.id }}/run">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                  <input type="hidden" name="provider" value="enrow">
+                  <input type="hidden" name="operation" value="email_find">
+                  <button type="submit" {% if not contact.can_enrow_find %}disabled{% endif %}>ENROW FIND <small>UP TO 1 CREDIT</small></button>
+                </form>
+                <form method="post" action="/email-verification/{{ contact.id }}/run">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                  <input type="hidden" name="provider" value="enrow">
+                  <input type="hidden" name="operation" value="email_verify">
+                  <button type="submit" {% if not contact.can_verify %}disabled{% endif %}>ENROW VERIFY <small>0.25 CREDIT</small></button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="verification-empty">No contacts match this filter.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="verification-history">
+    <div class="verification-workspace-head">
+      <div><span>02 / PROVIDER HISTORY</span><h2>Durable lookup and verification evidence</h2></div>
+      <p>Applying a finder candidate changes the canonical address but leaves it non-send-ready. Run Enrow Verify against the applied address to establish deliverability.</p>
+    </div>
+    <div class="verification-attempts">
+      {% for attempt in attempts %}
+      <article class="verification-attempt">
+        <header>
+          <div><span>{{ attempt.provider|upper }} / {{ attempt.operation|replace('_', ' ')|upper }}</span><strong>{{ attempt.partner_name }} at {{ attempt.firm or 'unknown firm' }}</strong></div>
+          <span class="verification-state {{ 'verified' if attempt.send_gate_effect == 'eligible' else 'held' if attempt.send_gate_effect == 'blocked' else '' }}">{{ attempt.state|replace('_', ' ')|upper }}</span>
+        </header>
+        <div class="verification-attempt-grid">
+          <div><span>CANDIDATE</span><code>{{ attempt.candidate_email or 'NONE RETURNED' }}</code></div>
+          <div><span>PROVIDER STATUS</span><strong>{{ attempt.provider_email_status or 'N/A' }}</strong></div>
+          <div><span>CONFIDENCE</span><strong>{{ ((attempt.confidence or 0) * 100)|round|int }}%</strong></div>
+          <div><span>PROVIDER COST</span><strong>{{ '%.2f CREDITS'|format((attempt.provider_cost_microunits or 0) / 1000000) if attempt.provider_cost_microunits else 'NOT REPORTED' }}</strong></div>
+          <div><span>REQUESTS</span><strong>{{ attempt.request_count }} / {{ attempt.retry_count }} RETRIES</strong></div>
+          <div><span>SEND GATE</span><strong>{{ attempt.send_gate_effect|upper }}</strong></div>
+          <div><span>HTTP</span><strong>{{ attempt.http_status or 'N/A' }}</strong></div>
+          <div><span>OBSERVED</span><strong>{{ attempt.observed_at[:19]|replace('T', ' ') }}</strong></div>
+        </div>
+        {% if attempt.candidate_disposition == 'review_required' %}
+        <div class="verification-review-actions">
+          <form method="post" action="/email-verification/attempts/{{ attempt.id }}/apply">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <label for="email_verification-field-1-{{ attempt.id }}"><span>TYPE THE CANDIDATE EMAIL TO APPLY IT</span><input id="email_verification-field-1-{{ attempt.id }}" name="confirmation" type="email" autocomplete="off" required placeholder="{{ attempt.candidate_email }}"></label>
+            <button type="submit">APPLY AS UNVERIFIED</button>
+          </form>
+          <form method="post" action="/email-verification/attempts/{{ attempt.id }}/dismiss">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button type="submit">DISMISS CANDIDATE</button>
+          </form>
+        </div>
+        {% else %}
+        <footer><span>DISPOSITION</span><strong>{{ attempt.candidate_disposition|replace('_', ' ')|upper }}</strong></footer>
+        {% endif %}
+      </article>
+      {% else %}
+      <div class="verification-empty">No Apollo or Enrow attempts have been recorded yet.</div>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+{% endblock %}

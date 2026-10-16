@@ -1,0 +1,171 @@
+{% extends 'base.html' %}
+{% block page_id %}reply_detail{% endblock %}
+{% block title %}Reply detail / {{ g_workspace.workspace_name }}{% endblock %}
+
+{% block content %}
+
+<!-- Back + heading -->
+<div class="breadcrumb">
+  <a href="/replies">Replies</a>
+  <span class="breadcrumb-sep">/</span>
+  <span>{{ reply['from_name'] or reply['from_email'] }}</span>
+</div>
+
+<div class="section-header page-title">
+  <h1>{{ reply['from_name'] or reply['from_email'] }}</h1>
+  <div class="flex items-center gap-2">
+    {% if not reply['user_reviewed'] %}
+      <span class="badge badge-warning">Unreviewed</span>
+    {% else %}
+      <span class="badge badge-success">Reviewed</span>
+    {% endif %}
+  </div>
+</div>
+
+<div class="two-col">
+
+  <!-- ── Left: email body + metadata ── -->
+  <div class="reply-detail-layout">
+
+    <!-- Email card -->
+    <div>
+      <div class="section">
+        <div class="section-title mb-3">Email Details</div>
+        <div class="meta-list">
+          <div class="meta-row">
+            <span class="meta-key">From</span>
+            <span class="meta-val">
+              {{ reply['from_name'] or '' }}
+              <span class="text-muted" style="font-size:12px;">&lt;{{ reply['from_email'] or ' / ' }}&gt;</span>
+            </span>
+          </div>
+          <div class="meta-row">
+            <span class="meta-key">Subject</span>
+            <span class="meta-val">{{ reply['subject'] or ' / ' }}</span>
+          </div>
+          <div class="meta-row">
+            <span class="meta-key">Received</span>
+            <span class="meta-val text-muted">{{ (reply['received_at'] or reply['discovered_at'] or ' / ')[:19].replace('T',' ') }}</span>
+          </div>
+          {% if reply['partner_name'] %}
+          <div class="meta-row">
+            <span class="meta-key">Partner</span>
+            <span class="meta-val">
+              <a href="/partners/{{ reply['partner_id'] }}">{{ reply['partner_name'] }}</a>
+              {% if reply['firm'] %}<span class="text-muted"> / {{ reply['firm'] }}</span>{% endif %}
+            </span>
+          </div>
+          {% endif %}
+          <div class="meta-row">
+            <span class="meta-key">Thread</span>
+            <span class="meta-val"><code>{{ reply['gmail_thread_id'] }}</code></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title mb-3">Email Body</div>
+        <div class="inset">
+          {% if reply['body_text'] %}
+            <div class="convo-body">{{ reply['body_text'] }}</div>
+          {% else %}
+            <p class="text-muted" style="font-size:13px;font-style:italic;">
+              No plain-text body. Snippet: {{ reply['snippet'] or ' / ' }}
+            </p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Right: classification + actions ── -->
+    <div>
+
+      <!-- AI Classification -->
+      <div class="section">
+        <div class="section-title mb-3">AI Classification</div>
+
+        <div class="mb-4">
+          {% set lbl = reply['label'] %}
+          {% if lbl == 'interested' %}
+            <span class="badge badge-success classif-label-large">Interested</span>
+          {% elif lbl == 'pass' %}
+            <span class="badge badge-danger classif-label-large">Pass</span>
+          {% elif lbl == 'needs_more_info' %}
+            <span class="badge badge-accent classif-label-large">Needs More Info</span>
+          {% elif lbl == 'out_of_office' %}
+            <span class="badge badge-default classif-label-large">Out of Office</span>
+          {% elif lbl == 'bounce' %}
+            <span class="badge badge-danger classif-label-large" style="opacity:0.75;">Bounce</span>
+          {% elif lbl == 'auto_reply' %}
+            <span class="badge badge-default classif-label-large">Auto Reply</span>
+          {% elif lbl %}
+            <span class="badge badge-warning classif-label-large">{{ lbl }}</span>
+          {% else %}
+            <span class="text-muted">Not classified</span>
+          {% endif %}
+          {% if reply['classification_confidence'] %}
+            <span class="text-faint" style="font-size:12px;margin-left:8px;">
+              {{ "%.0f"|format(reply['classification_confidence'] * 100) }}% confidence
+            </span>
+          {% endif %}
+        </div>
+
+        {% if reply['classification_summary'] %}
+        <div class="mb-3">
+          <div class="form-label" style="margin-bottom:4px;">Summary</div>
+          <p style="font-size:13px;">{{ reply['classification_summary'] }}</p>
+        </div>
+        {% endif %}
+
+        {% if reply['suggested_action'] %}
+        <div class="inset" style="background:var(--info-dim);color:var(--info);">
+          <div class="form-label" style="color:var(--info);margin-bottom:3px;">Suggested Action</div>
+          <p style="font-size:13px;font-weight:500;">{{ reply['suggested_action'] }}</p>
+        </div>
+        {% endif %}
+
+        {% if reply['classified_at'] %}
+        <div class="text-faint mt-4" style="font-size:11px;">
+          Classified {{ reply['classified_at'][:16].replace('T',' ') }}
+        </div>
+        {% endif %}
+      </div>
+
+      <!-- Label override -->
+      <div class="section">
+        <div class="section-title mb-3">Override Label</div>
+        {% if reply['user_label'] %}
+          <p class="text-muted mb-3" style="font-size:13px;">
+            Current override: <strong>{{ reply['user_label'] }}</strong>
+          </p>
+        {% endif %}
+        <form action="/replies/{{ reply['id'] }}/update-label" method="post">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <div class="form-row">
+            <select aria-label="User Label" name="user_label" class="form-control" style="flex:1;">
+              <option value=""> /  choose label  / </option>
+              {% for lbl in all_labels %}
+              <option value="{{ lbl }}" {% if reply['user_label'] == lbl %}selected{% endif %}>{{ lbl }}</option>
+              {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-secondary btn-sm">Save</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Mark reviewed -->
+      {% if not reply['user_reviewed'] %}
+      <form action="/replies/{{ reply['id'] }}/mark-reviewed" method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit" class="btn btn-success btn-full">Mark as Reviewed</button>
+      </form>
+      {% else %}
+      <p class="text-faint" style="font-size:12px;text-align:center;">Already reviewed.</p>
+      {% endif %}
+
+    </div>
+  </div>
+
+</div>
+
+{% endblock %}
