@@ -1,4 +1,6 @@
 #!/bin/bash
+# Developer option: installs Python sources and a browser launcher.
+# For the standalone native app, see packaging/mac/README.md.
 set -euo pipefail
 
 INSTALL_DIR="$HOME/vcoutreach"

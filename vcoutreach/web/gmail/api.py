@@ -11,6 +11,8 @@ from __future__ import annotations
 import base64
 import logging
 import os
+import threading
+from contextlib import contextmanager
 from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -27,6 +29,31 @@ SCOPES = [
 
 class GmailAuthNotReady(Exception):
     """Raised when gmail-web authorization is missing or invalid."""
+
+
+@contextmanager
+def _private_oauth_logging():
+    """Keep OAuth callback URLs and HTTP debug payloads out of configured logs."""
+    owner = threading.get_ident()
+
+    class OtherThreadsOnly(logging.Filter):
+        def filter(self, record):
+            return record.thread != owner
+
+    prefixes = ('google_auth_oauthlib', 'oauthlib', 'requests_oauthlib', 'urllib3', 'google.auth')
+    names = set(prefixes) | {'urllib3.connectionpool', 'requests_oauthlib.oauth2_session',
+                             'google_auth_oauthlib.flow'}
+    names.update(name for name in dict(logging.Logger.manager.loggerDict)
+                 if name.startswith(prefixes))
+    loggers = [logging.getLogger(name) for name in names]
+    guard = OtherThreadsOnly()
+    for target in loggers:
+        target.addFilter(guard)
+    try:
+        yield
+    finally:
+        for target in loggers:
+            target.removeFilter(guard)
 
 
 def _get_credentials():
@@ -103,9 +130,17 @@ def run_oauth_flow() -> str:
         )
     google = _require_google()
     try:
-        flow = google.InstalledAppFlow.from_client_secrets_file(str(creds_path), SCOPES)
-        creds = flow.run_local_server(port=0, prompt='consent')
-        _write_token(token_path, creds.to_json())
+        from vcoutreach.web.gmail.setup import MAX_CLIENT_BYTES, validate_oauth_client
+        with creds_path.open('rb') as handle:
+            validate_oauth_client(handle.read(MAX_CLIENT_BYTES + 1))
+        with _private_oauth_logging():
+            flow = google.InstalledAppFlow.from_client_secrets_file(str(creds_path), SCOPES)
+            creds = flow.run_local_server(
+                host='127.0.0.1', bind_addr='127.0.0.1', port=0, prompt='consent',
+                timeout_seconds=180, authorization_prompt_message='',
+                success_message='Gmail authorization complete. Return to Publikreach.',
+            )
+            _write_token(token_path, creds.to_json())
     except Exception:
         raise GmailAuthNotReady(
             'Gmail web authorization failed. Check the Desktop app client JSON at '

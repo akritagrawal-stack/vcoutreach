@@ -1,5 +1,5 @@
 /* ============================================================
-   Publik Signal / outreach control system
+   Publikreach / outreach control system
    Sharp editorial geometry with high-contrast operational color
    ============================================================ */
 
@@ -872,7 +872,7 @@ textarea.form-control { min-height: 80px; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
 /* ============================================================
-   Publik Signal control console
+   Publikreach control console
    ============================================================ */
 .brand-dot { color: var(--accent); }
 .brand-product {
@@ -1990,6 +1990,10 @@ input, textarea, select { max-width: 100%; }
 .banner-confirm-form { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
 .flash-list { list-style: none; }
 .data-table-wrap, .crm-table-wrap, .verification-table-wrap, .target-table-wrap { width: 100%; min-width: 0; max-width: 100%; overflow-x: auto; }
+/* Keep cell contents inside their columns and wide tables reachable by scrolling. */
+.crm-table { table-layout: fixed; }
+.data-table th, .data-table td, .crm-table th, .crm-table td, .verification-table th, .verification-table td { overflow-wrap: anywhere; white-space: normal; }
+.data-table td > *, .crm-table td > *, .verification-table td > * { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
 .form-shell { width: 100%; max-width: 850px; margin-inline: auto; }
 .draft-editor-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(240px, 300px); align-items: start; gap: 20px; }
 .draft-editor-main { min-width: 0; }

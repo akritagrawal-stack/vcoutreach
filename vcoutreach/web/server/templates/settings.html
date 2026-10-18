@@ -20,8 +20,8 @@
     {% for name, state in connections.items() %}
     <div class="settings-status-cell">
       <span>{{ name|upper }}</span>
-      <strong>{{ state }}</strong>
-      <i class="connection-light {{ 'ready' if state in ['ready', 'session ready', 'live'] else 'guarded' }}"></i>
+      <strong{% if name == 'gmail' %} data-gmail-state{% endif %}>{{ state }}</strong>
+      <i{% if name == 'gmail' %} data-gmail-light{% endif %} class="connection-light {{ 'ready' if state in ['ready', 'session ready', 'live'] or (name == 'gmail' and state == 'connected') else 'guarded' }}"></i>
     </div>
     {% endfor %}
   </section>
@@ -63,7 +63,22 @@
     <p class="crm-source-note" data-pitchbook-message role="status">{{ connections.get('pitchbook','Not connected') }}</p>
   </section>
 
-  <section class="crm-panel" aria-label="Gmail connection state"><h2>Gmail connection</h2><p class="status-chip">{{ connections.get('gmail','Not connected') }}</p>{% if connections.get('gmail') == 'connected' %}<p>Gmail is connected for this workspace (read, label and reply access). Sending still needs the typed confirmations, and TEST mode applies.</p>{% else %}<p>Save your own Google Cloud Desktop app OAuth client JSON at <code>data/.gmail_credentials.json</code> under your workspace. In Terminal, run <code>vcoutreach auth gmail-web --workspace DIR</code>, replacing DIR with your workspace folder. This authorizes gmail.modify and saves a private token at <code>data/.gmail_token.json</code>. Then refresh replies from the Replies page.</p>{% endif %}<a class="crm-button crm-button-secondary" href="/replies">Open replies</a></section>
+  <section class="crm-panel" aria-label="Gmail connection state">
+    <h2>Gmail connection</h2>
+    <p class="status-chip" data-gmail-state>{{ connections.get('gmail','Not connected') }}</p>
+    <p>Each user needs their own Google Cloud Desktop app OAuth client JSON. No shared client is bundled yet. <a href="https://developers.google.com/workspace/gmail/api/quickstart/python#authorize_credentials_for_a_desktop_application" target="_blank" rel="noopener noreferrer">Create a Desktop OAuth client</a>, enable the Gmail API, configure the consent screen, and add yourself as a test user if required.</p>
+    <p>Choosing the file copies it privately into this workspace. Connect Gmail opens your system browser for consent to gmail.modify (read, label, draft and send access). Sending still needs the typed confirmations, and TEST mode applies.</p>
+    <form data-gmail-upload enctype="multipart/form-data" action="/api/gmail/client" method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="file" name="oauth_client" accept=".json,application/json" aria-label="Choose OAuth client file" data-gmail-file hidden>
+      <button type="button" class="crm-button crm-button-secondary" data-gmail-choose>Choose OAuth client file</button>
+      <button type="button" class="crm-button crm-button-primary" data-gmail-connect>Connect Gmail</button>
+      <button type="button" class="crm-button crm-button-secondary" data-gmail-remove>Remove Gmail client and token</button>
+    </form>
+    <p data-gmail-message role="status">Client and token files stay private in data/.gmail_credentials.json and data/.gmail_token.json (mode 0600). Connected means a local refresh token is saved; access is verified when Gmail is used.</p>
+    <p class="crm-source-note">The CLI alternative remains <code>vcoutreach auth gmail-web --workspace DIR</code>.</p>
+    <a class="crm-button crm-button-secondary" href="/replies">Open replies</a>
+  </section>
 
   <div class="settings-layout">
     <aside class="setup-guide">

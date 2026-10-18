@@ -16,7 +16,8 @@ dependencies = []
 web = ["Flask>=3.1,<4"]
 integrations = ["google-genai", "anthropic", "curl_cffi", "playwright", "beautifulsoup4", "requests", "dnspython"]
 gmail = [
-    "google-auth-oauthlib",
+    "google-auth",
+    "google-auth-oauthlib>=1.2.2",
     "google-api-python-client",
 ]
 dev = [

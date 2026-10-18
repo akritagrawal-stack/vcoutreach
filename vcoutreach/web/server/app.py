@@ -1,4 +1,4 @@
-"""Publik Signal workspace application and compatibility routes."""
+"""Publikreach workspace application and compatibility routes."""
 from __future__ import annotations
 
 import json
@@ -288,6 +288,8 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
     with app.app_context():
         init_db()
     install_security(app)
+    from vcoutreach.web.gmail.setup import register_setup_routes
+    register_setup_routes(app, _gmail_connection_state)
     drafts_service.register_routes(app)
 
     @app.get('/healthz')

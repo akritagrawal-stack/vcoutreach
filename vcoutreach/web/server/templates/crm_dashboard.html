@@ -15,7 +15,7 @@
       <a class="crm-button crm-button-primary" href="{{ url_for('crm_drafts') }}">Review drafts</a>
       <a class="crm-button crm-button-secondary" href="{{ url_for('crm_analytics') }}">Analytics</a>
       <a class="crm-button crm-button-secondary" href="{{ url_for('crm_tracking') }}">Cloudflare tracking</a>
-      <form method="post" action="{{ url_for('crm_refresh_inbox_route') }}">
+      <form method="post" action="{{ url_for('crm_refresh_inbox_route') }}" data-busy="Checking Gmail, this can take a minute...">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <button class="crm-button crm-button-secondary" type="submit">Refresh Gmail inbox</button>
       </form>

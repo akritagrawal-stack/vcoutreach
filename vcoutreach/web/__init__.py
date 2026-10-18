@@ -1,4 +1,4 @@
-"""Optional local Publik Signal web application."""
+"""Optional local Publikreach web application."""
 from __future__ import annotations
 from pathlib import Path
 

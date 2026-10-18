@@ -18,6 +18,8 @@ contacts*.csv
 drafts/
 .vcoutreach/
 token.json
+.gmail_credentials.json
+.gmail_token.json
 client_secret*.json
 *.eml
 dist/

@@ -1,4 +1,4 @@
-/* Publik Signal interactions. Page data stays in escaped HTML attributes. */
+/* Publikreach interactions. Page data stays in escaped HTML attributes. */
 (function () {
   'use strict';
   try {
@@ -44,13 +44,37 @@
         }).catch(function () { button.textContent = 'Select the URL to copy'; });
       });
     });
+    var goLiveForm = document.getElementById('goLiveForm');
+    var goLiveToggle = document.getElementById('bannerGoLiveToggle');
+    function cancelGoLive() {
+      goLiveForm.hidden = true;
+      goLiveForm.reset();
+      goLiveToggle.setAttribute('aria-expanded', 'false');
+      goLiveToggle.focus();
+    }
+    var goLiveCancel = document.querySelector('[data-cancel-go-live]');
+    if (goLiveCancel) goLiveCancel.addEventListener('click', cancelGoLive);
     document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape' && goLiveForm && !goLiveForm.hidden) {
+        event.preventDefault();
+        cancelGoLive();
+      }
       var dialog = document.getElementById('bulkScheduleOverlay');
       if (event.key === 'Escape' && dialog && dialog.style.display !== 'none') {
         dialog.style.display = 'none';
         var opener = document.querySelector('[data-action="partners_list-8"]');
         if (opener) opener.focus();
       }
+    });
+    document.querySelectorAll('form[data-busy]').forEach(function (form) {
+      form.addEventListener('submit', function () {
+        var button = form.querySelector('button[type="submit"]');
+        if (!button) return;
+        window.setTimeout(function () {
+          button.disabled = true;
+          button.textContent = form.dataset.busy;
+        }, 0);
+      });
     });
     document.querySelectorAll('[data-confirm]').forEach(function (element) {
       element.addEventListener(element.tagName === 'FORM' ? 'submit' : 'click', function (event) {
@@ -61,6 +85,7 @@
       element.addEventListener('click', function () {
         var target = document.getElementById(element.dataset.toggle);
         var open = target.hidden;
+        if (!open && target === goLiveForm) { cancelGoLive(); return; }
         target.hidden = !open;
         element.setAttribute('aria-expanded', String(open));
         if (open) { var field = target.querySelector('input:not([type="hidden"])'); if (field) field.focus(); }
@@ -539,6 +564,99 @@ document.querySelectorAll('[data-action="candidates_list-2"]').forEach(function 
 }
 
 if (page === 'settings') {
+  var gmailChoose = document.querySelector('[data-gmail-choose]');
+  var gmailConnect = document.querySelector('[data-gmail-connect]');
+  var gmailRemove = document.querySelector('[data-gmail-remove]');
+  var gmailFile = document.querySelector('[data-gmail-file]');
+  var gmailMessage = document.querySelector('[data-gmail-message]');
+  var gmailStates = document.querySelectorAll('[data-gmail-state]');
+  var gmailPoll;
+  function updateGmailState(payload) {
+    if (typeof payload.state !== 'string') return;
+    gmailStates.forEach(function (element) { element.textContent = payload.state; });
+    document.querySelectorAll('[data-gmail-light]').forEach(function (element) {
+      element.classList.toggle('ready', payload.state === 'connected');
+      element.classList.toggle('guarded', payload.state !== 'connected');
+    });
+  }
+  function gmailBusy(busy) {
+    gmailChoose.disabled = gmailConnect.disabled = gmailRemove.disabled = busy;
+  }
+  function gmailStatus() {
+    clearTimeout(gmailPoll);
+    gmailPoll = null;
+    return fetch('/api/gmail/status', {credentials: 'same-origin'}).then(function (response) {
+      if (!response.ok) throw new Error('status');
+      return response.json();
+    }).then(function (payload) {
+      updateGmailState(payload);
+      gmailBusy(payload.running);
+      if (payload.running) {
+        gmailMessage.textContent = 'Complete consent in your system browser. This expires after three minutes.';
+        gmailPoll = setTimeout(gmailStatus, 1500);
+      } else if (payload.failed) {
+        gmailMessage.textContent = 'Gmail authorization did not finish. Check your Desktop client and try Connect Gmail again.';
+      } else if (payload.state === 'connected') {
+        gmailMessage.textContent = 'Gmail connected. A private refresh token is saved for this workspace. TEST mode still applies.';
+      }
+    }).catch(function () {
+      gmailMessage.textContent = 'Could not reach the local Gmail setup service. Reload Settings to retry.';
+      gmailBusy(false);
+    });
+  }
+  function gmailPost(path, data, successMessage) {
+    return fetch(path, {method: 'POST', body: data, credentials: 'same-origin', headers: {'X-CSRF-Token': csrf}})
+      .then(function (response) { return response.json(); })
+      .then(function (payload) {
+        if (!payload.ok) {
+          gmailMessage.textContent = payload.error || 'Gmail setup is unavailable.';
+          return;
+        }
+        updateGmailState(payload);
+        gmailMessage.textContent = successMessage || 'OAuth client saved privately. Choose Connect Gmail to continue.';
+        clearTimeout(gmailPoll);
+        return gmailStatus();
+      }).catch(function () { gmailMessage.textContent = 'Gmail setup is unavailable. Reload Settings to retry.'; });
+  }
+  if (gmailChoose) {
+    gmailChoose.addEventListener('click', function () {
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.choose_oauth_client) {
+        window.pywebview.api.choose_oauth_client(csrf).then(function (payload) {
+          if (payload.cancelled) return;
+          if (!payload.ok) { gmailMessage.textContent = payload.error; return; }
+          updateGmailState(payload);
+          gmailMessage.textContent = 'OAuth client saved privately. Choose Connect Gmail to continue.';
+          return gmailStatus();
+        }).catch(function () { gmailMessage.textContent = 'Could not choose the OAuth client. Try again.'; });
+      } else {
+        gmailFile.click();
+      }
+    });
+    gmailFile.addEventListener('change', function () {
+      if (!gmailFile.files.length) return;
+      var upload = new FormData(document.querySelector('[data-gmail-upload]'));
+      gmailFile.value = '';
+      gmailPost('/api/gmail/client', upload);
+    });
+    gmailConnect.addEventListener('click', function () {
+      gmailBusy(true);
+      var data = new FormData();
+      data.append('csrf_token', csrf);
+      gmailPost('/api/gmail/connect', data, 'Starting Gmail consent in your system browser.').finally(function () {
+        if (!gmailPoll) gmailBusy(false);
+      });
+    });
+    gmailRemove.addEventListener('click', function () {
+      if (!window.confirm('Remove the Gmail OAuth client and saved token from this workspace? You will need to import a client and connect again.')) return;
+      gmailBusy(true);
+      var data = new FormData();
+      data.append('csrf_token', csrf);
+      gmailPost('/api/gmail/disconnect', data, 'Gmail client and token removed. Import a client to connect again.').finally(function () {
+        if (!gmailPoll) gmailBusy(false);
+      });
+    });
+    gmailStatus();
+  }
 
 (function() {
   var form = document.getElementById('workspaceSettingsForm');

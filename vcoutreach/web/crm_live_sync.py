@@ -14,7 +14,7 @@ def sync_status(db_path: Path) -> dict | None:
     finally:
         conn.close()
 
-def refresh_inbox(db_path: Path, *, days: int = 30, cap: int = 1000) -> dict:
+def refresh_inbox(db_path: Path, *, days: int = 30, cap: int = 300) -> dict:
     if not 1<=days<=90 or not 1<=cap<=1000:
         raise ValueError('Invalid inbox scan bounds.')
     from vcoutreach.web.gmail.api import get_service

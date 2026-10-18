@@ -1,3 +1,15 @@
+# Publikreach for Mac
+
+The Mac distribution is **Publikreach.dmg**, containing **Publikreach.app** for Apple Silicon (arm64), with macOS 12 or later declared as the minimum. Open the DMG, drag Publikreach into Applications, then double-click it. The app bundles Python, Flask and the Gmail libraries and opens its own native WKWebView window. No Python installation or Terminal launcher is needed on the target Mac. Release binaries are not included in this source checkout; a maintainer must [build the app and DMG](packaging/mac/README.md) before distributing them.
+
+The app stores `.env`, `data/`, `drafts/` and `outputs/` in `~/Documents/Publikreach`. Every launch starts in TEST mode. Closing its window quits the local server. Keep this workspace when replacing the app to update it.
+
+The app is **ad-hoc signed**, without an Apple Developer ID, and **not notarized**. On first launch, right-click Publikreach.app and choose Open. If macOS still blocks it, try opening it once, then use System Settings > Privacy and Security > Open Anyway. Notarization needs a paid Apple Developer account and has not been done. On older macOS versions these controls may be in System Preferences > Security and Privacy.
+
+In Settings, choose your own Google Cloud **Desktop app** OAuth client JSON, then click **Connect Gmail**. Consent opens in your system browser and requests `gmail.modify`. The client and token are stored privately in the workspace with mode 0600. Each user needs their own client until a shared one is bundled. Follow Google's [Desktop OAuth client setup steps](https://developers.google.com/workspace/gmail/api/quickstart/python#authorize_credentials_for_a_desktop_application), enable the Gmail API, and configure the consent screen and test users. A saved connection does not bypass the app's send confirmations or TEST mode.
+
+The existing `install-mac.sh` is the developer option for a Python installation and browser launcher. The CLI and browser documentation follows.
+
 # vcoutreach
 
 vcoutreach turns a CSV of contacts and a sender profile into personalized,
@@ -196,9 +208,9 @@ reading, email verification, enrichment, analytics, scheduled sends and a guarde
 send flow. It runs from your own workspace folder and only talks to a service when
 you click a button for it.
 
-### On a Mac: one line
+### On a Mac: developer browser installation
 
-Paste this into Terminal:
+For source development with Python and the browser version, paste this into Terminal:
 
 ```
 curl -fsSL https://raw.githubusercontent.com/akritagrawal-stack/vcoutreach/main/install-mac.sh | bash

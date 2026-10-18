@@ -1,4 +1,4 @@
-"""Workspace-scoped paths and runtime settings for Publik Signal."""
+"""Workspace-scoped paths and runtime settings for Publikreach."""
 from __future__ import annotations
 import json
 import os

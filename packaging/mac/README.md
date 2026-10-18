@@ -1,24 +1,21 @@
-# Install on a Mac
+# Publikreach.app
 
-Paste this one line into Terminal:
+Native macOS app (Cocoa WKWebView window hosting the Flask app, bundled Python, no install needed on the target Mac). Apple Silicon (arm64) only.
+
+Build on a real Mac:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/akritagrawal-stack/vcoutreach/main/install-mac.sh | bash
+bash packaging/mac/build_app.sh
 ```
 
-The installer downloads the app, finds Python 3.10 or newer, and installs it with `.[web,gmail]` in ~/vcoutreach.
-If needed, it offers to install Python with an existing Homebrew installation (`brew install python`).
-Your contacts, drafts and keys stay in ~/Documents/vcoutreach-workspace.
-Double-click Outreach.command on your Desktop. It opens the app in your browser, always in TEST mode.
-Close the Terminal window to stop the app. To update, run the same line again (old copies get .old backups).
-Options: --dry-run, --dir PATH, --workspace PATH, --ref REF, --no-launcher-on-desktop, --help.
-With options, end the line with `| bash -s -- --dir "$HOME/My Outreach"`. --ref selects a GitHub branch.
-Gemini, Claude and PitchBook need one more step: `~/vcoutreach/.venv/bin/python -m pip install -e "$HOME/vcoutreach[integrations]"`.
+Outputs `dist/Publikreach.app` and `dist/Publikreach.dmg`. Headless check:
 
-- **Python too old:** Install a current Python from https://www.python.org/downloads/macos/ and retry.
-- **Permission denied:** Choose a folder you own with --dir; do not use sudo.
-  If the launcher is not executable, run `chmod +x "$HOME/Desktop/Outreach.command"`.
-- **Cannot be opened because it is from an unidentified developer:** Right-click Outreach.command, choose Open, then confirm Open.
+```sh
+dist/Publikreach.app/Contents/MacOS/Publikreach --self-test
+```
 
-To uninstall, run `bash "$HOME/vcoutreach/packaging/mac/uninstall-mac.sh"`.
-It removes the app and Desktop launcher, asks before deleting the workspace, and keeps it by default.
+First launch: the app is ad-hoc signed, not notarized. Right-click the app and choose Open. Its workspace is `~/Documents/Publikreach` and it starts in TEST mode every launch.
+
+Gmail needs your own Google Cloud Desktop app OAuth client JSON (Settings > Choose OAuth client file > Connect Gmail).
+
+Full documentation: [docs/mac-app.md](../../docs/mac-app.md). The older `install-mac.sh` developer installer is documented there too.
