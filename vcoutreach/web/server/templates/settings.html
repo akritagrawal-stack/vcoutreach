@@ -1,380 +1,149 @@
 {% extends 'base.html' %}
 {% block page_id %}settings{% endblock %}
-{% block title %}Configure / {{ settings.workspace_name }}{% endblock %}
+{% block title %}Configure{% endblock %}
+{% set words = {'unset': 'Not set', 'saved': 'Key saved', 'ok': 'Connected', 'fail': 'Failed'} %}
+{% macro mark(id, letters) %}<svg class="svc-mark m-{{ id }}" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32"/><text x="16" y="21.5" text-anchor="middle">{{ letters }}</text></svg>{% endmacro %}
+{% macro chip(state) %}<span class="svc-status" role="status"><i class="svc-dot"></i><b data-svc-label>{{ words[state] }}</b></span>{% endmacro %}
+{% macro fld(n, label, max=0, rows=0, type='text', wide=false) %}<label class="fld{{ ' wide' if wide }}"><span>{{ label }}</span>
+  {%- if rows %}<textarea name="{{ n }}" rows="{{ rows }}" maxlength="{{ max }}" required>{{ settings[n] }}</textarea>
+  {%- else %}<input name="{{ n }}" type="{{ type }}"{% if max %} maxlength="{{ max }}"{% endif %} value="{{ settings[n] }}"{% if n != 'pitch_deck_url' %} required{% endif %}>{% endif %}</label>{% endmacro %}
+{% macro section(id, title, blurb, cls='') %}<details class="acc" id="{{ id }}"><summary><b>{{ title }}</b><span>{{ blurb }}</span></summary><div class="fields {{ cls }}">{{ caller() }}</div></details>{% endmacro %}
 
 {% block content %}
 <div class="settings-shell">
-  <header class="settings-hero">
-    <div>
-      <span class="control-kicker"><span class="live-pixel"></span> LOCAL WORKSPACE CONFIGURATION</span>
-      <h1>Build the company<br><span>knowledge base.</span></h1>
-      <p>Put the product, market, founders, proof, pitch deck, claim limits, and outreach format in one reusable source. Enter service credentials below; saved values remain hidden.</p>
-    </div>
-    <div class="settings-hero-actions">
-      <a class="square-button secondary" href="/">Preview overview</a>
-      <button class="square-button primary" type="submit" form="workspaceSettingsForm">Save configuration</button>
-    </div>
+  <header class="settings-head">
+    <h1>Settings</h1>
+    <span class="svc-summary" data-svc-summary aria-live="polite"></span>
+    <nav class="svc-tiles" aria-label="Setup status">
+      {% for name, state, word, target in tiles %}<a class="svc-tile" href="#{{ target }}" data-state="{{ state }}"{% if target.startswith('svc-') %} data-tile-for="{{ target[4:] }}"{% endif %}><i class="svc-dot"></i><span>{{ name }}</span><b data-svc-label>{{ word }}</b></a>{% endfor %}
+    </nav>
   </header>
 
-  <section class="settings-status-strip" aria-label="Connection status">
-    {% for name, state in connections.items() %}
-    <div class="settings-status-cell">
-      <span>{{ name|upper }}</span>
-      <strong{% if name == 'gmail' %} data-gmail-state{% endif %}>{{ state }}</strong>
-      <i{% if name == 'gmail' %} data-gmail-light{% endif %} class="connection-light {{ 'ready' if state in ['ready', 'session ready', 'live'] or (name == 'gmail' and state == 'connected') else 'guarded' }}"></i>
-    </div>
+  <section class="svc-grid" aria-label="Connections">
+    <article class="svc-card" id="svc-gmail" tabindex="-1" data-service="gmail" data-state="{{ gmail.state }}" data-gmail-view="{{ gmail.view }}">
+      <header class="svc-head">{{ mark('gmail', 'Gm') }}<h2>Gmail</h2>{{ chip(gmail.state) }}</header>
+      <form data-gmail-upload enctype="multipart/form-data" action="/api/gmail/client" method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="file" name="oauth_client" accept=".json,application/json" aria-label="Choose OAuth client file" data-gmail-file hidden>
+        <div class="svc-actions" data-gmail-panel="no-client"{% if gmail.view != 'no-client' %} hidden{% endif %}>
+          <button type="button" class="svc-btn primary" data-gmail-choose>Choose OAuth client file</button>
+          <a class="svc-link" href="https://developers.google.com/workspace/gmail/api/quickstart/python#authorize_credentials_for_a_desktop_application" target="_blank" rel="noopener noreferrer">How to create a Desktop client</a>
+        </div>
+        <div class="svc-actions" data-gmail-panel="ready"{% if gmail.view != 'ready' %} hidden{% endif %}>
+          <button type="button" class="svc-btn primary" data-gmail-connect>Connect Gmail</button>
+          <button type="button" class="svc-link" data-gmail-choose>Replace client file</button>
+        </div>
+        <p class="svc-busy" data-gmail-panel="running"{% if gmail.view != 'running' %} hidden{% endif %}><i class="svc-spin"></i> Finish consent in your system browser. This expires after three minutes.</p>
+        <div class="svc-actions" data-gmail-panel="connected"{% if gmail.view != 'connected' %} hidden{% endif %}>
+          <button type="button" class="svc-btn" data-gmail-switch>Connect a different Gmail account</button>
+          <button type="button" class="svc-btn danger" data-gmail-remove>Disconnect</button>
+        </div>
+        <div class="svc-actions" data-gmail-panel="failed"{% if gmail.view != 'failed' %} hidden{% endif %}>
+          <button type="button" class="svc-btn primary" data-gmail-connect>Retry</button>
+          <button type="button" class="svc-link" data-gmail-choose>Replace client file</button>
+        </div>
+      </form>
+      <p class="svc-hint" data-gmail-message role="status">Choose an OAuth client file, then choose Connect Gmail. Files stay private in this workspace.</p>
+    </article>
+
+    {% for s in services %}
+    <article class="svc-card" id="svc-{{ s.id }}" tabindex="-1" data-service="{{ s.id }}" data-state="{{ s.state }}" data-test="{{ s.test }}">
+      <header class="svc-head">{{ mark(s.id, s.mark) }}<h2>{{ s.name }}</h2>{{ chip(s.state) }}</header>
+      <form class="svc-form" method="post" action="{{ s.action or '/settings/keys' }}" data-svc-form>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        {% if s.provider %}<input type="hidden" name="provider" value="{{ s.provider }}"><input type="hidden" name="return_to" value="settings">{% endif %}
+        {% for f in s.fields %}<label class="fld"><span>{{ f.label }}</span><input name="{{ f.name }}" type="{{ f.type }}" autocomplete="new-password" placeholder="{{ f.placeholder }}"></label>{% endfor %}
+        <div class="svc-actions">
+          {% if s.fields %}<button type="submit" class="svc-btn primary">Store</button>{% if s.provider %}<button type="submit" class="svc-btn danger" name="action" value="remove">Remove key</button>{% endif %}{% endif %}
+          {% if s.test == 'pitchbook' %}<button type="button" class="svc-btn primary" data-pitchbook-launch>Open sign-in</button><button type="button" class="svc-btn" data-pitchbook-check>Check session</button>
+          {% elif s.test %}<button type="button" class="svc-btn" data-svc-test>Test connection</button>{% endif %}
+        </div>
+      </form>
+      <p class="svc-hint" data-svc-note{% if s.test == 'pitchbook' %} data-pitchbook-message{% endif %} role="status">{{ s.hint }}</p>
+    </article>
     {% endfor %}
+    <article class="svc-card" id="svc-searxng" data-service="searxng" data-state="{{ 'saved' if searxng_url else 'unset' }}">
+      <header class="svc-head"><h2>SearXNG</h2>{{ chip('saved' if searxng_url else 'unset') }}</header>
+      <form method="post" action="/settings/keys" data-searxng-form>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <label class="fld"><span>SearXNG URL</span><input type="url" name="SEARXNG_URL" value="{{ searxng_url }}" placeholder="http://localhost:8080"></label>
+        <div class="svc-actions"><button type="submit" class="svc-btn primary">Save</button><button type="button" class="svc-btn" data-searxng-test>Test connection</button></div>
+      </form>
+      <p class="svc-hint" data-searxng-note role="status">{{ searxng_url or 'No SearXNG URL saved.' }}</p>
+    </article>
   </section>
 
+  <details class="acc" id="sec-more"><summary><b>More settings</b><span>Sender and test recipient email, daily cap, other keys and URLs. Saved key values are never shown.</span></summary>
+    <form method="post" action="/settings/keys" class="fields three" data-svc-form data-more>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      {% for k in more_settings %}<label class="fld"><span>{{ k.name }} <em class="set-chip{{ ' on' if k.set }}" data-key-chip="{{ k.name }}">{{ 'Set' if k.set else 'Not set' }}</em></span><input name="{{ k.name }}" type="{{ k.type }}" autocomplete="{{ 'off' if k.type in ('email', 'text') else 'new-password' }}" placeholder="Enter a new value"{% if k.name == 'TEST_RECIPIENT_EMAIL' %} value="{{ g_test_recipient }}"{% endif %}></label>{% endfor %}
+      <div class="svc-actions wide"><button type="submit" class="svc-btn primary">Save</button><span class="svc-hint" data-svc-note role="status">Leave keys blank to keep them. Clear the test recipient field to hold test sends.</span></div>
+    </form>
+  </details>
 
-  <section class="crm-panel"><h2>Workspace sample</h2><form method="post" action="/sample/load"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit" class="crm-button crm-button-primary">Load the sample</button></form><p>Daily send cap defaults to 20. Set DAILY_SEND_CAP in the workspace .env to override it.</p></section>
-  <section class="crm-panel" id="senderProfile">
-    <div class="crm-panel-heading"><h2>Sender profile</h2><span class="crm-eyebrow">DRAFTING ENGINE</span></div>
-    <form method="post" action="/settings/sender" class="settings-fields two-up">
+  <h2 class="settings-sub">Workspace</h2>
+  <details class="acc" id="sec-sender"><summary><b>Sender profile</b><span>Name, signature, claims and subject line for drafts</span></summary>
+    <form method="post" action="/settings/sender" class="fields">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       {% set profile = sender|default({}) %}
       {% for field, label in [('name','Sender name'),('title','Title'),('org','Organization'),('website','Website'),('first_touch_subject','First-touch subject')] %}
-      <label for="sender-{{ field }}">{{ label }}<input id="sender-{{ field }}" name="{{ field }}" value="{{ profile.get(field,'') }}" {% if field == 'name' %}required{% endif %} {% if field == 'first_touch_subject' %}maxlength="120"{% endif %}></label>
+      <label class="fld" for="sender-{{ field }}"><span>{{ label }}</span><input id="sender-{{ field }}" name="{{ field }}" value="{{ profile.get(field,'') }}"{% if field == 'name' %} required{% endif %}{% if field == 'first_touch_subject' %} maxlength="120"{% endif %}></label>
       {% endfor %}
-      <p class="crm-source-note field-wide">The first-touch subject can use {first_name}. Leave it blank to use the engine default.</p>
+      <p class="svc-hint wide">The first-touch subject can use {first_name}. Leave it blank to use the engine default.</p>
       {% for field,label in [('signature','Signature'),('product_lines','Product lines, one per line'),('traction_lines','Traction lines, one per line'),('ask_line','Ask or offer'),('forbidden_phrases','Forbidden phrases, one per line')] %}
-      <label for="sender-{{ field }}">{{ label }}<textarea id="sender-{{ field }}" name="{{ field }}" rows="4">{{ profile.get(field,[])|join('\n') if field in ['product_lines','traction_lines','forbidden_phrases'] else profile.get(field,'') }}</textarea></label>
+      <label class="fld wide" for="sender-{{ field }}"><span>{{ label }}</span><textarea id="sender-{{ field }}" name="{{ field }}" rows="3">{{ profile.get(field,[])|join('\n') if field in ['product_lines','traction_lines','forbidden_phrases'] else profile.get(field,'') }}</textarea></label>
       {% endfor %}
-      <label for="senderClaims">Approved claims (JSON object)<textarea id="senderClaims" name="approved_claims" rows="5">{{ profile.get('approved_claims',{})|tojson }}</textarea></label>
-      <div class="field-wide"><button class="crm-button crm-button-primary" type="submit">Save sender profile</button></div>
+      <label class="fld wide" for="senderClaims"><span>Approved claims (JSON object)</span><textarea id="senderClaims" name="approved_claims" rows="4">{{ profile.get('approved_claims',{})|tojson }}</textarea></label>
+      <div class="svc-actions wide"><button class="svc-btn primary" type="submit">Save sender profile</button></div>
     </form>
-  </section>
-  <section class="crm-panel" id="connectionSettings">
-    <h2>Keys and connection settings</h2><p>Saved values are never displayed. Leave a field blank to keep its current value.</p>
-    <form method="post" action="/settings/keys" class="settings-fields two-up">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      {% for key in key_names|default([]) %}
-      <label for="key-{{ key }}">{{ key }} <span class="status-chip">{{ 'Set' if (key_status|default({})).get(key,false) else 'Not set' }}</span><input id="key-{{ key }}" name="{{ key }}" type="{{ 'email' if key in ['TEST_RECIPIENT_EMAIL','SENDER_EMAIL'] else ('url' if key.endswith('_URL') else 'password') }}" autocomplete="{{ 'off' if key in ['TEST_RECIPIENT_EMAIL','SENDER_EMAIL'] else 'new-password' }}" placeholder="Enter a new value"></label>
-      {% endfor %}
-      <div class="field-wide"><button type="submit" class="crm-button crm-button-primary">Save connection settings</button></div>
-    </form>
-  </section>
+  </details>
 
-  <section class="crm-panel" aria-label="PitchBook connection">
-    <h2>PitchBook browser session</h2>
-    <p>Sign in with your own PitchBook account in the dedicated browser. Enable PITCHBOOK_ENABLED in the connection settings to use enrichment.</p>
-    <button type="button" class="crm-button crm-button-secondary" data-pitchbook-launch>Open PitchBook sign-in</button>
-    <button type="button" class="crm-button crm-button-secondary" data-pitchbook-check>Check session</button>
-    <p class="crm-source-note" data-pitchbook-message role="status">{{ connections.get('pitchbook','Not connected') }}</p>
-  </section>
+  <form id="workspaceSettingsForm" method="post" action="/settings">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    {% call section('sec-identity', 'Workspace identity', 'Names shown in the app') %}
+      {{ fld('workspace_name','Workspace name',60) }}{{ fld('workspace_short_name','Short nav label',16) }}{{ fld('company_name','Company or project',60) }}
+      {{ fld('website','Website',240,type='url') }}{{ fld('operator_name','Operator name',60) }}{{ fld('operator_role','Operator role',80) }}
+    {% endcall %}
+    {% call section('sec-company', 'Company knowledge base', 'Product, problem, customer, model, moat, founders') %}
+      {{ fld('product_name','Product name',60) }}{{ fld('one_liner','One-line company description',500,3,wide=true) }}{{ fld('company_background','Company background and journey',1600,5,wide=true) }}
+      {{ fld('problem_statement','Core problem',1200,5) }}{{ fld('solution_statement','Solution and product mechanism',1600,5) }}{{ fld('target_customer','Ideal customer and beachhead',1400,5) }}
+      {{ fld('business_model','Business model and pricing',1400,5) }}{{ fld('competitive_advantage','Competitive advantage and moat',1400,5) }}{{ fld('founder_background','Founder background',1600,5) }}
+    {% endcall %}
+    {% call section('sec-package', 'Investor package', 'Pitch deck, attachment rules, email blurb') %}
+      {{ fld('pitch_deck_label','Pitch deck label',160) }}{{ fld('pitch_deck_url','Optional shared deck URL',240,type='url') }}{{ fld('pitch_deck_path','Local pitch deck path',500,wide=true) }}
+      {{ fld('attachment_notes','Attachment instructions',1200,3,wide=true) }}{{ fld('outreach_blurb_template','Full outreach blurb format',3000,10,wide=true) }}
+    {% endcall %}
+    {% call section('sec-proof', 'Proof and claim controls', 'Approved facts and what must never be overstated') %}
+      {{ fld('proof_library','Proof library',2200,7) }}{{ fld('claim_guardrails','Claim guardrails',2200,7) }}
+    {% endcall %}
+    {% call section('sec-audience', 'Audience and goal', 'Dashboard language and sourcing route') %}
+      <label class="fld"><span>Audience type</span><select name="audience_type">{% for value, label in audiences.items() %}<option value="{{ value }}"{% if settings.audience_type == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+      <label class="fld"><span>Primary discovery route</span><select name="discovery_source">{% for value, label in discovery_sources.items() %}<option value="{{ value }}"{% if settings.discovery_source == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+      {{ fld('contact_label_singular','Contact label, singular',24) }}{{ fld('contact_label_plural','Contact label, plural',32) }}{{ fld('campaign_goal','Campaign goal',120,wide=true) }}
+      {{ fld('hero_primary','Hero line',80) }}{{ fld('hero_emphasis','Highlighted hero line',80) }}{{ fld('hero_support','Hero explanation',240,2,wide=true) }}
+    {% endcall %}
+    {% call section('sec-story', 'Outreach story', 'Subject, thesis, traction, ask and call to action') %}
+      {{ fld('email_subject_rule','Subject-line rule',100) }}{{ fld('call_to_action','Call to action',120) }}{{ fld('personalization_rule','Personalization rule',180,2,wide=true) }}
+      {{ fld('company_thesis','Core thesis or value proposition',900,4) }}{{ fld('founder_line','Founder or company line',600,4) }}{{ fld('traction_line','Proof and traction',800,4) }}{{ fld('ask_line','Offer or ask',400,3) }}
+    {% endcall %}
+    {% call section('sec-snapshot', 'Operating snapshot', 'Manual meeting numbers until a calendar is connected', 'three') %}
+      {{ fld('meeting_count','Tomorrow meetings',50,type='number') }}{{ fld('meeting_label','Meeting label',60) }}{{ fld('meeting_source','Snapshot source label',80) }}
+    {% endcall %}
+    <div class="svc-actions save-bar"><button class="svc-btn primary" type="submit">Save configuration</button></div>
+  </form>
 
-  <section class="crm-panel" aria-label="Gmail connection state">
-    <h2>Gmail connection</h2>
-    <p class="status-chip" data-gmail-state>{{ connections.get('gmail','Not connected') }}</p>
-    <p>Each user needs their own Google Cloud Desktop app OAuth client JSON. No shared client is bundled yet. <a href="https://developers.google.com/workspace/gmail/api/quickstart/python#authorize_credentials_for_a_desktop_application" target="_blank" rel="noopener noreferrer">Create a Desktop OAuth client</a>, enable the Gmail API, configure the consent screen, and add yourself as a test user if required.</p>
-    <p>Choosing the file copies it privately into this workspace. Connect Gmail opens your system browser for consent to gmail.modify (read, label, draft and send access). Sending still needs the typed confirmations, and TEST mode applies.</p>
-    <form data-gmail-upload enctype="multipart/form-data" action="/api/gmail/client" method="post">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <input type="file" name="oauth_client" accept=".json,application/json" aria-label="Choose OAuth client file" data-gmail-file hidden>
-      <button type="button" class="crm-button crm-button-secondary" data-gmail-choose>Choose OAuth client file</button>
-      <button type="button" class="crm-button crm-button-primary" data-gmail-connect>Connect Gmail</button>
-      <button type="button" class="crm-button crm-button-secondary" data-gmail-remove>Remove Gmail client and token</button>
-    </form>
-    <p data-gmail-message role="status">Client and token files stay private in data/.gmail_credentials.json and data/.gmail_token.json (mode 0600). Connected means a local refresh token is saved; access is verified when Gmail is used.</p>
-    <p class="crm-source-note">The CLI alternative remains <code>vcoutreach auth gmail-web --workspace DIR</code>.</p>
-    <a class="crm-button crm-button-secondary" href="/replies">Open replies</a>
-  </section>
-
-  <div class="settings-layout">
-    <aside class="setup-guide">
-      <section class="field-guide-overlay is-idle" id="fieldGuideOverlay" aria-label="Suggested response for the selected field">
-        <header class="field-guide-head">
-          <div class="field-guide-status">
-            <span>FIELD ASSISTANT</span>
-            <div><strong><i></i> FOCUS MODE</strong><button type="button" id="fieldGuideDismiss">CLOSE</button></div>
-          </div>
-          <span class="field-guide-section" id="fieldGuideSection">Company knowledge base</span>
-          <h2 id="fieldGuideTitle">Select a field</h2>
-          <p id="fieldGuidePrompt">Guidance appears only while a knowledge field is selected.</p>
-        </header>
-
-        <div class="field-guide-example" aria-live="polite">
-          <span>PUBLIK EXAMPLE</span>
-          <p id="fieldGuideExample">{{ settings.one_liner }}</p>
-        </div>
-
-        <div class="field-guide-checks">
-          <span>WHAT MAKES THIS STRONG</span>
-          <ul id="fieldGuideChecks">
-            <li>Names the product and the transformation.</li>
-            <li>Explains how the outcome is created.</li>
-            <li>Avoids a generic AI category label.</li>
-          </ul>
-        </div>
-
-        <footer>
-          <span>Click away or press Escape to close the assistant.</span>
-          <strong id="fieldGuideCount">0 WORDS</strong>
-        </footer>
-      </section>
-
-      <div class="panel-heading">
-        <div>
-          <span class="panel-index">SETUP / GUIDE</span>
-          <h2>Do this in order</h2>
-        </div>
-      </div>
-      <div class="instruction-stack">
-        {% for item in instructions %}
-        <article class="instruction-card state-{{ item.state }}">
-          <span>{{ item.index }}</span>
-          <div>
-            <div class="instruction-title"><strong>{{ item.title }}</strong><em>{{ item.state }}</em></div>
-            <p>{{ item.body }}</p>
-          </div>
-        </article>
-        {% endfor %}
-      </div>
-      <div class="settings-safety-note">
-        <strong>How secrets work</strong>
-        <p>The API panel below writes keys to the workspace .env file. Saved keys are never shown again or included in the sample email.</p>
-      </div>
-    </aside>
-
-    <form class="settings-form" id="workspaceSettingsForm" method="post" action="/settings">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-
-      <section class="settings-section">
-        <div class="settings-section-heading">
-          <span>01</span>
-          <div><h2>Workspace identity</h2><p>What should another operator see when they open the app?</p></div>
-        </div>
-        <div class="settings-fields two-up">
-          <label for="settings-field-1"><span>Workspace name</span><input id="settings-field-1" name="workspace_name" maxlength="60" value="{{ settings.workspace_name }}" required></label>
-          <label for="settings-field-2"><span>Short nav label</span><input id="settings-field-2" name="workspace_short_name" maxlength="16" value="{{ settings.workspace_short_name }}" required></label>
-          <label for="settings-field-3"><span>Company or project</span><input id="settings-field-3" name="company_name" maxlength="60" value="{{ settings.company_name }}" required></label>
-          <label for="settings-field-4"><span>Website</span><input id="settings-field-4" name="website" type="url" maxlength="240" value="{{ settings.website }}" required></label>
-          <label for="settings-field-5"><span>Operator name</span><input id="settings-field-5" name="operator_name" maxlength="60" value="{{ settings.operator_name }}" required></label>
-          <label for="settings-field-6"><span>Operator role</span><input id="settings-field-6" name="operator_role" maxlength="80" value="{{ settings.operator_role }}" required></label>
-        </div>
-      </section>
-
-      <section class="settings-section">
-        <div class="settings-section-heading">
-          <span>02</span>
-          <div><h2>Company knowledge base</h2><p>The core context every research, personalization, and drafting step should inherit.</p></div>
-        </div>
-        <div class="knowledge-grid">
-          <label for="settings-field-7"><span>Product name</span><input id="settings-field-7" name="product_name" maxlength="60" value="{{ settings.product_name }}" required></label>
-          <label class="field-wide" for="settings-field-8"><span>One-line company description</span><textarea id="settings-field-8" name="one_liner" maxlength="500" rows="3" required>{{ settings.one_liner }}</textarea></label>
-          <label class="field-wide" for="settings-field-9"><span>Company background and journey</span><textarea id="settings-field-9" name="company_background" maxlength="1600" rows="6" required>{{ settings.company_background }}</textarea></label>
-          <label for="settings-field-10"><span>Core problem</span><textarea id="settings-field-10" name="problem_statement" maxlength="1200" rows="6" required>{{ settings.problem_statement }}</textarea></label>
-          <label for="settings-field-11"><span>Solution and product mechanism</span><textarea id="settings-field-11" name="solution_statement" maxlength="1600" rows="6" required>{{ settings.solution_statement }}</textarea></label>
-          <label for="settings-field-12"><span>Ideal customer and beachhead</span><textarea id="settings-field-12" name="target_customer" maxlength="1400" rows="6" required>{{ settings.target_customer }}</textarea></label>
-          <label for="settings-field-13"><span>Business model and pricing</span><textarea id="settings-field-13" name="business_model" maxlength="1400" rows="6" required>{{ settings.business_model }}</textarea></label>
-          <label for="settings-field-14"><span>Competitive advantage and moat</span><textarea id="settings-field-14" name="competitive_advantage" maxlength="1400" rows="6" required>{{ settings.competitive_advantage }}</textarea></label>
-          <label for="settings-field-15"><span>Founder background</span><textarea id="settings-field-15" name="founder_background" maxlength="1600" rows="6" required>{{ settings.founder_background }}</textarea></label>
-        </div>
-      </section>
-
-      <section class="settings-section">
-        <div class="settings-section-heading">
-          <span>03</span>
-          <div><h2>Investor package</h2><p>The current deck and reusable email structure, with explicit attachment and claim controls.</p></div>
-        </div>
-        <div class="settings-fields two-up">
-          <label for="settings-field-16"><span>Pitch deck label</span><input id="settings-field-16" name="pitch_deck_label" maxlength="160" value="{{ settings.pitch_deck_label }}" required></label>
-          <label for="settings-field-17"><span>Optional shared deck URL</span><input id="settings-field-17" name="pitch_deck_url" type="url" maxlength="240" value="{{ settings.pitch_deck_url }}" placeholder="https://example.com/deck"></label>
-          <label class="field-wide" for="settings-field-18"><span>Local pitch deck path</span><input id="settings-field-18" name="pitch_deck_path" maxlength="500" value="{{ settings.pitch_deck_path }}" required></label>
-          <label class="field-wide" for="settings-field-19"><span>Attachment instructions</span><textarea id="settings-field-19" name="attachment_notes" maxlength="1200" rows="4" required>{{ settings.attachment_notes }}</textarea></label>
-          <label class="field-wide" for="settings-field-20"><span>Full outreach blurb format</span><textarea id="settings-field-20" name="outreach_blurb_template" maxlength="3000" rows="12" required>{{ settings.outreach_blurb_template }}</textarea></label>
-        </div>
-      </section>
-
-      <section class="settings-section">
-        <div class="settings-section-heading">
-          <span>04</span>
-          <div><h2>Proof and claim controls</h2><p>Store the approved facts and the language the drafting engine must never overstate.</p></div>
-        </div>
-        <div class="settings-fields two-up">
-          <label for="settings-field-21"><span>Proof library</span><textarea id="settings-field-21" name="proof_library" maxlength="2200" rows="8" required>{{ settings.proof_library }}</textarea></label>
-          <label for="settings-field-22"><span>Claim guardrails</span><textarea id="settings-field-22" name="claim_guardrails" maxlength="2200" rows="8" required>{{ settings.claim_guardrails }}</textarea></label>
-        </div>
-      </section>
-
-      <section class="settings-section">
-        <div class="settings-section-heading">
-          <span>05</span>
-          <div><h2>Audience and goal</h2><p>This changes the dashboard language and the sourcing instructions.</p></div>
-        </div>
-        <div class="settings-fields two-up">
-          <label for="settings-field-23"><span>Audience type</span>
-            <select id="settings-field-23" name="audience_type">
-              {% for value, label in audiences.items() %}<option value="{{ value }}" {% if settings.audience_type == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
-            </select>
-          </label>
-          <label for="settings-field-24"><span>Primary discovery route</span>
-            <select id="settings-field-24" name="discovery_source">
-              {% for value, label in discovery_sources.items() %}<option value="{{ value }}" {% if settings.discovery_source == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
-            </select>
-          </label>
-          <label for="settings-field-25"><span>Contact label, singular</span><input id="settings-field-25" name="contact_label_singular" maxlength="24" value="{{ settings.contact_label_singular }}" required></label>
-          <label for="settings-field-26"><span>Contact label, plural</span><input id="settings-field-26" name="contact_label_plural" maxlength="32" value="{{ settings.contact_label_plural }}" required></label>
-          <label class="field-wide" for="settings-field-27"><span>Campaign goal</span><input id="settings-field-27" name="campaign_goal" maxlength="120" value="{{ settings.campaign_goal }}" required></label>
-          <label for="settings-field-28"><span>Hero line</span><input id="settings-field-28" name="hero_primary" maxlength="80" value="{{ settings.hero_primary }}" required></label>
-          <label for="settings-field-29"><span>Highlighted hero line</span><input id="settings-field-29" name="hero_emphasis" maxlength="80" value="{{ settings.hero_emphasis }}" required></label>
-          <label class="field-wide" for="settings-field-30"><span>Hero explanation</span><textarea id="settings-field-30" name="hero_support" maxlength="240" rows="3" required>{{ settings.hero_support }}</textarea></label>
-        </div>
-      </section>
-
-      <section class="settings-section">
-        <div class="settings-section-heading">
-          <span>06</span>
-          <div><h2>Outreach story</h2><p>The overview renders this as an anonymized example. No real recipient is inserted.</p></div>
-        </div>
-        <div class="settings-fields">
-          <label for="settings-field-31"><span>Subject-line rule</span><input id="settings-field-31" name="email_subject_rule" maxlength="100" value="{{ settings.email_subject_rule }}" required></label>
-          <label for="settings-field-32"><span>Personalization rule</span><textarea id="settings-field-32" name="personalization_rule" maxlength="180" rows="2" required>{{ settings.personalization_rule }}</textarea></label>
-          <label for="settings-field-33"><span>Core thesis or value proposition</span><textarea id="settings-field-33" name="company_thesis" maxlength="900" rows="5" required>{{ settings.company_thesis }}</textarea></label>
-          <label for="settings-field-34"><span>Founder or company line</span><textarea id="settings-field-34" name="founder_line" maxlength="600" rows="4" required>{{ settings.founder_line }}</textarea></label>
-          <label for="settings-field-35"><span>Proof and traction</span><textarea id="settings-field-35" name="traction_line" maxlength="800" rows="5" required>{{ settings.traction_line }}</textarea></label>
-          <label for="settings-field-36"><span>Offer or ask</span><textarea id="settings-field-36" name="ask_line" maxlength="400" rows="3" required>{{ settings.ask_line }}</textarea></label>
-          <label for="settings-field-37"><span>Call to action</span><input id="settings-field-37" name="call_to_action" maxlength="120" value="{{ settings.call_to_action }}" required></label>
-        </div>
-      </section>
-
-      <section class="settings-section">
-        <div class="settings-section-heading">
-          <span>07</span>
-          <div><h2>Operating snapshot</h2><p>Use manual values until a live calendar is connected.</p></div>
-        </div>
-        <div class="settings-fields three-up">
-          <label for="settings-field-38"><span>Tomorrow meetings</span><input id="settings-field-38" name="meeting_count" type="number" min="0" max="50" value="{{ settings.meeting_count }}" required></label>
-          <label for="settings-field-39"><span>Meeting label</span><input id="settings-field-39" name="meeting_label" maxlength="60" value="{{ settings.meeting_label }}" required></label>
-          <label for="settings-field-40"><span>Snapshot source label</span><input id="settings-field-40" name="meeting_source" maxlength="80" value="{{ settings.meeting_source }}" required></label>
-        </div>
-      </section>
-
-      <footer class="settings-form-footer">
-        <div><strong>Ready to preview?</strong><span>Saving updates the overview immediately. It does not start sourcing or sending.</span></div>
-        <button class="square-button primary" type="submit">Save and configure</button>
-      </footer>
-    </form>
-  </div>
-
-  <section class="runtime-lab" aria-label="Sample email and runtime integration">
-    <article class="runtime-sample-card">
-      <div class="panel-heading">
-        <div>
-          <span class="panel-index">08 / SAMPLE EMAIL</span>
-          <h2>Preview the current knowledge base</h2>
-        </div>
-        <span class="status-chip sample" id="sampleEmailState">UNSAVED PREVIEW</span>
-      </div>
-      <div class="runtime-email-meta">
-        <div><span>SUBJECT</span><strong id="sampleEmailSubject">{{ sample_email.subject }}</strong></div>
-        <div><span>ATTACHMENT</span><strong id="sampleEmailAttachment">{{ sample_email.attachment }}</strong></div>
-        <div><span>DELIVERY</span><strong>DISABLED</strong></div>
-      </div>
-      <div class="runtime-email-copy" id="sampleEmailCopy" aria-live="polite">
-        {% for paragraph in sample_email.paragraphs %}
-        <p class="{{ 'email-hook' if loop.index == 2 else '' }}">{{ paragraph }}</p>
-        {% endfor %}
-      </div>
-    </article>
-
-    <aside class="runtime-connect-card">
-      <div class="panel-heading">
-        <div>
-          <span class="panel-index">09 / RUNTIME</span>
-          <h2>CLI and model connection</h2>
-        </div>
-        <span class="status-chip {{ 'active' if gemini_status.ok else 'working' if gemini_status.configured else 'idle' }}" id="geminiStatusChip">{{ 'TESTED' if gemini_status.ok else 'CONFIGURED' if gemini_status.configured else 'NOT CONFIGURED' }}</span>
-      </div>
-
-      <div class="runtime-cli-block">
-        <span>REVIEW-ONLY OUTREACH CLI</span>
-        <code>{{ outreach_cli }}</code>
-        <p>Overview starts and stops this exact local process. It has no provider or Gmail authority.</p>
-      </div>
-
-      <div class="runtime-provider-section">
-        <div class="runtime-provider-heading">
-          <div><span>MODEL PROVIDERS</span><strong>One secure setup for app and CLI</strong></div>
-          <small>Keys remain in the workspace .env file. Only configured status is returned.</small>
-        </div>
-        <div class="runtime-provider-grid" id="modelProviderGrid">
-          {% for provider in model_providers %}
-          <form method="post" action="/api/model-provider/key" class="runtime-key-form provider-key-form" data-provider="{{ provider.id }}">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-            <input type="hidden" name="provider" value="{{ provider.id }}">
-            <div class="runtime-provider-meta">
-              <div>
-                <label for="providerKey-{{ provider.id }}">{{ provider.label|upper }} {{ 'DEVELOPER API KEY' if provider.id == 'gemini' else 'API KEY' }}</label>
-                <small>{{ provider.env_var }}</small>
-              </div>
-              <span class="status-chip {{ 'active' if provider.configured else 'idle' }}" data-provider-status>{{ 'READY' if provider.configured else 'ADD KEY' }}</span>
-            </div>
-            <div>
-              <input id="providerKey-{{ provider.id }}" name="api_key" type="password" autocomplete="new-password" placeholder="Paste key, never displayed again">
-              <button type="submit">STORE</button>
-            </div>
-            <p data-provider-message>{{ provider.default_model }}</p>
-          </form>
-          {% endfor %}
-        </div>
-      </div>
-
-      <div class="runtime-provider-section" id="dataProviders">
-        <div class="runtime-provider-heading">
-          <div><span>CONTACT DATA PROVIDERS</span><strong>Apollo enrichment and Enrow verification</strong></div>
-          <small>Keys stay in workspace settings. Connection checks use documented zero-credit endpoints.</small>
-        </div>
-        <div class="runtime-provider-grid" id="dataProviderGrid">
-          {% for provider in data_providers %}
-          {% set health = data_provider_health.get(provider.id, {}) %}
-          <form method="post" action="/api/data-provider/key" class="runtime-key-form data-provider-key-form" data-provider="{{ provider.id }}">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-            <input type="hidden" name="provider" value="{{ provider.id }}">
-            <div class="runtime-provider-meta">
-              <div>
-                <label for="dataProviderKey-{{ provider.id }}">{{ provider.label|upper }} API KEY</label>
-                <small>{{ provider.env_var }}</small>
-              </div>
-              <span class="status-chip {{ 'active' if health.get('health_status') == 'connected' else 'working' if provider.configured else 'idle' }}" data-data-provider-status>
-                {{ 'CONNECTED' if health.get('health_status') == 'connected' else 'KEY READY' if provider.configured else 'ADD KEY' }}
-              </span>
-            </div>
-            <div>
-              <input id="dataProviderKey-{{ provider.id }}" name="api_key" type="password" autocomplete="new-password" placeholder="Paste scoped key, never displayed again">
-              <button type="submit">STORE</button>
-            </div>
-            <p data-data-provider-message>{{ provider.capability }}. {{ provider.credit_note }}</p>
-            <button class="runtime-provider-test" type="button" data-test-data-provider>TEST CONNECTION</button>
-          </form>
-          {% endfor %}
-        </div>
-        <a class="runtime-provider-ledger-link" href="/email-verification">OPEN CONTACT VERIFICATION LEDGER</a>
-        
-      </div>
-
-      
-
-      <div class="runtime-benchmark">
-        <div class="runtime-benchmark-grid">
-          <div><span>MODEL</span><strong id="geminiModel">{{ gemini_status.model }}</strong></div>
-          <div><span>LATENCY</span><strong id="geminiLatency">{{ gemini_status.latency_ms|string + ' ms' if gemini_status.tested else 'NOT TESTED' }}</strong></div>
-          <div><span>QUALITY</span><strong id="geminiQuality">{{ gemini_status.quality_score|string + ' / 100' if gemini_status.tested else 'NOT TESTED' }}</strong></div>
-        </div>
-        <button type="button" id="testGemini">TEST 3 ANONYMIZED CAMPAIGN EMAILS</button>
-        <p id="geminiMessage">{{ 'Last probe passed. No raw campaign content was stored.' if gemini_status.ok else 'Store a key, then run the quality and latency probe.' }}</p>
-      </div>
-    </aside>
-  </section>
+  <details class="acc" id="sec-sample"><summary><b>Sample email and demo data</b><span>Preview the current form as an email, or load fictional sample data</span></summary>
+    <div class="sample-preview">
+      <p><b id="sampleEmailSubject">{{ sample_email.subject }}</b> <span id="sampleEmailAttachment">{{ sample_email.attachment }}</span></p>
+      <div id="sampleEmailCopy" aria-live="polite">{% for paragraph in sample_email.paragraphs %}<p>{{ paragraph }}</p>{% endfor %}</div>
+      <form method="post" action="/sample/load"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit" class="svc-btn">Load the sample</button><span class="svc-hint">Daily send cap defaults to 20. Set DAILY_SEND_CAP in the workspace .env to override it.</span></form>
+    </div>
+  </details>
 
   <form class="reset-settings" method="post" action="/settings/reset" data-confirm="Restore the editable example configuration?">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <div><strong>Need a clean start?</strong><span>Restore the example configuration, then replace each field with your own workflow.</span></div>
-    <button type="submit">RESTORE EXAMPLE</button>
+    <span>Need a clean start? Restore the example configuration.</span>
+    <button type="submit" class="svc-btn">Restore example</button>
   </form>
 </div>
-{% endblock %}
-
-{% block scripts %}
-
 {% endblock %}

@@ -152,7 +152,10 @@ def start_server(workspace, *, server_factory=None):
 def self_test(root):
     """Exercise a real loopback server and bundled pages without importing a GUI."""
     import http.client
+    import importlib
     import json
+    for module in ('requests', 'bs4', 'anthropic'):
+        importlib.import_module(module)
     workspace = bootstrap_workspace(root)
     with SingleInstanceLock(workspace.path('data', '.app.lock')):
         runtime = start_server(workspace)

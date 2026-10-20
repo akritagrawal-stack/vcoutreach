@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import re
+from vcoutreach.contacts import sanitize_text, is_http_url
+from vcoutreach.lint import canned_well_wishes, unfilled_placeholders, FILLER_PHRASES
 from vcoutreach.web.vendor import load_sender_context
 
 # ---------------------------------------------------------------------------
@@ -33,13 +35,9 @@ _BANNED_FILLER_PHRASES: list[tuple[str, str]] = [
 # ---------------------------------------------------------------------------
 
 _PLACEHOLDER_RE = re.compile(
-    r'\[[^\]]{1,80}\]'        # [anything in brackets]
-    r'|\{[^}]{1,80}\}'        # {anything in braces}
-    r'|\bTODO\b'
-    r'|\bPLACEHOLDER\b'
+    r'\bPLACEHOLDER\b'
     r'|\bINSERT\s+\w+'
-    r'|(?-i:\bFIRM\b)'        # stray FIRM token leakage - case-sensitive (avoids false positive on "firm's")
-    r'|\bX\b(?=\s*\])',       # [X] style
+    r'|(?-i:\bFIRM\b)',       # Case-sensitive to allow ordinary prose about a firm.
     re.IGNORECASE,
 )
 
@@ -97,16 +95,28 @@ def validate_hook(hook: str, *, sender_profile: dict | None = None, facts: dict 
     if wc > 50:
         return False, f'hook too long: {wc} words (maximum 50)'
 
+    if '\n' in hook or len(re.split(r'(?<=[.!?])\s+(?=[A-Z])', hook)) > 2:
+        return False, 'hook must be an opener of 1 to 2 sentences, without a greeting, body or signature'
+
     # Banned filler phrase check
+    well_wishes = canned_well_wishes(hook)
+    if well_wishes:
+        return False, 'filler phrase: ' + well_wishes[0]
     hook_lower = hook.lower()
     for phrase, reason in _BANNED_FILLER_PHRASES:
         if phrase in hook_lower:
             return False, reason
+    for phrase in FILLER_PHRASES:
+        if phrase in hook_lower.replace('\u2019', "'"):
+            return False, 'filler phrase: ' + phrase
 
     # Placeholder detection
-    ph = _PLACEHOLDER_RE.search(hook)
+    ph = unfilled_placeholders(hook)
     if ph:
-        return False, f'hook contains placeholder text: {ph.group(0)!r}'
+        return False, f'hook contains placeholder text: {ph[0]!r}'
+    ph_token = _PLACEHOLDER_RE.search(hook)
+    if ph_token:
+        return False, f'hook contains placeholder text: {ph_token.group(0)!r}'
 
     # Consecutive question mark check (two '?' back-to-back or ??)
     if '??' in hook:
@@ -127,6 +137,9 @@ def validate_subject(subject: str, *, sender_profile: dict | None = None, facts:
     """Validate outreach text without a fixed sender persona."""
     if not subject or not subject.strip():
         return False, 'subject is empty'
+    ph = unfilled_placeholders(subject)
+    if ph:
+        return False, f'subject contains placeholder text: {ph[0]!r}'
 
     # Em/en dash check
     for ch in _EM_DASH_CHARS:

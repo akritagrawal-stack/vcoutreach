@@ -5,6 +5,7 @@ import io
 import json
 import re
 import secrets
+import unicodedata
 from dataclasses import asdict, replace
 from pathlib import Path
 from vcoutreach.contacts import load_contacts
@@ -24,17 +25,66 @@ def valid_slug(slug):
         raise ValueError('Invalid contact id.')
     return slug
 
-def parse_csv(text, *, label='your CSV'):
+def clean_contact_text(value, maximum, *, notes=False):
+    text = ''.join(c for c in str(value or '') if
+        (unicodedata.category(c) != 'Cc' or notes and c in '\n\t')
+        and not ('\u202a' <= c <= '\u202e' or '\u2066' <= c <= '\u2069'))
+    text = text.strip()
+    if len(text) > maximum:
+        raise ValueError(f'Contact field exceeds {maximum} characters.')
+    return text
+
+def friendly_message(value):
+    text = str(value)
+    if 'Gmail is not connected.' in text:
+        return re.sub(r'Gmail is not connected\..*', 'Gmail is not connected. Open Settings and choose Connect Gmail.', text)
+    if 'linkedin' in text.lower() and any(word in text.lower() for word in ('not seeded', 'not set up', 'linkedin-auth')):
+        return 'LinkedIn is not set up; skipped.'
+    return text
+
+def parse_csv(text, *, label='your CSV', report=None):
+    if any(ord(c) < 32 and c not in '\r\n\t' for c in text):
+        raise ContactsError('That file is not a UTF-8 CSV')
+    if text.lstrip()[:1] in {'{','['}:
+        raise ContactsError(label+' looks like JSON, expected a CSV file with a header row')
     workspace = get_workspace()
     path = workspace.path('data', 'import-' + secrets.token_hex(8) + '.csv')
     path.parent.mkdir(parents=True, exist_ok=True)
     try:
-        path.write_text(text, encoding='utf-8')
-        parsed = load_contacts(path)
+        records = list(csv.reader(io.StringIO(text)))
+        header_index = next((i for i, cells in enumerate(records) if any(c.strip() for c in cells)), None)
+        if header_index is None:
+            raise ContactsError('no contacts found in ' + label)
+        # Validate each row through the shared loader so duplicate emails can be skipped later.
+        # Keep original row numbers when reporting malformed input.
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(records[header_index])
+        path.write_text(output.getvalue(), encoding='utf-8')
+        load_contacts(path, report=report)
+        parsed, problems = [], []
+        blank_rows = header_index
+        header_text = output.getvalue()
+        for index, cells in enumerate(records[header_index+1:], header_index+2):
+            if not any(cell.strip() for cell in cells):
+                blank_rows += 1
+                continue
+            output = io.StringIO()
+            output.write(header_text)
+            csv.writer(output).writerow(cells)
+            path.write_text(output.getvalue(), encoding='utf-8')
+            try:
+                parsed.extend(load_contacts(path))
+            except ContactsError as exc:
+                problems.extend(str(exc).replace('row 2', f'row {index}').splitlines())
+        if problems:
+            raise ContactsError('\n'.join(problems[:25]))
+        if report is not None:
+            report['skipped_blank_rows'] = blank_rows
         if not parsed:
             raise ContactsError('no contacts found in ' + label)
         return parsed
-    except ContactsError as exc:
+    except (ContactsError, csv.Error) as exc:
         message = str(exc).replace(path.name, label)
         if label == 'the form':
             message = re.sub(r': row \d+:', ':', message)
@@ -62,16 +112,23 @@ def contact_from_row(row):
         lane=Lane(row.get('lane') or 'first_touch'), thread_subject=row.get('thread_subject') or '',
         in_reply_to=row.get('in_reply_to') or '', references=row.get('refs') or '', preferred_name=row.get('first_name') or '')
 
-def contacts(db_path=None):
+def contacts(db_path=None, include_enrichment=False):
     conn = get_conn(db_path)
     try:
-        return [contact_from_row(row) for row in conn.execute('SELECT * FROM partners ORDER BY id')]
+        found = [contact_from_row(row) for row in conn.execute('SELECT * FROM partners ORDER BY id')]
     finally:
         conn.close()
+    if include_enrichment:
+        # Stored enrichment facts follow the CSV facts; export and import stay CSV-only.
+        from vcoutreach.web.enrichment_facts import with_enrichment
+        found = [with_enrichment(c, db_path=db_path) for c in found]
+    return found
 
-def import_contacts(items, db_path=None, batch_name='Import'):
+def import_contacts(items, db_path=None, batch_name='Import', *, report=None):
     items = list(items)
     seen_emails, seen_ids = set(), set()
+    accepted = []
+    skipped = 0
     with cursor_ctx(db_path) as (conn, cur):
         existing = {row['email'].casefold() for row in conn.execute('SELECT email FROM partners')}
         existing_ids = {row['slug'].casefold() for row in conn.execute('SELECT slug FROM partners WHERE slug IS NOT NULL')}
@@ -79,23 +136,31 @@ def import_contacts(items, db_path=None, batch_name='Import'):
             valid_slug(contact.id)
             email = contact.email.lower()
             if email in existing or email in seen_emails:
-                raise ContactsError(f'duplicate email {email!r}')
+                skipped += 1
+                continue
             if contact.id.casefold() in existing_ids or contact.id.casefold() in seen_ids:
                 raise ContactsError(f'duplicate id {contact.id!r}')
+            contact = replace(contact, name=clean_contact_text(contact.name,200),
+                org=clean_contact_text(contact.org,200), role=clean_contact_text(contact.role,200))
+            if not contact.name:
+                raise ContactsError('Contact name is required.')
+            accepted.append(contact)
             seen_emails.add(email); seen_ids.add(contact.id.casefold())
         cur.execute('INSERT INTO batches(name) VALUES (?)', (batch_name[:160],))
         batch_id = cur.lastrowid
-        for contact in items:
+        for contact in accepted:
             cur.execute('''INSERT INTO partners(partner_name,first_name,firm,email,slug,role,facts,source_urls,lane,thread_subject,in_reply_to,refs,source)
                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)''', (contact.name, contact.first_name, contact.org, contact.email.lower(),
                 contact.id, contact.role, json.dumps(contact.facts), json.dumps(contact.source_urls), contact.lane.value,
                 contact.thread_subject, contact.in_reply_to, contact.references, 'import'))
             cur.execute('INSERT INTO contact_batches(contact_id,batch_id) VALUES (?,?)', (cur.lastrowid, batch_id))
-    return len(items)
+    if report is not None:
+        report['skipped_existing'] = skipped
+    return len(accepted)
 
 def csv_safe_cell(value):
     """Keep spreadsheet applications from interpreting exported text as formulas."""
-    text = str(value) if value is not None else ''
+    text = str(value).replace('\x00','') if value is not None else ''
     return "'" + text if text.startswith(('=', '+', '-', '@', '\t', '\r')) else text
 
 def export_csv():
@@ -110,8 +175,11 @@ def export_csv():
 
 def engine_settings():
     from vcoutreach.config import load_settings
+    from vcoutreach.web.llm.chain import _CLAUDE_HAIKU
     workspace = get_workspace()
-    return replace(load_settings(env={**__import__('os').environ, **workspace.env()}, dotenv_path=workspace.env_path),
+    loaded = load_settings(env={**__import__('os').environ, **workspace.env()}, dotenv_path=workspace.env_path)
+    # Same default the hook path uses, so a saved Anthropic key works without a separate model setting.
+    return replace(loaded, anthropic_model=loaded.anthropic_model or _CLAUDE_HAIKU,
                    workdir=workspace.root, send_mode=send_mode(), daily_send_cap=daily_send_cap(), gmail_token_path=workspace.path('data','.gmail_token.json'),
                    gmail_client_secrets_path=workspace.path('data','.gmail_credentials.json'))
 
@@ -136,6 +204,9 @@ def save_sender(values):
             except json.JSONDecodeError:
                 raise ValueError('Approved claims: enter a valid JSON object with claim names and values.') from None
         output[name] = value
+    if output.get('website'):
+        from vcoutreach.web.server.workspace_settings import validate_http_url
+        output['website'] = validate_http_url(output['website'])
     temporary = workspace.path('data', 'sender-' + secrets.token_hex(8) + '.json')
     try:
         temporary.write_text(json.dumps(output, indent=2) + '\n', encoding='utf-8')
@@ -177,10 +248,11 @@ def _lint(draft, contact=None):
 
 def list_drafts():
     workspace = get_workspace()
-    all_contacts = {c.id: c for c in contacts()}
+    all_contacts = {c.id: c for c in contacts(include_enrichment=True)}
     conn = get_conn()
     try:
         ids = {row['slug']: row['id'] for row in conn.execute('SELECT id,slug FROM partners')}
+        checks = {row['partner_id']: dict(row) for row in conn.execute('SELECT partner_id,hook,hallucination_check,status,auto_approve_skip_reason,boilerplate_version FROM drafts ORDER BY id')}
     finally:
         conn.close()
     result = []
@@ -193,13 +265,38 @@ def list_drafts():
             from vcoutreach.types import LintIssue
             draft = replace(draft,status='blocked',issues=(LintIssue('sender_required','Save a sender profile before checking drafts.'),))
         row = asdict(draft)
+        review = checks.get(ids.get(draft.contact_id), {})
+        reason = '; '.join(i.message for i in draft.issues if i.severity == 'error') if draft.status == 'blocked' else ''
+        from vcoutreach.web.llm.hook_grounding import grounding_state, hook_is_ungrounded
+        if not reason and review.get('auto_approve_skip_reason') and (review.get('boilerplate_version') or '').startswith('engine-'):
+            reason=review['auto_approve_skip_reason']
+        if not reason and hook_is_ungrounded(review):
+            reason=grounding_state(review)
         row.update(slug=draft.contact_id, partner_id=ids.get(draft.contact_id),
-            recipient_name=contact.name if contact else draft.to, recipient_email=draft.to,
+            grounding='blocked: '+reason if reason else grounding_state(review),
+            blocked_reason=reason, review_state=review.get('status','pending'),
+            approval_state='blocked' if reason else review.get('status','pending'),
+            recipient_name=contact.name if contact else draft.to, recipient_email=contact.email if contact else draft.to,
             firm=contact.org if contact else '', word_count=len(draft.body.split()),
             lane=draft.lane.value, editor_url='/crm/drafts/' + draft.contact_id,
             draft_type=draft.lane.value, draft_type_label=draft.lane.value.replace('_',' ').title())
         result.append(row)
     return sorted(result,key=lambda row:(row['status']!='ok',row['slug']))
+
+def draft_block_reason(row, engine_rows=None):
+    row = dict(row)
+    if engine_rows is None:
+        engine_rows = list_drafts()
+    engine = next((item for item in engine_rows if item['partner_id'] == row.get('partner_id')), None)
+    if engine and engine.get('blocked_reason'):
+        return engine['blocked_reason']
+    reason = row.get('auto_approve_skip_reason') or ''
+    if row.get('status') == 'blocked' or 'insufficient_facts' in reason or (row.get('boilerplate_version') or '').startswith('engine-') and reason:
+        return reason or 'Save and check this draft before approval.'
+    from vcoutreach.web.llm.hook_grounding import hook_is_ungrounded, grounding_state
+    if hook_is_ungrounded(row):
+        return grounding_state(row)
+    return ''
 
 def get_engine_draft(slug):
     valid_slug(slug)
@@ -227,7 +324,7 @@ def write_drafts(slugs=(), provider='auto', overwrite=False):
     _check_write_tree()
     previous = {row['slug'] for row in list_drafts()}
     selected = set(slugs)
-    items = [c for c in contacts() if (not selected or c.id in selected) and (overwrite or c.id not in previous)]
+    items = [c for c in contacts(include_enrichment=True) if (not selected or c.id in selected) and (overwrite or c.id not in previous)]
     if not items:
         return []
     # Isolate pipeline pruning to this run; merge results into the canonical draft tree.
@@ -247,7 +344,7 @@ def write_drafts(slugs=(), provider='auto', overwrite=False):
 def save_draft(slug, values):
     old = get_engine_draft(slug)
     # To is always bound to the current contact, never a writable recipient field.
-    contact = next((c for c in contacts() if c.id == slug),None)
+    contact = next((c for c in contacts(include_enrichment=True) if c.id == slug),None)
     if contact is None:
         raise ValueError('Contact not found.')
     draft = replace(old,to=contact.email,subject=values.get('subject',old.subject),body=values.get('body',old.body),
@@ -262,16 +359,24 @@ def save_draft(slug, values):
 
 def _sync_legacy(draft):
     from vcoutreach.web.pipeline.loader import upsert_draft
+    from vcoutreach.email_copy import opener_from_body
+    from vcoutreach.web.llm.hook_grounding import check_hook_grounding
+    from vcoutreach.web.enrichment.orchestrator import get_enrichment_facts
+    from vcoutreach.web.vendor import load_sender_context
     conn=get_conn()
     try:
-        row=conn.execute('SELECT id FROM partners WHERE slug=?',(draft.contact_id,)).fetchone()
+        row=conn.execute('SELECT * FROM partners WHERE slug=?',(draft.contact_id,)).fetchone()
     finally:
         conn.close()
     if row:
-        draft_id=upsert_draft(row['id'],draft.body,draft.subject,'engine-' + draft.lane.value,skip_auto_approve=True)
+        hook=opener_from_body(draft.body,row['first_name'])
+        sender,facts=load_sender_context()
+        grounded,reason=check_hook_grounding(hook,dict(row),get_enrichment_facts(row['id'],limit=None),sender,facts)
+        check=('grounded' if grounded else 'ungrounded: '+reason) if hook else ''
+        draft_id=upsert_draft(row['id'],hook,draft.subject,'engine-' + draft.lane.value,skip_auto_approve=True)
         with cursor_ctx() as (_,cur):
-            cur.execute("UPDATE drafts SET status='pending',approved_at=NULL,auto_approve_skip_reason=?,is_reply=?,in_reply_to_message_id=? WHERE id=?",
-                (None if draft.status=='ok' else ';'.join(i.code for i in draft.issues),int(draft.lane==Lane.FOLLOW_UP),draft.in_reply_to,draft_id))
+            cur.execute("UPDATE drafts SET status='pending',approved_at=NULL,hallucination_check=?,auto_approve_skip_reason=?,is_reply=?,in_reply_to_message_id=? WHERE id=?",
+                (check,None if draft.status=='ok' else ';'.join(i.code for i in draft.issues),int(draft.lane==Lane.FOLLOW_UP),draft.in_reply_to,draft_id))
 
 def send_plan():
     from vcoutreach.send.gate import plan_sends
@@ -279,7 +384,7 @@ def send_plan():
     workspace=get_workspace()
     settings=engine_settings();mode=settings.send_mode
     rows=list_drafts()
-    drafts=[replace(get_engine_draft(row['slug']),status=row['status']) for row in rows]
+    drafts=[replace(get_engine_draft(row['slug']),status=row['status'],to=row['recipient_email']) for row in rows]
     actual_journal=Journal(workspace.path('.vcoutreach','journal.jsonl'))
     # Plan through the engine without its execution-only live switches.
     class PlanJournal:
@@ -288,7 +393,10 @@ def send_plan():
     report=plan_sends(drafts,replace(settings,send_mode='test',test_recipient_email=''),_sender(),PlanJournal())
     conn=get_conn()
     try:
-        stages={row['slug']:dict(row) for row in conn.execute('SELECT p.slug,p.email,p.dropped_reason,p.email_verification_status,cp.stage, (SELECT d.status FROM drafts d WHERE d.partner_id=p.id ORDER BY d.id DESC LIMIT 1) AS review_state FROM partners p LEFT JOIN crm_profiles cp ON cp.partner_id=p.id')}
+        stages={row['slug']:dict(row) for row in conn.execute('''SELECT p.slug,p.partner_name,p.email,p.dropped_reason,p.email_verification_status,cp.stage,
+            d.status AS review_state,d.hook,d.hallucination_check FROM partners p
+            LEFT JOIN crm_profiles cp ON cp.partner_id=p.id
+            LEFT JOIN drafts d ON d.id=(SELECT latest.id FROM drafts latest WHERE latest.partner_id=p.id ORDER BY latest.id DESC LIMIT 1)''')}
         reservations={(row['recipient'],row['lane']) for row in conn.execute("SELECT recipient,lane FROM web_send_journal WHERE mode=? AND state IN ('sending','sent','uncertain')",(mode,))}
         used=conn.execute("SELECT COUNT(*) FROM web_send_journal WHERE date(created_at)=date('now') AND state IN ('sending','sent','uncertain')").fetchone()[0]
     finally:
@@ -303,11 +411,20 @@ def send_plan():
         readiness.append('Set TEST_RECIPIENT_EMAIL to a valid email in Settings, under Keys and connection settings.')
     connection_reason=gmail_connection_reason()
     if connection_reason:
-        readiness.append(connection_reason)
+        readiness.append(friendly_message(connection_reason))
     for item in report.planned:
         contact=stages.get(item.draft.contact_id,{})
         reason=''
-        if readiness:
+        from vcoutreach.web.llm.hook_grounding import hook_is_ungrounded, grounding_state
+        if contact.get('review_state') == 'rejected':
+            reason='Draft was rejected.'
+        elif contact.get('review_state') != 'approved':
+            reason='Draft is not approved. Approve it before sending.'
+        elif str(contact.get('stage') or '').casefold() == 'contacted':
+            reason='Contact is already Contacted.'
+        elif hook_is_ungrounded(contact):
+            reason=grounding_state(contact)+'. Regenerate the hook or edit it before sending.'
+        elif readiness:
             reason=' '.join(readiness)
         elif item.draft.contact_id not in stages:
             reason='Contact not found.'
@@ -324,14 +441,82 @@ def send_plan():
         if reason:
             skipped.append({'slug':item.draft.contact_id,'reason':'workspace_gate','detail':reason})
         else:
-            planned.append({'slug':item.draft.contact_id,'to':item.draft.to if mode=='live' else settings.test_recipient_email or 'TEST_RECIPIENT_EMAIL not set',
+            planned.append({'slug':item.draft.contact_id,'to':item.draft.to if mode=='live' else settings.test_recipient_email or 'Test recipient not set',
                 'subject':item.draft.subject if mode=='live' else item.subject,'mode':mode})
+    from vcoutreach.web.llm.hook_grounding import hook_is_ungrounded, grounding_state
+    draft_rows={row['slug']:row for row in rows}
+    for row in skipped:
+        contact=stages.get(row['slug'],{})
+        state=grounding_state(contact)
+        if not draft_rows.get(row['slug'],{}).get('blocked_reason') and hook_is_ungrounded(contact) and state not in row.get('detail',''):
+            row['detail']=state+'. '+row.get('detail','')
+        draft=draft_rows.get(row['slug'],{})
+        row.update(to=settings.test_recipient_email if mode=='test' else 'Held',
+                   subject=draft.get('subject',''),mode=mode)
+    for row in planned + skipped:
+        contact=stages.get(row['slug'],{})
+        draft=draft_rows.get(row['slug'],{})
+        row.update(recipient_name=contact.get('partner_name',row['slug']), recipient_email=contact.get('email',''),
+                   approval_state=draft.get('approval_state',contact.get('review_state') or 'pending'))
+        if draft.get('blocked_reason'):
+            row['detail']='blocked: '+draft['blocked_reason']+' '+row.get('detail','')
+        row['to']=(settings.test_recipient_email or 'Test recipient not set') if mode=='test' else row.get('to','Held')
     return {'planned':planned,'skipped':skipped,'sent':[]}
+
+def send_reviewed_batch(ids):
+    from vcoutreach.web.gmail.push_worker import send_with_throttle, gmail_connection_reason
+    from vcoutreach.web.crm_store import add_activity
+    accepted, errors = [], []
+    engine_rows=list_drafts()
+    connection_reason=friendly_message(gmail_connection_reason())
+    for draft_id in ids:
+        conn=get_conn()
+        try:
+            row=conn.execute('SELECT d.*,p.partner_name,p.email,cp.stage FROM drafts d '
+                'JOIN partners p ON p.id=d.partner_id LEFT JOIN crm_profiles cp ON cp.partner_id=p.id WHERE d.id=?',(draft_id,)).fetchone()
+        finally:
+            conn.close()
+        reason=''
+        if row is None:
+            errors.append(f'Draft {draft_id}: Draft not found.')
+            continue
+        row=dict(row)
+        if row['status']=='rejected':
+            reason='Draft was rejected.'
+        elif row['status']!='approved':
+            reason='Draft is not approved. Approve it before sending.'
+        elif str(row.get('stage') or '').casefold()=='contacted':
+            reason='Contact is already Contacted.'
+        else:
+            reason=draft_block_reason(row,engine_rows) or connection_reason
+        if reason:
+            errors.append(f"{row['partner_name']} <{row['email']}>: {reason}")
+            add_activity(row['partner_id'],'note','Send refused',reason)
+        else:
+            accepted.append(draft_id)
+    result={'sent':0,'failed':len(errors),'errors':errors}
+    for draft_id in accepted:
+        outcome=send_with_throttle([draft_id])
+        result['sent']+=outcome['sent']
+        result['failed']+=outcome['failed']
+        conn=get_conn()
+        try:
+            row=conn.execute('SELECT d.partner_id,p.partner_name,p.email FROM drafts d '
+                'JOIN partners p ON p.id=d.partner_id WHERE d.id=?',(draft_id,)).fetchone()
+        finally:
+            conn.close()
+        for error in outcome.get('errors',[]):
+            reason=friendly_message(error)
+            result['errors'].append(f"{row['partner_name']} <{row['email']}>: {reason}" if row else reason)
+            if row:
+                add_activity(row['partner_id'],'note','Send refused',reason)
+    return result
+
 
 def register_routes(app):
     from flask import request,render_template,redirect,url_for,flash,abort,Response
     from vcoutreach.web.crm_store import STAGES,save_profile,add_activity
-    from vcoutreach.web.keys import write_env,KEY_NAMES
+    from vcoutreach.web.keys import write_env,KEY_NAMES,key_status
 
     @app.post('/crm/drafts/write')
     def crm_drafts_write():
@@ -355,6 +540,7 @@ def register_routes(app):
             abort(404)
         if request.method=='POST':
             try:
+                was_approved=any(row['slug']==slug and row['review_state']=='approved' for row in list_drafts())
                 draft=save_draft(slug,request.form)
                 if request.form.get('action')=='review' or request.form.get('reviewed')=='1':
                     conn=get_conn()
@@ -364,7 +550,7 @@ def register_routes(app):
                         conn.close()
                     if row:
                         add_activity(row['id'],'note','Draft reviewed',draft.subject)
-                flash('Draft saved with issues. Review the checks below.' if draft.status=='blocked' else 'Draft saved and checked.',
+                flash('Edit saved; draft returned to Pending and needs re-approval' if was_approved else 'Draft saved with issues. Review the checks below.' if draft.status=='blocked' else 'Draft saved and checked.',
                       'warning' if draft.status=='blocked' else 'success')
             except (ValueError,OutreachError):
                 flash('Could not save draft. Check sender profile, lane and message fields.','error')
@@ -373,8 +559,8 @@ def register_routes(app):
         row=next((row for row in rows if row['slug']==slug),None)
         if row is None:
             abort(404)
-        contact=next((asdict(c) for c in contacts() if c.id==slug),{})
-        return render_template('crm_draft.html',draft=row,contact=contact,issues=row['issues'],drafts=rows,active_page='drafts')
+        lanes=[(lane.value,lane.value.replace('_',' ').title()) for lane in Lane]
+        return render_template('crm_draft.html',draft=row,drafts=rows,lanes=lanes,active_page='drafts')
 
     @app.get('/crm/send-plan')
     def crm_send_plan():
@@ -385,7 +571,7 @@ def register_routes(app):
             plan={'planned':[],'skipped':[],'sent':[]}
             error='Save a sender profile and check drafts to prepare a send plan.'
         rows=[{**row,'status':'Planned'} for row in plan['planned']]+[{**row,'status':'Held'} for row in plan['skipped']]
-        return render_template('crm_send_plan.html',plan=plan,rows=rows,
+        return render_template('crm_send_plan.html',rows=rows,
             summary={'planned':len(plan['planned']),'held':len(plan['skipped'])},error=error,active_page='send_plan')
 
     @app.route('/crm/new',methods=['GET','POST'])
@@ -396,11 +582,13 @@ def register_routes(app):
                 if values.get('stage','prospect') not in STAGES:
                     raise ValueError('Choose a valid stage.')
                 contact=form_contact(values)
-                import_contacts([contact])
+                notes=clean_contact_text(values.get('notes',''),5000,notes=True)
+                if not import_contacts([contact]):
+                    raise ContactsError('Duplicate email: another contact already has this email address.')
                 with cursor_ctx() as (conn,cur):
                     partner_id=conn.execute('SELECT id FROM partners WHERE slug=?',(contact.id,)).fetchone()[0]
                     cur.execute('UPDATE partners SET tags=?,notes=?,next_action=? WHERE id=?',
-                        (values.get('tags',''),values.get('notes',''),values.get('next_action',''),partner_id))
+                        (values.get('tags',''),notes,values.get('next_action',''),partner_id))
                 save_profile(partner_id,{'stage':values.get('stage','prospect')})
                 flash('Contact created.','success')
                 return redirect(url_for('crm_contact',partner_id=partner_id))
@@ -413,12 +601,22 @@ def register_routes(app):
         upload=request.files.get('file') or request.files.get('csv_file')
         try:
             text=upload.read().decode('utf-8-sig') if upload else request.form.get('csv_text','')
-            parsed=parse_csv(text)
+            report={}
+            parsed=parse_csv(text,report=report)
             from datetime import datetime
             name = Path(upload.filename).stem if upload and upload.filename else 'Import ' + datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            count=import_contacts(parsed,batch_name=name)
-            flash(f'Imported {count} contacts.','success')
-        except (OutreachError,ValueError,UnicodeError) as exc:
+            count=import_contacts(parsed,batch_name=name,report=report)
+            message=f'Imported {count} new '+('contact' if count==1 else 'contacts')+f'; skipped {report.get("skipped_existing",0)} already in this workspace'
+            dropped=report.get('dropped_columns',[])
+            skipped=report.get('skipped_blank_rows',0)
+            if dropped:
+                message+=f' Dropped {len(dropped)} unsupported columns: '+', '.join(dropped)+'.'
+            if skipped:
+                message+=f' Skipped {skipped} blank rows.'
+            flash(message,'warning' if dropped or skipped else 'success')
+        except UnicodeError:
+            flash('That file is not a UTF-8 CSV','error')
+        except (OutreachError,ValueError) as exc:
             # CSV errors identify the user's input and retain its row numbers.
             for message in str(exc).splitlines()[:25]:
                 flash(message,'error')
@@ -438,7 +636,7 @@ def register_routes(app):
         if row is None:
             abort(404)
         contact=contact_from_row(row)
-        if request.form.get('confirm_text',request.form.get('confirm',''))!=contact.id:
+        if request.form.get('confirm') != 'yes' and request.form.get('confirm_text','') != contact.id:
             flash('Type the contact id to confirm deletion: '+contact.id,'error')
             return redirect(url_for('crm_contact',partner_id=partner_id))
         workspace=get_workspace()
@@ -451,6 +649,7 @@ def register_routes(app):
         with cursor_ctx() as (_,cur):
             # Preserve immutable send and reply evidence while removing the contact link.
             cur.execute('UPDATE replies SET partner_id=NULL WHERE partner_id=?',(partner_id,))
+            cur.execute('UPDATE partners SET dedup_of=NULL WHERE dedup_of=?',(partner_id,))
             cur.execute('DELETE FROM partners WHERE id=?',(partner_id,))
         flash('Contact deleted. Draft files were archived.','success')
         return redirect(url_for('crm_dashboard'))
@@ -466,19 +665,37 @@ def register_routes(app):
 
     @app.post('/settings/keys')
     def save_keys():
+        from vcoutreach.web.server.workspace_settings import CONNECTION_SETTING_NAMES, save_connection_settings
+        wants_json=request.accept_mimetypes.best=='application/json'
         try:
             if request.form.get('key') or request.form.get('name'):
                 values={request.form.get('key') or request.form.get('name'):request.form.get('value','')}
             else:
-                unknown=set(request.form)-KEY_NAMES-{'csrf_token'}
+                unknown=set(request.form)-CONNECTION_SETTING_NAMES-{'csrf_token','action','clear'}
                 if unknown:
                     raise ValueError('Unsupported setting name.')
-                values={key:request.form[key] for key in KEY_NAMES if request.form.get(key)}
-            write_env(values)
-            flash('Settings saved. Key values are never displayed.','success')
+                values={key:request.form[key] for key in CONNECTION_SETTING_NAMES if key in request.form}
+            clear=request.form.get('clear','')
+            if clear:
+                if clear not in CONNECTION_SETTING_NAMES:
+                    raise ValueError('Unsupported setting name.')
+                values[clear]=''
+            blank_key=any(not value.strip() and key.endswith(('_KEY','_TOKEN')) and key != clear for key,value in values.items())
+            values={key:(value if value.strip() else '') for key,value in values.items() if value.strip() or key in {'TEST_RECIPIENT_EMAIL','SEARXNG_URL'} or key==clear}
+            save_connection_settings(values)
+            message='Settings saved. Key values are never displayed.'
+            if values.get('TEST_RECIPIENT_EMAIL') == '':
+                message='Test recipient cleared; test sends are held until one is set'
+            elif blank_key:
+                message='No key entered; saved key unchanged'
+            if wants_json:
+                return {'ok':True,'status':'unchanged' if blank_key and not values else 'saved','message':message,'saved':sorted(values),'key_status':key_status()}
+            flash(message,'success')
         except ValueError as exc:
+            if wants_json:
+                return {'ok':False,'error':str(exc)},400
             flash(str(exc),'error')
-        return redirect(url_for('workspace_settings'))
+        return redirect('/settings')
 
     @app.post('/sample/load')
     def sample_load():

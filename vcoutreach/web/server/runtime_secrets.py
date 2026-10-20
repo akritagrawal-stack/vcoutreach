@@ -132,8 +132,10 @@ def _load_key(spec: dict[str, str], runner=None) -> str | None:
         raise RuntimeSecretError("keychain_load_failed") from exc
 
 
-def _store_key(spec: dict[str, str], value: str) -> None:
-    key = validate_secret(value)
+def _store_key(spec: dict[str, str], value: str, *, allow_empty=False) -> None:
+    if not value.strip() and not allow_empty:
+        return
+    key = validate_secret(value) if value else ''
     path = workspace_path(".env")
     path.parent.mkdir(parents=True, exist_ok=True)
     lines = path.read_text(encoding="utf-8").splitlines() if path.is_file() else []
@@ -149,6 +151,12 @@ def _store_key(spec: dict[str, str], value: str) -> None:
     finally:
         if os.path.exists(temporary):
             os.unlink(temporary)
+
+
+def store_searxng_url(value: str) -> None:
+    from vcoutreach.web.server.workspace_settings import validate_http_url
+    value = validate_http_url(value) if value else ''
+    _store_key({'env_var': 'SEARXNG_URL'}, value, allow_empty=True)
 
 
 def load_provider_key(provider: str, *, runner: Callable[..., subprocess.CompletedProcess[bytes]] | None = None) -> str | None:

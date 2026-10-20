@@ -455,6 +455,8 @@ def list_contacts(*, q: str = '', view: str = 'all', stage: str = '', page: int 
 
 
 def get_contact(partner_id: int, db_path: Path | None = None) -> dict | None:
+    if not isinstance(partner_id,int) or not 0 <= partner_id <= 9223372036854775807:
+        return None
     conn = _connection(db_path)
     try:
         partner_row = conn.execute('SELECT * FROM partners WHERE id=?', (partner_id,)).fetchone()

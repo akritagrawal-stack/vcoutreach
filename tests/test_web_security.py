@@ -368,10 +368,12 @@ def test_an_unexpected_exception_shows_a_one_line_error_with_no_traceback_or_pat
 # Publik branding
 # ---------------------------------------------------------------------------------------------------------------
 
-def test_the_wordmark_is_publik_dot_with_the_signal_tag_and_no_web_fonts_are_loaded(web):
+def test_the_header_brand_is_the_single_word_publikreach_and_no_web_fonts_are_loaded(web):
     markup = web.html("/crm")
-    assert "publik." in tight_text(markup)
-    assert "SIGNAL" in page_text(markup)
+    brand = re.search(r'(?is)<a\b[^>]*class="[^"]*\bnav-brand\b[^"]*"[^>]*>(.*?)</a>', markup)
+    assert brand, "header brand link missing"
+    inner = re.sub(r'(?is)<span\b[^>]*aria-hidden="true"[^>]*>.*?</span>', " ", brand.group(1))
+    assert page_text(inner) == "Publikreach"
     for path in ("/crm", "/settings", "/replies"):
         assert "googleapis" not in web.html(path).lower()
     assert "googleapis" not in body(web.get("/static/style.css")).lower()

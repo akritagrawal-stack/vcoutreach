@@ -20,7 +20,7 @@ unset PYTHONPATH PYTHONHOME
 "$BUILD_PYTHON" -m venv "$BUILD_TEMP/venv"
 BUILD_BIN="$BUILD_TEMP/venv/bin"
 "$BUILD_BIN/python" -m pip install --upgrade pip
-"$BUILD_BIN/python" -m pip install "$REPO_ROOT[web,gmail]" 'pywebview>=6.0,<7' 'pyinstaller>=6.0,<7'
+"$BUILD_BIN/python" -m pip install "$REPO_ROOT[web,gmail]" requests beautifulsoup4 anthropic 'pywebview>=6.0,<7' 'pyinstaller>=6.0,<7'
 "$BUILD_BIN/python" "$REPO_ROOT/packaging/mac/app/make_icon.py"
 cd "$REPO_ROOT"
 "$BUILD_BIN/python" -m PyInstaller --noconfirm --clean \

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from decimal import Decimal
 from typing import List, Tuple
 
 from .types import Contact, LintIssue, SenderProfile
@@ -21,6 +22,51 @@ _ALLOWLIST = frozenset(
         "jan", "feb", "mar", "apr", "jun", "jul", "aug", "sep", "sept", "oct", "nov", "dec",
     }
 )
+
+_METRIC = re.compile(
+    r"(?<![\w.])(?P<currency>[$\u00a3\u20ac])?"
+    r"(?P<value>\d+(?:,\d{3})*(?:\.\d+)?)"
+    r"(?:[ \t]*(?P<unit>percent(?:age)?|million|billion|thousand|[mkb]|%))?"
+    r"(?!\w)(?P<plus>\+)?",
+    re.IGNORECASE,
+)
+_QUALIFIER = re.compile(
+    r"\b(about|roughly|around|over|more than|at least|under|less than|at most|exactly)\s*$",
+    re.IGNORECASE,
+)
+_MULTIPLIERS = {"k": 1000, "thousand": 1000, "m": 1000000, "million": 1000000,
+                "b": 1000000000, "billion": 1000000000}
+
+
+def _metrics(text: str):
+    """Yield normalized numeric claims, preserving precision and bounds."""
+    spans = []
+    for match in _METRIC.finditer(text or ""):
+        spans.append(match.span())
+        unit = (match.group("unit") or "").lower()
+        value = Decimal(match.group("value").replace(",", "")) * _MULTIPLIERS.get(unit, 1)
+        prefix = _QUALIFIER.search(text[:match.start()])
+        qualifier = prefix.group(1).lower() if prefix else "exact"
+        qualifier = {"about": "approx", "roughly": "approx", "around": "approx",
+                     "more than": "over", "less than": "under", "exactly": "exact"}.get(qualifier, qualifier)
+        if match.group("plus"):
+            qualifier = "over" if qualifier == "exact" else qualifier + "+"
+        kind = "percent" if unit in {"%", "percent", "percentage"} else (match.group("currency") or "number")
+        yield match.group(0).strip(), (value, kind, qualifier)
+    # Keep mixed tokens such as a16z or B2B grounded without treating their
+    # embedded digit as a free-standing approved metric.
+    for match in _TOKEN.finditer(text or ""):
+        if any(ch.isdigit() for ch in match.group(0)) and not any(
+            start < match.end() and match.start() < end for start, end in spans
+        ):
+            token = match.group(0)
+            yield token, (token.casefold(), "token", "exact")
+
+
+def unsupported_metrics(text: str, sources) -> List[str]:
+    """Return numbers absent from facts, or used with a changed qualifier."""
+    approved = {metric for source in sources for _, metric in _metrics(str(source))}
+    return list(dict.fromkeys(token for token, metric in _metrics(text) if metric not in approved))
 
 
 def _candidates(hook_text: str) -> List[Tuple[str, bool]]:
@@ -53,13 +99,22 @@ def check_grounding(hook_text: str, contact: Contact, sender: SenderProfile) -> 
         return []
     sources = [contact.name, contact.org, contact.role, *contact.facts]
     sources += [sender.name, sender.org, sender.title]
+    sources += list(sender.approved_claims.values())
     haystack = unicodedata.normalize("NFC", "\n".join(s for s in sources if s))
     haystack = haystack.lower().replace("\u2019", "'")
     haystack_plain = haystack.replace(",", "")
 
     issues: List[LintIssue] = []
     reported = set()
+    for token in unsupported_metrics(hook_text, [*contact.facts, *sender.approved_claims.values()]):
+        reported.add(token.casefold())
+        issues.append(LintIssue(
+            "ungrounded_claim",
+            'the hook mentions the number "%s", which is not supported with the same qualifier in approved claims or contact facts' % token,
+        ))
     for token, is_number in _candidates(hook_text):
+        if is_number:
+            continue
         needle = token.lower().replace("\u2019", "'")
         if needle in reported:
             continue

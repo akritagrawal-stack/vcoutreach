@@ -1,0 +1,81 @@
+{# Shared badge macros for the partners pipeline pages. Import with:
+   {% from '_partner_macros.html' import verification_badge, status_badge, tier_badge, responsive_badge, empty_value %} #}
+
+{% macro empty_value() %}<span class="text-faint">none</span>{% endmacro %}
+
+{# ONE verification indicator. email_status = partners.email_verification_status,
+   verif = partners.verification_status. Address level facts win over partner level ones. #}
+{% macro verification_badge(email_status, verif) -%}
+  {%- if email_status == 'invalid' -%}
+    <span class="badge badge-rejected" title="SMTP probe rejected this address. Do not send.">invalid</span>
+  {%- elif email_status == 'catch_all' -%}
+    <span class="badge badge-verif-weak" title="Catch-all domain: the server accepts every address.">catch-all</span>
+  {%- elif email_status in ['valid', 'deliverable', 'pb_verified'] -%}
+    <span class="badge badge-verif" title="Address marked verified.">verified</span>
+  {%- elif verif == 'verified_strong' -%}
+    <span class="badge badge-verif-strong">strong</span>
+  {%- elif verif == 'verified' -%}
+    <span class="badge badge-verif">verified</span>
+  {%- elif verif == 'weak' or email_status in ['mx_pattern_match', 'mx_only'] -%}
+    <span class="badge badge-verif-weak" title="{{ 'Domain accepts mail; this address is not confirmed.' if email_status in ['mx_pattern_match', 'mx_only'] else 'Weak verification.' }}">weak</span>
+  {%- else -%}
+    <span class="badge badge-verif-none">unverified</span>
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro tier_badge(tier) -%}
+  {%- if tier == 1 -%}<span class="badge badge-tier1">T1</span>
+  {%- elif tier == 2 -%}<span class="badge badge-tier2">T2</span>
+  {%- elif tier -%}<span class="badge badge-default">T{{ tier }}</span>
+  {%- else -%}{{ empty_value() }}
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro responsive_badge(resp) -%}
+  {%- if resp == 'High' -%}<span class="badge badge-resp-high">High</span>
+  {%- elif resp == 'Medium-High' -%}<span class="badge badge-resp-mh">Med-High</span>
+  {%- elif resp == 'Medium' -%}<span class="badge badge-resp-medium">Medium</span>
+  {%- elif resp == 'Low' -%}<span class="badge badge-resp-low">Low</span>
+  {%- else -%}{{ empty_value() }}
+  {%- endif -%}
+{%- endmacro %}
+
+{# One draft status badge. item is a draft/partner row (dict), sent_to is the legacy sent_to address or none,
+   test_recipient is the configured test address. #}
+{% macro status_badge(item, sent_to, test_recipient) -%}
+  {%- set st = item.get('status') -%}
+  {%- set tests = item.get('test_sent_count') or 0 -%}
+  {%- if item.get('live_sent_at') or st == 'live_sent' -%}
+    <span class="badge badge-sent pl-badge-live" title="Live sent to {{ item.get('live_sent_to') or 'unknown' }} on {{ (item.get('live_sent_at') or '')[:10] }}">LIVE SENT</span>
+    {%- if tests > 0 %} <span class="badge badge-test-sent" title="Also test-sent {{ tests }} time(s). Last: {{ (item.get('last_test_sent_at') or '')[:10] }}">+{{ tests }}t</span>{% endif -%}
+  {%- elif st == 'pending' -%}<span class="badge badge-pending">Pending</span>
+  {%- elif st == 'approved' -%}<span class="badge badge-approved">Approved</span>
+  {%- elif st == 'rejected' -%}<span class="badge badge-rejected">Rejected</span>
+  {%- elif st == 'drafted' -%}<span class="badge badge-drafted">Drafted</span>
+  {%- elif st == 'test_sent' or (st == 'sent' and (tests > 0 or (sent_to and sent_to == test_recipient))) -%}
+    <span class="badge badge-test-sent" title="Test-sent {{ tests or 1 }} time(s). Last: {{ (item.get('last_test_sent_at') or item.get('sent_at') or '')[:10] }}">test sent{% if tests > 1 %} x{{ tests }}{% endif %}</span>
+  {%- elif st == 'sent' -%}<span class="badge badge-sent">sent</span>
+  {%- else -%}<span class="badge badge-default">{{ st or 'none' }}</span>
+  {%- endif -%}
+{%- endmacro %}
+
+{# ONE reply label badge shared by replies_list.html and reply_detail.html.
+   Unlabeled (empty or 'unclassified') renders the single string "Not classified". #}
+{% macro label_badge(lbl, large=true) -%}
+  {%- set spec = {
+        'interested': ('Interested', 'badge-success', ''),
+        'pass': ('Pass', 'badge-danger', ''),
+        'needs_more_info': ('Needs More Info', 'badge-accent', ''),
+        'out_of_office': ('Out of Office', 'badge-default', ''),
+        'bounce': ('Bounce', 'badge-danger', 'reply-label-bounce'),
+        'auto_reply': ('Auto Reply', 'badge-default', ''),
+      }.get(lbl) -%}
+  {%- set size = 'classif-label-large' if large else '' -%}
+  {%- if spec -%}
+    <span class="badge {{ spec[1] }} {{ size }} {{ spec[2] }}">{{ spec[0] }}</span>
+  {%- elif lbl and lbl != 'unclassified' -%}
+    <span class="badge badge-warning {{ size }}">{{ lbl|replace('_',' ')|title }}</span>
+  {%- else -%}
+    <span class="text-muted">Not classified</span>
+  {%- endif -%}
+{%- endmacro %}

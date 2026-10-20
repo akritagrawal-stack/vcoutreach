@@ -8,6 +8,22 @@
   document.addEventListener('DOMContentLoaded', function () {
     var page = document.body.dataset.page;
     var csrf = document.querySelector('meta[name="csrf-token"]').content;
+
+    function fmtDur(secs) {
+      if (secs < 60) return secs + ' sec';
+      if (secs < 3600) {
+        var m = Math.floor(secs / 60), s = secs % 60;
+        return s ? m + ' min ' + s + ' sec' : m + ' min';
+      }
+      var h = Math.floor(secs / 3600), m2 = Math.floor((secs % 3600) / 60);
+      return m2 ? h + ' hr ' + m2 + ' min' : h + ' hr';
+    }
+    function setTomorrowDefault(dateEl, timeEl) {
+      var t = new Date();
+      t.setDate(t.getDate() + 1);
+      dateEl.value = t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0');
+      timeEl.value = '09:00';
+    }
     var themeButton = document.getElementById('themeToggle');
     themeButton.addEventListener('click', function () {
       var next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
@@ -18,7 +34,7 @@
     themeButton.setAttribute('aria-pressed', String(document.documentElement.dataset.theme === 'dark'));
     document.querySelectorAll('[data-pitchbook-launch], [data-pitchbook-check]').forEach(function (button) {
       button.addEventListener('click', function () {
-        var message = document.querySelector('[data-pitchbook-message]');
+        var message = document.querySelector('[data-pitchbook-message]') || document.createElement('span');
         var launching = button.hasAttribute('data-pitchbook-launch');
         var data = new FormData();
         data.append('csrf_token', csrf);
@@ -30,6 +46,7 @@
           credentials: 'same-origin', headers: {'X-CSRF-Token': csrf}
         }).then(function (response) {
           return response.json().then(function (payload) {
+            if (!launching) document.dispatchEvent(new CustomEvent('pitchbook-status', {detail: {status: payload.status, ok: response.ok}}));
             message.textContent = payload.message || (response.ok ? String(payload.status || 'Session checked').replaceAll('_', ' ') : 'PitchBook connection unavailable.');
           });
         }).catch(function () { message.textContent = 'PitchBook connection unavailable. Check the local setup instructions.'; })
@@ -99,55 +116,45 @@ if (page === 'enrichment_status') {
 
 // ── Client-side column sort ─────────────────────────────────────────────────
 
-var _sortDir = {};  // col index -> 'asc'|'desc'
+var _sortDir = {};  // data-sort key -> 'asc'|'desc'
+// data-sort key -> row data attribute holding the numeric value
+var _sortAttr = {tier: 'data-tier', pb_api: 'data-pb-api', pb: 'data-pb', linkedin: 'data-linkedin',
+                 web: 'data-web', web2: 'data-web2', fw: 'data-fw', eg: 'data-eg', facts: 'data-total'};
+var _hookOrder = {'cite_specific': 0, 'grounded': 0, 'generic': 1, 'ungrounded': 1, 'unknown': 2, 'not_checked': 2, 'no_enrichment': 3, 'no_hook': 4};
 
-function sortTable(colIdx) {
+function sortTable(key, th) {
   var table = document.getElementById('enrichTable');
   var tbody = table.querySelector('tbody');
   var rows = Array.from(tbody.querySelectorAll('tr[data-total]'));
-
-  var dir = _sortDir[colIdx] === 'asc' ? 'desc' : 'asc';
-  _sortDir[colIdx] = dir;
-  table.querySelectorAll('thead th').forEach(function (cell, index) { cell.setAttribute('aria-sort', index === colIdx ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'); });
-
-  rows.sort(function(a, b) {
-    var av = a.cells[colIdx] ? a.cells[colIdx].textContent.trim() : '';
-    var bv = b.cells[colIdx] ? b.cells[colIdx].textContent.trim() : '';
-
-    // Numeric columns: Facts (10), Tier (1), source cols (3-9)
-    var numericCols = [1, 3, 4, 5, 6, 7, 8, 9, 10];
-    if (numericCols.indexOf(colIdx) !== -1) {
-      // Use data attributes for source cols (3-9) for accuracy
-      var srcAttrs = ['data-pb-api','data-pb','data-linkedin','data-web','data-web2','data-fw','data-eg'];
-      if (colIdx >= 3 && colIdx <= 9) {
-        var attr = srcAttrs[colIdx - 3];
-        av = parseInt(a.getAttribute(attr) || '0', 10);
-        bv = parseInt(b.getAttribute(attr) || '0', 10);
-      } else if (colIdx === 10) {
-        av = parseInt(a.getAttribute('data-total') || '0', 10);
-        bv = parseInt(b.getAttribute('data-total') || '0', 10);
-      } else if (colIdx === 1) {
-        av = parseInt(a.getAttribute('data-tier') || '0', 10);
-        bv = parseInt(b.getAttribute('data-tier') || '0', 10);
-      }
-      return dir === 'asc' ? av - bv : bv - av;
+  var dir = _sortDir[key] === 'asc' ? 'desc' : 'asc';
+  _sortDir[key] = dir;
+  table.querySelectorAll('thead th').forEach(function (cell) {
+    cell.setAttribute('aria-sort', cell === th ? (dir === 'asc' ? 'ascending' : 'descending') : 'none');
+  });
+  var colIdx = th.cellIndex;
+  function value(row) {
+    if (_sortAttr[key]) return parseInt(row.getAttribute(_sortAttr[key]) || '0', 10);
+    if (key === 'hook') {
+      var o = _hookOrder[row.getAttribute('data-hook-quality')];
+      return o !== undefined ? o : 5;
     }
-
-    // Hook quality sort (11)
-    if (colIdx === 11) {
-      var order = {'cite_specific': 0, 'generic': 1, 'unknown': 2, 'no_enrichment': 3, 'no_hook': 4};
-      av = order[a.getAttribute('data-hook-quality')] !== undefined ? order[a.getAttribute('data-hook-quality')] : 5;
-      bv = order[b.getAttribute('data-hook-quality')] !== undefined ? order[b.getAttribute('data-hook-quality')] : 5;
-      return dir === 'asc' ? av - bv : bv - av;
-    }
-
-    // String sort
+    return row.cells[colIdx] ? row.cells[colIdx].textContent.trim().toLowerCase() : '';
+  }
+  rows.sort(function (a, b) {
+    var av = value(a), bv = value(b);
     if (av < bv) return dir === 'asc' ? -1 : 1;
     if (av > bv) return dir === 'asc' ? 1 : -1;
     return 0;
   });
+  rows.forEach(function (r) { tbody.appendChild(r); });
+}
 
-  rows.forEach(function(r) { tbody.appendChild(r); });
+var enrichTableEl = document.getElementById('enrichTable');
+if (enrichTableEl) {
+  enrichTableEl.querySelector('thead').addEventListener('click', function (event) {
+    var th = event.target.closest('th[data-sort]');
+    if (th) sortTable(th.getAttribute('data-sort'), th);
+  });
 }
 
 // ── Filter chips ────────────────────────────────────────────────────────────
@@ -217,30 +224,19 @@ document.querySelectorAll('[data-action="enrichment_status-5"]').forEach(functio
 document.querySelectorAll('[data-action="enrichment_status-6"]').forEach(function (element) { element.addEventListener('click', function (event) { toggleChip(this,'hq_none'); }); });
 document.querySelectorAll('[data-action="enrichment_status-7"]').forEach(function (element) { element.addEventListener('click', function (event) { toggleChip(this,'tier_' + this.dataset.arg0); }); });
 document.querySelectorAll('[data-action="enrichment_status-8"]').forEach(function (element) { element.addEventListener('click', function (event) { clearAllChips(); }); });
-document.querySelectorAll('[data-action="enrichment_status-9"]').forEach(function (element) { element.addEventListener('click', function (event) { sortTable(0); }); });
-document.querySelectorAll('[data-action="enrichment_status-10"]').forEach(function (element) { element.addEventListener('click', function (event) { sortTable(1); }); });
-document.querySelectorAll('[data-action="enrichment_status-11"]').forEach(function (element) { element.addEventListener('click', function (event) { sortTable(3); }); });
-document.querySelectorAll('[data-action="enrichment_status-12"]').forEach(function (element) { element.addEventListener('click', function (event) { sortTable(4); }); });
-document.querySelectorAll('[data-action="enrichment_status-13"]').forEach(function (element) { element.addEventListener('click', function (event) { sortTable(5); }); });
-document.querySelectorAll('[data-action="enrichment_status-14"]').forEach(function (element) { element.addEventListener('click', function (event) { sortTable(6); }); });
-document.querySelectorAll('[data-action="enrichment_status-15"]').forEach(function (element) { element.addEventListener('click', function (event) { sortTable(7); }); });
-document.querySelectorAll('[data-action="enrichment_status-16"]').forEach(function (element) { element.addEventListener('click', function (event) { sortTable(8); }); });
-document.querySelectorAll('[data-action="enrichment_status-17"]').forEach(function (element) { element.addEventListener('click', function (event) { sortTable(9); }); });
-document.querySelectorAll('[data-action="enrichment_status-18"]').forEach(function (element) { element.addEventListener('click', function (event) { sortTable(10); }); });
-document.querySelectorAll('[data-action="enrichment_status-19"]').forEach(function (element) { element.addEventListener('click', function (event) { sortTable(11); }); });
 }
 
 if (page === 'partner_detail') {
 
 function showText() {
-  document.getElementById('preview-text').style.display = '';
-  document.getElementById('preview-html').style.display = 'none';
+  document.getElementById('preview-text').hidden = false;
+  document.getElementById('preview-html').hidden = true;
   document.getElementById('tab-text').classList.add('active');
   document.getElementById('tab-html').classList.remove('active');
 }
 function showHtml() {
-  document.getElementById('preview-text').style.display = 'none';
-  document.getElementById('preview-html').style.display = '';
+  document.getElementById('preview-text').hidden = true;
+  document.getElementById('preview-html').hidden = false;
   document.getElementById('tab-text').classList.remove('active');
   document.getElementById('tab-html').classList.add('active');
 }
@@ -260,29 +256,19 @@ function toggleReject() {
 
   if (!dateEl) return;
 
-  // Default to tomorrow at 09:00
-  var tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  var yyyy = tomorrow.getFullYear();
-  var mm = String(tomorrow.getMonth() + 1).padStart(2, '0');
-  var dd = String(tomorrow.getDate()).padStart(2, '0');
-  dateEl.value = yyyy + '-' + mm + '-' + dd;
-  timeEl.value = '09:00';
-
-  function fmtDur(secs) {
-    if (secs < 60) return secs + ' sec';
-    if (secs < 3600) {
-      var m = Math.floor(secs / 60), s = secs % 60;
-      return s ? m + ' min ' + s + ' sec' : m + ' min';
-    }
-    var h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60);
-    return m ? h + ' hr ' + m + ' min' : h + ' hr';
-  }
+  setTomorrowDefault(dateEl, timeEl);
 
   function updateEta() {
     var n = 1; // single partner
     var minS = n * 2, maxS = n * 32, avgS = n * 17;
     var d = dateEl.value, t = timeEl.value;
+    if (liveEl) {
+      var isLive = modeEl && modeEl.value === 'live';
+      liveEl.hidden = !isLive;
+      liveEl.style.display = isLive ? 'block' : 'none';
+      var confirmation = liveEl.querySelector('input');
+      if (confirmation) { confirmation.required = !!isLive; confirmation.disabled = !isLive; }
+    }
     if (!d || !t) { etaEl.style.display = 'none'; return; }
     var start = new Date(d + 'T' + t);
     var compMax = new Date(start.getTime() + maxS * 1000);
@@ -292,7 +278,6 @@ function toggleReject() {
     var compStr = h + ':' + String(mi).padStart(2,'0') + ' ' + ap;
     etaEl.innerHTML = '<strong>Estimated:</strong> ' + fmtDur(minS) + ' - ' + fmtDur(maxS) + ' (avg ' + fmtDur(avgS) + '). <strong>Completes by ~' + compStr + '</strong>';
     etaEl.style.display = '';
-    if (liveEl) liveEl.style.display = (modeEl && modeEl.value === 'live') ? 'block' : 'none';
   }
 
   dateEl.addEventListener('change', updateEta);
@@ -302,216 +287,10 @@ function toggleReject() {
 })();
 
 document.querySelectorAll('[data-action="partner_detail-0"]').forEach(function (element) { element.addEventListener('click', function (event) { toggleReject(); }); });
-document.querySelectorAll('[data-action="partner_detail-1"]').forEach(function (element) { element.addEventListener('click', function (event) { document.getElementById('liveSendPanel').style.display=document.getElementById('liveSendPanel').style.display==='none'?'block':'none'; }); });
-document.querySelectorAll('[data-action="partner_detail-2"]').forEach(function (element) { element.addEventListener('click', function (event) { document.getElementById('schedulePanel1').style.display=document.getElementById('schedulePanel1').style.display==='none'?'block':'none'; }); });
+document.querySelectorAll('[data-action="partner_detail-1"]').forEach(function (element) { element.addEventListener('click', function (event) { var panel = document.getElementById('liveSendPanel'); panel.hidden = !panel.hidden; }); });
+document.querySelectorAll('[data-action="partner_detail-2"]').forEach(function (element) { element.addEventListener('click', function (event) { var panel = document.getElementById('schedulePanel1'); panel.hidden = !panel.hidden; }); });
 document.querySelectorAll('[data-action="partner_detail-3"]').forEach(function (element) { element.addEventListener('click', function (event) { showText(); }); });
 document.querySelectorAll('[data-action="partner_detail-4"]').forEach(function (element) { element.addEventListener('click', function (event) { showHtml(); }); });
-}
-
-if (page === 'dashboard') {
-
-(function() {
-  var launch = document.getElementById('launchVisibleRun');
-  var mirror = document.getElementById('runCommandMirror');
-  var chip = document.getElementById('runStateChip');
-  var message = document.getElementById('runMessage');
-  var browserLine = document.getElementById('runBrowserLine');
-  var loginLine = document.getElementById('runLoginLine');
-  var researchLine = document.getElementById('runResearchLine');
-  var privacyToggle = document.getElementById('relationshipPrivacyToggle');
-  var relationshipDesk = document.getElementById('relationshipDesk');
-  var outreachStart = document.getElementById('startOutreachRun');
-  var outreachStop = document.getElementById('stopOutreachRun');
-  var outreachChip = document.getElementById('outreachStateChip');
-  var outreachMessage = document.getElementById('outreachRunMessage');
-  var outreachPollTimer = null;
-  var pollTimer = null;
-  var pollCount = 0;
-
-  function stopPolling() {
-    if (pollTimer) window.clearInterval(pollTimer);
-    pollTimer = null;
-  }
-
-  function setButtons(state) {
-    var busy = state === 'browser_open' || state === 'refreshing_session';
-    launch.disabled = busy;
-    mirror.disabled = busy;
-    if (state === 'session_ready') {
-      launch.lastChild.textContent = ' Open PitchBook';
-      mirror.textContent = 'OPEN / PITCHBOOK / READY';
-    } else if (state === 'waiting_for_sign_in') {
-      launch.lastChild.textContent = ' Bring PitchBook forward';
-      mirror.textContent = 'OPEN / PITCHBOOK / SIGN IN';
-    } else if (state === 'attention_required') {
-      launch.lastChild.textContent = ' Try PitchBook again';
-      mirror.textContent = 'RETRY / PITCHBOOK';
-    } else {
-      launch.lastChild.textContent = ' Launch visible run';
-      mirror.textContent = 'RUN / PITCHBOOK / VISIBLE';
-    }
-  }
-
-  function setState(state, copy) {
-    setButtons(state);
-    chip.className = 'status-chip ' + (state === 'session_ready' ? 'active' : state === 'attention_required' ? 'error' : 'working');
-    chip.textContent = state.replaceAll('_', ' ').toUpperCase();
-    message.textContent = copy;
-    if (state === 'browser_open' || state === 'waiting_for_sign_in' || state === 'refreshing_session' || state === 'session_ready') {
-      browserLine.classList.add('complete');
-      browserLine.querySelector('em').textContent = 'visible';
-    }
-    if (state === 'waiting_for_sign_in') {
-      loginLine.classList.add('working');
-      loginLine.querySelector('em').textContent = 'in browser';
-    }
-    if (state === 'refreshing_session') {
-      loginLine.classList.remove('working');
-      loginLine.classList.add('complete');
-      loginLine.querySelector('em').textContent = 'confirmed';
-      researchLine.classList.add('working');
-      researchLine.querySelector('em').textContent = 'refreshing';
-    }
-    if (state === 'session_ready') {
-      loginLine.classList.remove('working');
-      loginLine.classList.add('complete');
-      loginLine.querySelector('em').textContent = 'confirmed';
-      researchLine.classList.add('working');
-      researchLine.querySelector('em').textContent = 'ready';
-      stopPolling();
-    }
-    if (state === 'attention_required') {
-      stopPolling();
-    }
-  }
-
-  function pollStatus() {
-    fetch('/demo/pitchbook-status', {credentials: 'same-origin', headers: {'X-CSRF-Token': csrf}})
-      .then(function(response) {
-        return response.json().then(function(data) {
-          if (!response.ok) throw new Error(data.message || 'PitchBook status check failed.');
-          return data;
-        });
-      })
-      .then(function(data) {
-        pollCount += 1;
-        if (pollCount > 100 && data.status !== 'session_ready') {
-          setState('attention_required', 'PitchBook is taking too long. Bring its Chrome window forward, finish sign-in, then try again.');
-          return;
-        }
-        setState(data.status, data.message);
-      })
-      .catch(function() { setState('attention_required', 'Could not read the local run status.'); });
-  }
-
-  function startVisibleRun() {
-    pollCount = 0;
-    setState('browser_open', 'Opening the dedicated installed Chrome profile...');
-    var form = new FormData();
-    form.append('csrf_token', csrf);
-    fetch('/demo/pitchbook-visible', {method: 'POST', body: form, credentials: 'same-origin', headers: {'X-CSRF-Token': csrf}})
-      .then(function(response) { return response.json().then(function(data) { return {ok: response.ok, data: data}; }); })
-      .then(function(result) {
-        if (!result.ok) throw new Error(result.data.message || 'Launch failed');
-        setState(result.data.status, result.data.message);
-        if (result.data.status !== 'session_ready') {
-          stopPolling();
-          pollTimer = window.setInterval(pollStatus, 1800);
-          pollStatus();
-        }
-      })
-      .catch(function(error) {
-        setState('attention_required', error.message);
-      });
-  }
-
-  function renderOutreachState(state) {
-    var status = state.status || 'idle';
-    outreachChip.className = 'status-chip ' + (status === 'complete' ? 'active' : status === 'running' ? 'working' : status === 'attention_required' ? 'error' : 'idle');
-    outreachChip.textContent = status.replaceAll('_', ' ').toUpperCase();
-    document.querySelectorAll('[data-outreach-step]').forEach(function(node) {
-      var step = node.getAttribute('data-outreach-step');
-      node.classList.toggle('complete', (state.completed_steps || []).includes(step));
-      node.classList.toggle('working', status === 'running' && state.current_step === step);
-      var value = state.counts && state.counts[step] ? state.counts[step] : 'waiting';
-      node.querySelector('em').textContent = value;
-    });
-    outreachStart.disabled = status === 'running';
-    outreachStop.disabled = status !== 'running';
-    outreachMessage.textContent = status === 'complete'
-      ? 'Preparation complete. Review artifacts remain local.'
-      : status === 'stopped'
-        ? 'Preparation stopped. No provider or Gmail action occurred.'
-        : status === 'running'
-          ? 'Local CLI is preparing review-only records.'
-          : status === 'attention_required'
-            ? 'The local run needs attention. Check the private run log.'
-            : 'Ready in test mode. No delivery authority.';
-    if (status !== 'running' && outreachPollTimer) {
-      window.clearInterval(outreachPollTimer);
-      outreachPollTimer = null;
-    }
-  }
-
-  function readOutreachState() {
-    fetch('/demo/outreach/status', {credentials: 'same-origin', headers: {'X-CSRF-Token': csrf}})
-      .then(function(response) { return response.json(); })
-      .then(renderOutreachState)
-      .catch(function() { renderOutreachState({status: 'attention_required'}); });
-  }
-
-  function mutateOutreach(path) {
-    var form = new FormData();
-    form.append('csrf_token', csrf);
-    return fetch(path, {method: 'POST', body: form, credentials: 'same-origin', headers: {'X-CSRF-Token': csrf}})
-      .then(function(response) {
-        return response.json().then(function(data) {
-          if (!response.ok) throw new Error(data.message || 'Local outreach control failed.');
-          return data;
-        });
-      });
-  }
-
-  function startOutreach() {
-    outreachStart.disabled = true;
-    mutateOutreach('/demo/outreach/start')
-      .then(function(state) {
-        renderOutreachState(state);
-        if (!outreachPollTimer) outreachPollTimer = window.setInterval(readOutreachState, 700);
-        readOutreachState();
-      })
-      .catch(function(error) {
-        renderOutreachState({status: 'attention_required'});
-        outreachMessage.textContent = error.message;
-      });
-  }
-
-  function stopOutreach() {
-    outreachStop.disabled = true;
-    mutateOutreach('/demo/outreach/stop')
-      .then(renderOutreachState)
-      .catch(function(error) {
-        renderOutreachState({status: 'attention_required'});
-        outreachMessage.textContent = error.message;
-      });
-  }
-
-  if (launch) launch.addEventListener('click', startVisibleRun);
-  if (mirror) mirror.addEventListener('click', startVisibleRun);
-  if (outreachStart && outreachStop) {
-    outreachStart.addEventListener('click', startOutreach);
-    outreachStop.addEventListener('click', stopOutreach);
-    readOutreachState();
-  }
-  if (privacyToggle && relationshipDesk) {
-    privacyToggle.addEventListener('click', function() {
-      var hidden = relationshipDesk.classList.toggle('privacy-on');
-      privacyToggle.textContent = hidden ? 'REVEAL LOCAL DETAILS' : 'MASK LOCAL DETAILS';
-    });
-  }
-})();
-
-
 }
 
 if (page === 'candidates_list') {
@@ -564,23 +343,148 @@ document.querySelectorAll('[data-action="candidates_list-2"]').forEach(function 
 }
 
 if (page === 'settings') {
-  var gmailChoose = document.querySelector('[data-gmail-choose]');
-  var gmailConnect = document.querySelector('[data-gmail-connect]');
-  var gmailRemove = document.querySelector('[data-gmail-remove]');
-  var gmailFile = document.querySelector('[data-gmail-file]');
-  var gmailMessage = document.querySelector('[data-gmail-message]');
-  var gmailStates = document.querySelectorAll('[data-gmail-state]');
-  var gmailPoll;
-  function updateGmailState(payload) {
-    if (typeof payload.state !== 'string') return;
-    gmailStates.forEach(function (element) { element.textContent = payload.state; });
-    document.querySelectorAll('[data-gmail-light]').forEach(function (element) {
-      element.classList.toggle('ready', payload.state === 'connected');
-      element.classList.toggle('guarded', payload.state !== 'connected');
-    });
+  var WORDS = {unset: 'Not set', saved: 'Key saved', ok: 'Connected', fail: 'Failed'};
+  var cards = {};
+  document.querySelectorAll('.svc-card').forEach(function (card) { cards[card.dataset.service] = card; });
+  function noteOf(card) { return card.querySelector('[data-svc-note]'); }
+  function say(card, text) { var note = card && noteOf(card); if (note) note.textContent = text; }
+  function updateSummary() {
+    var ids = Object.keys(cards);
+    var ready = ids.filter(function (id) { return cards[id].dataset.state !== 'unset'; }).length;
+    document.querySelectorAll('[data-svc-summary]').forEach(function (node) { node.textContent = ready + ' of ' + ids.length + ' services set up'; });
   }
-  function gmailBusy(busy) {
-    gmailChoose.disabled = gmailConnect.disabled = gmailRemove.disabled = busy;
+  // The one place a service status changes: card chip, header tile and summary stay in sync, no reload.
+  function setServiceStatus(id, state, text) {
+    var card = cards[id];
+    if (!card || !WORDS[state]) return;
+    card.dataset.state = state;
+    var label = card.querySelector('.svc-status [data-svc-label]');
+    if (label) label.textContent = WORDS[state];
+    document.querySelectorAll('[data-tile-for="' + id + '"]').forEach(function (tile) {
+      tile.dataset.state = state;
+      var word = tile.querySelector('[data-svc-label]');
+      if (word) word.textContent = WORDS[state];
+    });
+    if (text) say(card, text);
+    updateSummary();
+  }
+  window.setServiceStatus = setServiceStatus;
+  function postJson(form) {
+    return fetch(form.action, {method: 'POST', body: new FormData(form), credentials: 'same-origin', headers: {'X-CSRF-Token': csrf, 'Accept': 'application/json'}})
+      .then(function (response) {
+        return response.json().then(function (payload) { return {ok: response.ok && payload.ok !== false, payload: payload}; });
+      });
+  }
+  function problem(payload, fallback) {
+    return String(payload.error || payload.error_code || payload.status || fallback).replaceAll('_', ' ');
+  }
+
+  // Key cards: Store and Test connection.
+  document.querySelectorAll('.svc-card [data-svc-form]').forEach(function (form) {
+    var card = form.closest('.svc-card');
+    var id = card.dataset.service;
+    var inputs = Array.prototype.slice.call(form.querySelectorAll('input:not([type="hidden"])'));
+    var testButton = form.querySelector('[data-svc-test]');
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (!inputs.length) return;
+      var removing = event.submitter && event.submitter.value === 'remove';
+      if (!removing && !inputs.some(function (input) { return input.value.trim(); })) { say(card, 'No key entered; saved key unchanged'); return; }
+      var action = form.querySelector('input[data-key-action]');
+      if (!action) { action = document.createElement('input'); action.type = 'hidden'; action.name = 'action'; action.dataset.keyAction = ''; form.appendChild(action); }
+      action.value = removing ? 'remove' : 'save';
+      var button = form.querySelector('button[type="submit"]');
+      button.disabled = true;
+      postJson(form).then(function (result) {
+        if (!result.ok) { say(card, 'Could not store: ' + problem(result.payload, 'settings unavailable') + '.'); return; }
+        if (result.payload.status === 'unchanged') { say(card, result.payload.message); return; }
+        if (removing) { setServiceStatus(id, 'unset', 'Key removed.'); return; }
+        inputs.forEach(function (input) { input.value = ''; });
+        var status = result.payload.key_status;
+        var complete = !status || inputs.every(function (input) { return status[input.name]; });
+        setServiceStatus(id, complete ? 'saved' : 'unset', complete ? 'Stored in the workspace. The value is never shown again.' + (testButton ? ' Run Test connection.' : '') : 'Stored. The other field is still needed.');
+      }).catch(function () { say(card, 'Could not reach the local settings service.'); })
+        .finally(function () { button.disabled = false; });
+    });
+    if (testButton) {
+      testButton.addEventListener('click', function () {
+        var kind = card.dataset.test;
+        var data = new FormData();
+        data.append('csrf_token', csrf);
+        if (kind === 'data') data.append('provider', id);
+        testButton.disabled = true;
+        say(card, kind === 'gemini' ? 'Running 3 anonymized emails...' : 'Checking the connection...');
+        fetch(kind === 'gemini' ? '/api/gemini/test' : kind === 'tracking' ? '/api/tracking/test' : '/api/data-provider/test', {method: 'POST', body: data, credentials: 'same-origin', headers: {'X-CSRF-Token': csrf}})
+          .then(function (response) { return response.json().then(function (payload) { return {ok: response.ok && payload.ok !== false, payload: payload}; }); })
+          .then(function (result) {
+            var code = result.payload.error_code || '';
+            if (result.ok) {
+              var credits = result.payload.credits_remaining;
+              setServiceStatus(id, 'ok', kind === 'tracking' ? 'Worker reachable and token accepted.' : kind === 'gemini' ? 'Probe passed on 3 anonymized emails. Nothing stored.' : 'Verified without using credits' + (credits != null ? '. Credits: ' + credits + '.' : '.'));
+            } else if (code === 'provider_key_not_configured') {
+              setServiceStatus(id, 'unset', 'Store a key first.');
+            } else {
+              setServiceStatus(id, 'fail', kind === 'tracking' ? (result.payload.message || 'Could not verify the tracking Worker.') : 'Test stopped: ' + problem(result.payload, 'provider unavailable') + '.');
+            }
+          })
+          .catch(function () { setServiceStatus(id, 'fail', 'Could not reach the local test service.'); })
+          .finally(function () { testButton.disabled = false; });
+      });
+    }
+  });
+
+  // PitchBook has no key; the global session check reports through this event.
+  document.addEventListener('pitchbook-status', function (event) {
+    var status = event.detail && event.detail.status;
+    if (status === 'browser_open') setServiceStatus('pitchbook', 'ok');
+    else if (status === 'idle') setServiceStatus('pitchbook', 'unset');
+  });
+
+  // More settings: per-key Set / Not set chips update in place.
+  document.querySelectorAll('[data-more]').forEach(function (form) {
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      var note = form.querySelector('[data-svc-note]');
+      var fields = Array.prototype.slice.call(form.querySelectorAll('input:not([type="hidden"])'));
+      if (!fields.length) return;
+      postJson(form).then(function (result) {
+        if (!result.ok) { note.textContent = 'Could not save: ' + problem(result.payload, 'settings unavailable') + '.'; return; }
+        fields.forEach(function (input) { if (input.name !== 'TEST_RECIPIENT_EMAIL') input.value = ''; });
+        var status = result.payload.key_status || {};
+        form.querySelectorAll('[data-key-chip]').forEach(function (chip) { chip.textContent = status[chip.dataset.keyChip] ? 'Set' : 'Not set'; chip.classList.toggle('on', !!status[chip.dataset.keyChip]); });
+        note.textContent = result.payload.message || 'Saved. Key values are never shown.';
+      }).catch(function () { note.textContent = 'Could not reach the local settings service.'; });
+    });
+  });
+
+  // Gmail card state machine.
+  var gmailCard = cards.gmail;
+  var gmailFile = document.querySelector('[data-gmail-file]');
+  var gmailPoll;
+  var gmailSwitching = false;
+  var VIEW_STATE = {'no-client': 'unset', ready: 'saved', running: 'saved', connected: 'ok', failed: 'fail'};
+  var VIEW_TEXT = {
+    'no-client': 'Needs your own Desktop OAuth client. The file stays private in this workspace.',
+    ready: 'OAuth client saved privately. Connect Gmail to continue. TEST mode still applies.',
+    running: 'Finish consent in your system browser. This expires after three minutes.',
+    connected: 'Gmail connected. A private refresh token is saved for this workspace. TEST mode still applies.',
+    failed: 'Gmail authorization did not finish. Check your Desktop client and try again.'
+  };
+  function gmailButtons(busy) {
+    if (gmailCard) gmailCard.querySelectorAll('button').forEach(function (button) { button.disabled = busy; });
+  }
+  function showGmail(view, text) {
+    if (!gmailCard) return;
+    gmailCard.dataset.gmailView = view;
+    gmailCard.querySelectorAll('[data-gmail-panel]').forEach(function (panel) { panel.hidden = panel.dataset.gmailPanel !== view; });
+    gmailButtons(view === 'running');
+    setServiceStatus('gmail', VIEW_STATE[view], text || VIEW_TEXT[view]);
+  }
+  function gmailViewOf(payload) {
+    if (payload.running) return 'running';
+    if (payload.failed) return 'failed';
+    if (payload.state === 'connected') return 'connected';
+    return payload.state === 'add OAuth client' ? 'no-client' : 'ready';
   }
   function gmailStatus() {
     clearTimeout(gmailPoll);
@@ -589,353 +493,123 @@ if (page === 'settings') {
       if (!response.ok) throw new Error('status');
       return response.json();
     }).then(function (payload) {
-      updateGmailState(payload);
-      gmailBusy(payload.running);
-      if (payload.running) {
-        gmailMessage.textContent = 'Complete consent in your system browser. This expires after three minutes.';
-        gmailPoll = setTimeout(gmailStatus, 1500);
-      } else if (payload.failed) {
-        gmailMessage.textContent = 'Gmail authorization did not finish. Check your Desktop client and try Connect Gmail again.';
-      } else if (payload.state === 'connected') {
-        gmailMessage.textContent = 'Gmail connected. A private refresh token is saved for this workspace. TEST mode still applies.';
-      }
+      if (typeof payload.state !== 'string') return;
+      showGmail(gmailViewOf(payload));
+      if (payload.running) gmailPoll = setTimeout(gmailStatus, 1500);
     }).catch(function () {
-      gmailMessage.textContent = 'Could not reach the local Gmail setup service. Reload Settings to retry.';
-      gmailBusy(false);
+      say(gmailCard, 'Could not reach the local Gmail setup service. Reload Settings to retry.');
+      gmailButtons(false);
     });
   }
-  function gmailPost(path, data, successMessage) {
+  function gmailPost(path, data) {
+    gmailButtons(true);
     return fetch(path, {method: 'POST', body: data, credentials: 'same-origin', headers: {'X-CSRF-Token': csrf}})
       .then(function (response) { return response.json(); })
       .then(function (payload) {
-        if (!payload.ok) {
-          gmailMessage.textContent = payload.error || 'Gmail setup is unavailable.';
-          return;
-        }
-        updateGmailState(payload);
-        gmailMessage.textContent = successMessage || 'OAuth client saved privately. Choose Connect Gmail to continue.';
-        clearTimeout(gmailPoll);
-        return gmailStatus();
-      }).catch(function () { gmailMessage.textContent = 'Gmail setup is unavailable. Reload Settings to retry.'; });
+        if (!payload.ok) { gmailSwitching = false; gmailButtons(false); say(gmailCard, payload.error || 'Gmail setup is unavailable.'); return false; }
+        return gmailStatus().then(function () { return true; });
+      }).catch(function () { gmailSwitching = false; gmailButtons(false); say(gmailCard, 'Gmail setup is unavailable. Reload Settings to retry.'); return false; });
   }
-  if (gmailChoose) {
-    gmailChoose.addEventListener('click', function () {
-      if (window.pywebview && window.pywebview.api && window.pywebview.api.choose_oauth_client) {
-        window.pywebview.api.choose_oauth_client(csrf).then(function (payload) {
-          if (payload.cancelled) return;
-          if (!payload.ok) { gmailMessage.textContent = payload.error; return; }
-          updateGmailState(payload);
-          gmailMessage.textContent = 'OAuth client saved privately. Choose Connect Gmail to continue.';
-          return gmailStatus();
-        }).catch(function () { gmailMessage.textContent = 'Could not choose the OAuth client. Try again.'; });
-      } else {
-        gmailFile.click();
-      }
-    });
+  function gmailForm(extra) {
+    var data = new FormData();
+    data.append('csrf_token', csrf);
+    return data;
+  }
+  function gmailConnect() {
+    gmailSwitching = false;
+    gmailPost('/api/gmail/connect', gmailForm());
+  }
+  function gmailChoose(auto) {
+    if (!auto) gmailSwitching = false;
+    if (window.pywebview && window.pywebview.api && window.pywebview.api.choose_oauth_client) {
+      window.pywebview.api.choose_oauth_client(csrf).then(function (payload) {
+        if (payload.cancelled) { gmailSwitching = false; return; }
+        if (!payload.ok) { gmailSwitching = false; say(gmailCard, payload.error); return; }
+        return gmailStatus().then(function () { if (gmailSwitching) gmailConnect(); });
+      }).catch(function () { gmailSwitching = false; say(gmailCard, 'Could not choose the OAuth client. Try again.'); });
+    } else if (gmailFile) {
+      gmailFile.click();
+    }
+  }
+  if (gmailCard && gmailFile) {
+    gmailCard.querySelectorAll('[data-gmail-choose]').forEach(function (button) { button.addEventListener('click', function () { gmailChoose(false); }); });
+    gmailCard.querySelectorAll('[data-gmail-connect]').forEach(function (button) { button.addEventListener('click', gmailConnect); });
     gmailFile.addEventListener('change', function () {
       if (!gmailFile.files.length) return;
-      var upload = new FormData(document.querySelector('[data-gmail-upload]'));
+      var upload = new FormData(gmailCard.querySelector('[data-gmail-upload]'));
       gmailFile.value = '';
-      gmailPost('/api/gmail/client', upload);
+      gmailPost('/api/gmail/client', upload).then(function (ok) { if (ok && gmailSwitching) gmailConnect(); });
     });
-    gmailConnect.addEventListener('click', function () {
-      gmailBusy(true);
-      var data = new FormData();
-      data.append('csrf_token', csrf);
-      gmailPost('/api/gmail/connect', data, 'Starting Gmail consent in your system browser.').finally(function () {
-        if (!gmailPoll) gmailBusy(false);
-      });
-    });
-    gmailRemove.addEventListener('click', function () {
+    function gmailDisconnect(then) {
+      gmailPost('/api/gmail/disconnect', gmailForm()).then(function (ok) { if (ok && then) then(); });
+    }
+    var removeButton = gmailCard.querySelector('[data-gmail-remove]');
+    var switchButton = gmailCard.querySelector('[data-gmail-switch]');
+    if (removeButton) removeButton.addEventListener('click', function () {
       if (!window.confirm('Remove the Gmail OAuth client and saved token from this workspace? You will need to import a client and connect again.')) return;
-      gmailBusy(true);
-      var data = new FormData();
-      data.append('csrf_token', csrf);
-      gmailPost('/api/gmail/disconnect', data, 'Gmail client and token removed. Import a client to connect again.').finally(function () {
-        if (!gmailPoll) gmailBusy(false);
-      });
+      gmailSwitching = false;
+      gmailDisconnect();
+    });
+    if (switchButton) switchButton.addEventListener('click', function () {
+      if (!window.confirm('Disconnect this Gmail account and connect a different one? The saved OAuth client and token are removed, so you will choose a Desktop client file again.')) return;
+      gmailSwitching = true;
+      gmailDisconnect(function () { gmailChoose(true); });
     });
     gmailStatus();
   }
 
-(function() {
-  var form = document.getElementById('workspaceSettingsForm');
-  if (!form) return;
-  var overlay = document.getElementById('fieldGuideOverlay');
-  var dismissButton = document.getElementById('fieldGuideDismiss');
-
-  var guide = {
-    product_name: ['Name the product exactly as customers should remember it.', ['Use the public product name.', 'Keep capitalization consistent.', 'Do not add a category tagline here.']],
-    one_liner: ['Explain the product in one sentence using the buyer, the outcome, and the mechanism.', ['Names the product and the transformation.', 'Explains how the outcome is created.', 'Avoids a generic AI category label.']],
-    company_background: ['Tell the shortest credible story from the original insight to the product that exists now.', ['Shows the change that created the company.', 'Connects distribution to product demand.', 'Leaves out chronology that does not change the thesis.']],
-    problem_statement: ['State the costly behavior customers are stuck with before introducing the solution.', ['Names who experiences the problem.', 'Makes the cost or friction observable.', 'Does not smuggle the product into the problem.']],
-    solution_statement: ['Describe what the product does, how it works, and what changes for the customer.', ['Connects mechanism to outcome.', 'Explains the product clearly.', 'Uses concrete workflows instead of broad AI claims.']],
-    target_customer: ['Define the first buyer narrowly enough to find, qualify, and sell to repeatedly.', ['Names company stage or size.', 'Includes an accountable buyer.', 'Explains why the need is urgent now.']],
-    business_model: ['Record current pricing separately from future pricing hypotheses and usage costs.', ['Distinguishes current revenue from tests.', 'Names what is included.', 'Makes variable API costs explicit.']],
-    competitive_advantage: ['Describe why the product becomes harder to replace after real use.', ['Names the embedded customer context.', 'Avoids claiming an unproven network effect.', 'Links defensibility to retention or faster deployment.']],
-    founder_background: ['Summarize complementary founder capabilities without exposing personal identity in the demo.', ['Connects experience to this company.', 'Uses evidence instead of prestige labels.', 'Keeps names and personal details out of this preview.']],
-    pitch_deck_path: ['Point to the single current email-safe deck used by the outreach system.', ['Uses the current approved version.', 'Separates local path from shared URL.', 'Never exposes the local path in this preview.']],
-    outreach_blurb_template: ['Define the reusable email structure while leaving recipient evidence as a required input.', ['Personalization comes before the company pitch.', 'Claims match the proof library.', 'The ask and attachment are explicit.']],
-    proof_library: ['Store only claims that can be repeated in outreach with a known source and current date.', ['Uses exact numbers and qualifiers.', 'Separates founder-provided from independently verified.', 'Removes stale proof when the source changes.']],
-    claim_guardrails: ['Write the statements the drafting engine must never infer or overstate.', ['Blocks predictable hallucinations.', 'Separates provider acceptance from delivery.', 'Distinguishes hypotheses from current facts.']],
-    company_thesis: ['State the non-obvious belief that makes this company worth building now.', ['Explains why existing software economics can change.', 'Introduces the product after the problem.', 'Makes the final personalization layer concrete.']],
-    traction_line: ['Use the smallest set of current numbers that proves demand, distribution, and paid behavior.', ['Includes a date or current qualifier.', 'Avoids combining incompatible snapshots.', 'Separates audience, users, community, and revenue.']],
-    ask_line: ['State exactly what is being raised or requested and on what terms.', ['Includes the amount.', 'Includes the instrument and cap when approved.', 'Does not imply the round is closed.']],
-    call_to_action: ['Ask for one easy next step that matches the recipient and the email.', ['Uses one action.', 'Keeps the time request small.', 'Avoids vague feedback requests.']]
-  };
-
-  var privateExamples = {
-    operator_name: 'Company operator',
-    operator_role: 'Founder or campaign owner',
-    founder_background: 'Describe the team experience relevant to your product.',
-    founder_line: 'Describe how your team came to build the product.',
-    pitch_deck_path: 'Current compressed investor deck.pdf'
-  };
-
-  var defaultGuide = ['Answer this field with the exact information another operator or drafting system needs.', ['Use current, sourceable information.', 'Prefer concrete language over category labels.', 'Remove anything that does not change a decision.']];
-  var titleNode = document.getElementById('fieldGuideTitle');
-  var sectionNode = document.getElementById('fieldGuideSection');
-  var promptNode = document.getElementById('fieldGuidePrompt');
-  var exampleNode = document.getElementById('fieldGuideExample');
-  var checksNode = document.getElementById('fieldGuideChecks');
-  var countNode = document.getElementById('fieldGuideCount');
-  var currentField = null;
-
-  function fieldValue(field) {
-    if (privateExamples[field.name]) return privateExamples[field.name];
-    if (field.tagName === 'SELECT') return field.options[field.selectedIndex] ? field.options[field.selectedIndex].text : '';
-    return field.value.trim();
+  // Jump links: open the target, focus its first field, and flash it.
+  function reveal(id) {
+    var target = id && document.getElementById(id);
+    if (!target) return;
+    for (var node = target; node; node = node.parentElement) if (node.tagName === 'DETAILS') node.open = true;
+    target.classList.remove('svc-hl');
+    void target.offsetWidth;
+    target.classList.add('svc-hl');
+    window.setTimeout(function () { target.classList.remove('svc-hl'); }, 1800);
+    var field = target.querySelector('input:not([type="hidden"]):not([hidden]), textarea, select, button:not([disabled])');
+    (field || target).focus({preventScroll: true});
+    target.scrollIntoView({block: 'center', behavior: 'smooth'});
   }
-
-  function activateField(field) {
-    if (!field || field.type === 'hidden') return;
-    currentField = field;
-    overlay.classList.remove('is-idle');
-    var label = field.closest('label');
-    var section = field.closest('.settings-section');
-    var title = label && label.querySelector(':scope > span') ? label.querySelector(':scope > span').textContent.trim() : field.name.replaceAll('_', ' ');
-    var sectionTitle = section && section.querySelector('.settings-section-heading h2') ? section.querySelector('.settings-section-heading h2').textContent.trim() : 'Workspace configuration';
-    var guidance = guide[field.name] || defaultGuide;
-    var value = fieldValue(field) || 'Add a concise response here.';
-    var count = value.split(/\s+/).filter(Boolean).length;
-
-    form.querySelectorAll('label.is-guide-active').forEach(function(node) {
-      node.classList.remove('is-guide-active');
+  document.querySelectorAll('.svc-tile').forEach(function (tile) {
+    tile.addEventListener('click', function (event) {
+      event.preventDefault();
+      history.replaceState(null, '', tile.getAttribute('href'));
+      reveal(tile.getAttribute('href').slice(1));
     });
-    if (label) label.classList.add('is-guide-active');
-
-    titleNode.textContent = title;
-    sectionNode.textContent = sectionTitle;
-    promptNode.textContent = guidance[0];
-    exampleNode.textContent = value;
-    checksNode.replaceChildren();
-    guidance[1].forEach(function(item) {
-      var li = document.createElement('li');
-      li.textContent = item;
-      checksNode.appendChild(li);
-    });
-    countNode.textContent = count + (count === 1 ? ' WORD' : ' WORDS');
-  }
-
-  function dismissGuide() {
-    currentField = null;
-    form.querySelectorAll('label.is-guide-active').forEach(function(node) {
-      node.classList.remove('is-guide-active');
-    });
-    overlay.classList.add('is-idle');
-  }
-
-  form.querySelectorAll('input:not([type="hidden"]), textarea, select').forEach(function(field) {
-    field.addEventListener('focus', function() { activateField(field); });
-    field.addEventListener('click', function() { activateField(field); });
-    field.addEventListener('input', function() { if (currentField === field) activateField(field); });
-    field.addEventListener('change', function() { if (currentField === field) activateField(field); });
   });
+  window.addEventListener('hashchange', function () { reveal(location.hash.slice(1)); });
+  if (location.hash) reveal(location.hash.slice(1));
+  document.addEventListener('invalid', function (event) {
+    var holder = event.target.closest && event.target.closest('details');
+    if (holder) holder.open = true;
+  }, true);
 
-  if (dismissButton) dismissButton.addEventListener('click', dismissGuide);
-  document.addEventListener('pointerdown', function(event) {
-    if (!currentField) return;
-    if (event.target.closest('#fieldGuideOverlay')) return;
-    if (event.target.closest('#workspaceSettingsForm input, #workspaceSettingsForm textarea, #workspaceSettingsForm select')) return;
-    dismissGuide();
-  });
-  document.addEventListener('keydown', function(event) {
-    if (event.key === 'Escape') dismissGuide();
-  });
-
-  var sampleState = document.getElementById('sampleEmailState');
-  var sampleSubject = document.getElementById('sampleEmailSubject');
-  var sampleAttachment = document.getElementById('sampleEmailAttachment');
+  // Sample email preview follows the workspace form while its section is open.
+  var settingsForm = document.getElementById('workspaceSettingsForm');
+  var sampleBox = document.getElementById('sec-sample');
   var sampleCopy = document.getElementById('sampleEmailCopy');
   var sampleTimer = null;
-
-  function renderSampleEmail(payload) {
-    sampleSubject.textContent = payload.subject;
-    sampleAttachment.textContent = payload.attachment;
-    sampleCopy.replaceChildren();
-    (payload.paragraphs || []).forEach(function(text, index) {
-      var paragraph = document.createElement('p');
-      paragraph.textContent = text;
-      if (index === 1) paragraph.className = 'email-hook';
-      sampleCopy.appendChild(paragraph);
-    });
-    sampleState.textContent = 'CURRENT FORM';
-    sampleState.className = 'status-chip active';
-  }
-
-  function refreshSampleEmail() {
-    var data = new FormData(form);
-    fetch('/demo/sample-email', {method: 'POST', body: data, credentials: 'same-origin', headers: {'X-CSRF-Token': csrf}})
-      .then(function(response) {
-        if (!response.ok) throw new Error('Sample preview failed.');
-        return response.json();
-      })
-      .then(renderSampleEmail)
-      .catch(function() {
-        sampleState.textContent = 'PREVIEW ERROR';
-        sampleState.className = 'status-chip error';
-      });
-  }
-
-  form.addEventListener('input', function() {
-    if (sampleTimer) window.clearTimeout(sampleTimer);
-    sampleTimer = window.setTimeout(refreshSampleEmail, 180);
-  });
-  form.addEventListener('change', refreshSampleEmail);
-
-  var geminiChip = document.getElementById('geminiStatusChip');
-  var geminiButton = document.getElementById('testGemini');
-  var geminiMessage = document.getElementById('geminiMessage');
-  var geminiLatency = document.getElementById('geminiLatency');
-  var geminiQuality = document.getElementById('geminiQuality');
-  var geminiModel = document.getElementById('geminiModel');
-
-  function renderGemini(payload) {
-    var ok = Boolean(payload.ok);
-    var configured = Boolean(payload.configured || payload.status === 'configured' || ok);
-    geminiChip.textContent = ok ? 'TESTED' : configured ? 'CONFIGURED' : 'ATTENTION';
-    geminiChip.className = 'status-chip ' + (ok ? 'active' : configured ? 'working' : 'error');
-    if (payload.model) geminiModel.textContent = payload.model;
-    if (payload.tested || ok) {
-      geminiLatency.textContent = String(payload.latency_ms || 0) + ' ms';
-      geminiQuality.textContent = String(payload.quality_score || 0) + ' / 100';
-    }
-    geminiMessage.textContent = ok
-      ? 'Probe passed on 3 anonymized campaign emails. No raw content was stored.'
-      : payload.error_code
-        ? 'Probe stopped: ' + payload.error_code.replaceAll('_', ' ') + '.'
-        : 'Key stored in the workspace settings. Run the probe when ready.';
-  }
-
-  document.querySelectorAll('.provider-key-form').forEach(function(keyForm) {
-    keyForm.addEventListener('submit', function(event) {
-      event.preventDefault();
-      var keyInput = keyForm.querySelector('input[name="api_key"]');
-      var status = keyForm.querySelector('[data-provider-status]');
-      var message = keyForm.querySelector('[data-provider-message]');
-      var data = new FormData(keyForm);
-      status.textContent = 'STORING';
-      status.className = 'status-chip working';
-      fetch('/api/model-provider/key', {method: 'POST', body: data, credentials: 'same-origin', headers: {'X-CSRF-Token': csrf}})
-        .then(function(response) { return response.json().then(function(payload) { return {ok: response.ok, payload: payload}; }); })
-        .then(function(result) {
-          keyInput.value = '';
-          status.textContent = result.ok ? 'READY' : 'ATTENTION';
-          status.className = 'status-chip ' + (result.ok ? 'active' : 'error');
-          message.textContent = result.ok
-            ? 'Stored in the workspace settings. Available to the dashboard and CLI.'
-            : 'Could not store key: ' + String(result.payload.error_code || 'settings unavailable').replaceAll('_', ' ') + '.';
-          if (keyForm.dataset.provider === 'gemini' && result.ok) {
-            renderGemini({configured: true, status: 'configured'});
-          }
-        })
-        .catch(function() {
-          status.textContent = 'ATTENTION';
-          status.className = 'status-chip error';
-          message.textContent = 'Could not reach the local settings service.';
+  function refreshSample() {
+    if (!settingsForm || !sampleBox.open) return;
+    fetch('/demo/sample-email', {method: 'POST', body: new FormData(settingsForm), credentials: 'same-origin', headers: {'X-CSRF-Token': csrf}})
+      .then(function (response) { if (!response.ok) throw new Error('preview'); return response.json(); })
+      .then(function (payload) {
+        document.getElementById('sampleEmailSubject').textContent = payload.subject;
+        document.getElementById('sampleEmailAttachment').textContent = payload.attachment;
+        sampleCopy.replaceChildren();
+        (payload.paragraphs || []).forEach(function (text) {
+          var paragraph = document.createElement('p');
+          paragraph.textContent = text;
+          sampleCopy.appendChild(paragraph);
         });
-    });
-  });
-
-  document.querySelectorAll('.data-provider-key-form').forEach(function(keyForm) {
-    var status = keyForm.querySelector('[data-data-provider-status]');
-    var message = keyForm.querySelector('[data-data-provider-message]');
-    var keyInput = keyForm.querySelector('input[name="api_key"]');
-    var testButton = keyForm.querySelector('[data-test-data-provider]');
-    keyForm.addEventListener('submit', function(event) {
-      event.preventDefault();
-      status.textContent = 'STORING';
-      status.className = 'status-chip working';
-      fetch('/api/data-provider/key', {method: 'POST', body: new FormData(keyForm), credentials: 'same-origin', headers: {'X-CSRF-Token': csrf}})
-        .then(function(response) { return response.json().then(function(payload) { return {ok: response.ok, payload: payload}; }); })
-        .then(function(result) {
-          keyInput.value = '';
-          status.textContent = result.ok ? 'KEY READY' : 'ATTENTION';
-          status.className = 'status-chip ' + (result.ok ? 'working' : 'error');
-          message.textContent = result.ok
-            ? 'Stored in the workspace settings. Test the connection before using credits.'
-            : 'Could not store key: ' + String(result.payload.error_code || 'settings unavailable').replaceAll('_', ' ') + '.';
-        })
-        .catch(function() {
-          status.textContent = 'ATTENTION';
-          status.className = 'status-chip error';
-          message.textContent = 'Could not reach the local settings service.';
-        });
-    });
-    testButton.addEventListener('click', function() {
-      var data = new FormData();
-      data.append('csrf_token', csrf);
-      data.append('provider', keyForm.dataset.provider);
-      testButton.disabled = true;
-      status.textContent = 'TESTING';
-      status.className = 'status-chip working';
-      fetch('/api/data-provider/test', {method: 'POST', body: data, credentials: 'same-origin', headers: {'X-CSRF-Token': csrf}})
-        .then(function(response) { return response.json().then(function(payload) { return {ok: response.ok, payload: payload}; }); })
-        .then(function(result) {
-          status.textContent = result.ok ? 'CONNECTED' : 'ATTENTION';
-          status.className = 'status-chip ' + (result.ok ? 'active' : 'error');
-          message.textContent = result.ok
-            ? 'Connection verified without consuming credits' + (result.payload.credits_remaining != null ? '. Credits: ' + result.payload.credits_remaining + '.' : '.')
-            : 'Connection check stopped: ' + String(result.payload.error_code || result.payload.status || 'provider unavailable').replaceAll('_', ' ') + '.';
-        })
-        .catch(function() {
-          status.textContent = 'ATTENTION';
-          status.className = 'status-chip error';
-          message.textContent = 'Could not reach the provider health endpoint.';
-        })
-        .finally(function() { testButton.disabled = false; });
-    });
-  });
-
-  var cliProvider = document.getElementById('modelCliProvider');
-  var cliCommand = document.getElementById('modelCliCommand');
-  var copyCli = document.getElementById('copyModelCli');
-  function updateCliCommand() {
-    cliCommand.textContent = 'vcoutreach --help';
+      }).catch(function () {});
   }
-  if (cliProvider && cliCommand && copyCli) { cliProvider.addEventListener('change', updateCliCommand);
-  copyCli.addEventListener('click', function() {
-    navigator.clipboard.writeText(cliCommand.textContent).then(function() {
-      copyCli.textContent = 'COPIED';
-      window.setTimeout(function() { copyCli.textContent = 'COPY COMMAND'; }, 1000);
-    });
-  });
-
+  if (settingsForm && sampleBox) {
+    settingsForm.addEventListener('input', function () { window.clearTimeout(sampleTimer); sampleTimer = window.setTimeout(refreshSample, 180); });
+    sampleBox.addEventListener('toggle', refreshSample);
   }
-  geminiButton.addEventListener('click', function() {
-    geminiButton.disabled = true;
-    geminiMessage.textContent = 'Running anonymized quality and latency probe...';
-    var data = new FormData();
-    data.append('csrf_token', csrf);
-    fetch('/api/gemini/test', {method: 'POST', body: data, credentials: 'same-origin', headers: {'X-CSRF-Token': csrf}})
-      .then(function(response) { return response.json(); })
-      .then(renderGemini)
-      .catch(function() { renderGemini({ok: false, error_code: 'gemini_request_failed'}); })
-      .finally(function() { geminiButton.disabled = false; });
-  });
-})();
-
-
+  updateSummary();
 }
 
 if (page === 'partners_list') {
@@ -1025,7 +699,7 @@ function toggleAll(masterCb) {
   updateBulkBar();
 }
 
-function clearChecks() {
+function clearBulkChecks() {
   document.querySelectorAll('.row-check').forEach(function(cb) { cb.checked = false; });
   if (selectAll) { selectAll.checked = false; selectAll.indeterminate = false; }
   bulkBar.style.display = 'none';
@@ -1043,16 +717,6 @@ function submitBulkLive() {
 }
 
 // ── Bulk schedule panel ────────────────────────────────────────────────────
-function fmtDurBulk(secs) {
-  if (secs < 60) return secs + ' sec';
-  if (secs < 3600) {
-    var m = Math.floor(secs / 60), s = secs % 60;
-    return s ? m + ' min ' + s + ' sec' : m + ' min';
-  }
-  var h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60);
-  return m ? h + ' hr ' + m + ' min' : h + ' hr';
-}
-
 function openBulkSchedule() {
   var checked = getChecked();
   var n = checked.length;
@@ -1077,14 +741,7 @@ function openBulkSchedule() {
   var confirmInp = document.getElementById('bulkSchedConfirmInput');
   if (confirmInp) confirmInp.placeholder = phrase;
 
-  // Default date/time
-  var tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  var yyyy = tomorrow.getFullYear();
-  var mm = String(tomorrow.getMonth() + 1).padStart(2, '0');
-  var dd = String(tomorrow.getDate()).padStart(2, '0');
-  document.getElementById('bsd').value = yyyy + '-' + mm + '-' + dd;
-  document.getElementById('bst').value = '09:00';
+  setTomorrowDefault(document.getElementById('bsd'), document.getElementById('bst'));
 
   updateBulkSchedEta();
   document.getElementById('bulkScheduleOverlay').style.display = 'flex';
@@ -1101,6 +758,13 @@ function updateBulkSchedEta() {
   var liveEl = document.getElementById('bulkSchedLiveConfirm');
   var modeEl = document.getElementById('bsm');
 
+  if (liveEl) {
+    var isLive = modeEl && modeEl.value === 'live';
+    liveEl.hidden = !isLive;
+    liveEl.style.display = isLive ? 'block' : 'none';
+    var confirmation = liveEl.querySelector('input');
+    if (confirmation) { confirmation.required = !!isLive; confirmation.disabled = !isLive; }
+  }
   if (!d || !t) { if (etaEl) etaEl.style.display = 'none'; return; }
   var start = new Date(d + 'T' + t);
   var compMax = new Date(start.getTime() + maxS * 1000);
@@ -1109,10 +773,9 @@ function updateBulkSchedEta() {
   h = h % 12 || 12;
   var compStr = h + ':' + String(mi).padStart(2,'0') + ' ' + ap;
   if (etaEl) {
-    etaEl.innerHTML = '<strong>Estimated:</strong> ' + fmtDurBulk(minS) + ' - ' + fmtDurBulk(maxS) + ' (avg ' + fmtDurBulk(avgS) + ').<br><strong>Completes by ~' + compStr + '</strong>';
+    etaEl.innerHTML = '<strong>Estimated:</strong> ' + fmtDur(minS) + ' - ' + fmtDur(maxS) + ' (avg ' + fmtDur(avgS) + ').<br><strong>Completes by ~' + compStr + '</strong>';
     etaEl.style.display = '';
   }
-  if (liveEl) liveEl.style.display = (modeEl && modeEl.value === 'live') ? 'block' : 'none';
 }
 
 var bsdEl = document.getElementById('bsd');
@@ -1154,7 +817,7 @@ document.querySelectorAll('[data-action="partners_list-5"]').forEach(function (e
 document.querySelectorAll('[data-action="partners_list-6"]').forEach(function (element) { element.addEventListener('click', function (event) { document.getElementById('bulkLiveConfirm').style.display='flex'; }); });
 document.querySelectorAll('[data-action="partners_list-7"]').forEach(function (element) { element.addEventListener('click', function (event) { submitBulkLive(); }); });
 document.querySelectorAll('[data-action="partners_list-8"]').forEach(function (element) { element.addEventListener('click', function (event) { openBulkSchedule(); }); });
-document.querySelectorAll('[data-action="partners_list-9"]').forEach(function (element) { element.addEventListener('click', function (event) { clearChecks(); }); });
+document.querySelectorAll('[data-action="partners_list-9"]').forEach(function (element) { element.addEventListener('click', function (event) { clearBulkChecks(); }); });
 document.querySelectorAll('[data-action="partners_list-10"]').forEach(function (element) { element.addEventListener('change', function (event) { toggleAll(this); }); });
 document.querySelectorAll('[data-action="partners_list-11"]').forEach(function (element) { element.addEventListener('change', function (event) { updateBulkBar(); }); });
 document.querySelectorAll('[data-action="partners_list-12"]').forEach(function (element) { element.addEventListener('click', function (event) { document.getElementById('bulkScheduleOverlay').style.display='none'; }); });
@@ -1162,3 +825,19 @@ document.querySelectorAll('[data-action="partners_list-12"]').forEach(function (
 
   });
 })();
+
+// Test the currently entered SearXNG URL without saving it.
+document.querySelectorAll('[data-searxng-form]').forEach(function (form) {
+  var button = form.querySelector('[data-searxng-test]');
+  var note = form.closest('article').querySelector('[data-searxng-note]');
+  button.addEventListener('click', function () {
+    var data = new FormData(form);
+    data.set('url', data.get('SEARXNG_URL'));
+    button.disabled = true;
+    fetch('/api/searxng/test', {method: 'POST', body: data, credentials: 'same-origin'})
+      .then(function (response) { return response.json(); })
+      .then(function (payload) { note.textContent = payload.message; })
+      .catch(function () { note.textContent = 'Could not reach the local connection check.'; })
+      .finally(function () { button.disabled = false; });
+  });
+});

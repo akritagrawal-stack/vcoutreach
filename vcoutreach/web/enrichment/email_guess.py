@@ -28,6 +28,20 @@ _SMTP_TIMEOUT = 8
 _SMTP_DELAY = 1.5   # seconds between probes (respect target servers)
 _MAX_PROBES_PER_DOMAIN = 6
 
+FREE_EMAIL_DOMAINS = frozenset({
+    'gmail.com', 'googlemail.com', 'yahoo.com', 'ymail.com', 'rocketmail.com',
+    'hotmail.com', 'outlook.com', 'live.com', 'msn.com', 'aol.com',
+    'icloud.com', 'me.com', 'mac.com', 'proton.me', 'protonmail.com',
+    'pm.me', 'mail.com', 'gmx.com', 'gmx.net', 'hey.com', 'fastmail.com',
+    'tuta.com', 'tutanota.com', 'yandex.com', 'yandex.ru', 'qq.com', '163.com',
+})
+
+
+def is_free_email_domain(domain: str) -> bool:
+    domain = (domain or '').strip().lower().rstrip('.')
+    return (any(domain == free or domain.endswith('.' + free) for free in FREE_EMAIL_DOMAINS)
+            or domain.startswith(('yahoo.', 'hotmail.', 'outlook.')))
+
 
 def _normalize_name_part(s: str) -> str:
     """Lowercase, strip accents, remove non-alpha chars."""
@@ -53,7 +67,8 @@ def guess_emails(first: str, last: str, domain: str) -> list[dict]:
     """
     f = _normalize_name_part(first)
     l = _normalize_name_part(last)
-    if not f or not l or not domain:
+    domain = (domain or '').strip().lower().rstrip('.')
+    if not f or not l or not domain or is_free_email_domain(domain):
         return []
 
     fi = f[0]   # first initial

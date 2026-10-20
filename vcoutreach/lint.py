@@ -13,7 +13,6 @@ MIN_WORDS = 50
 MAX_WORDS = 130
 
 FILLER_PHRASES: Tuple[str, ...] = (
-    "i hope this finds you well",
     "just circling back",
     "bumping this",
     "excited to share",
@@ -22,6 +21,19 @@ FILLER_PHRASES: Tuple[str, ...] = (
     "leverage",
     "delve",
 )
+
+_CANNED_WELL_WISH = re.compile(
+    r"\b(?:i\s+)?hope\s+(?:"
+    r"this\s+(?:(?:message|note|email)\s+)?finds\s+you\s+(?:well|great|healthy)"
+    r"|you(?:\s+are|'re)\s+(?:doing\s+well|well|having\s+a\s+great\s+week)"
+    r"|all\s+is\s+well)(?![\w-])",
+    re.IGNORECASE,
+)
+
+
+def canned_well_wishes(text: str) -> List[str]:
+    """Match complete stock well-wishes, allowing case and punctuation variants."""
+    return [match.group(0) for match in _CANNED_WELL_WISH.finditer(_flat(text))]
 
 _FALSE_PARALLEL_PATTERNS: Tuple["re.Pattern[str]", ...] = tuple(
     re.compile(pattern)
@@ -37,6 +49,20 @@ _PARAGRAPH_SPLIT = re.compile(r"\n\s*\n")
 _NUMBER_TOKEN = re.compile(r"\d{1,3}(?:,\d{3})+|\d+")
 _DIGIT_RUN = re.compile(r"\d+")
 _GROUPED_NUMBER = re.compile(r"\d{1,3}(?:,\d{3})+")
+_PLACEHOLDER = re.compile(
+    r"\{\{\s*[A-Za-z0-9_][A-Za-z0-9_ ]*\s*\}\}"
+    r"|(?<!\{)\{[A-Za-z0-9_][A-Za-z0-9_ ]*\}(?!\})"
+    r"|\[\s*(?:company|name|first[ _]name|last[ _]name|tbd|placeholder|insert(?:\s+[^\]\n]*)?)\s*\]"
+    r"|<(?:name|first[ _]name|last[ _]name|company|tbd|insert(?:\s+[^>\n]*)?)>"
+    r"|%[A-Za-z_][A-Za-z0-9_ ]*%|\bTODO\b",
+    re.IGNORECASE,
+)
+
+
+def unfilled_placeholders(text: str) -> List[str]:
+    """Find template tokens outside inline or fenced backtick code."""
+    prose = re.sub(r"(`+)[\s\S]*?\1", "", text or "")
+    return list(dict.fromkeys(match.group(0) for match in _PLACEHOLDER.finditer(prose)))
 
 
 def _unix(text: str) -> str:
@@ -144,6 +170,10 @@ def lint_draft(
     subject = subject or ""
     body = body or ""
 
+    for place, text in (("subject", subject), ("body", body)):
+        for placeholder in unfilled_placeholders(text):
+            issues.append(LintIssue("placeholder", 'unfilled placeholder in %s: %s' % (place, placeholder)))
+
     # em_dash
     for place, text in (("subject", subject), ("body", body)):
         if EM_DASH in text or EN_DASH in text:
@@ -164,6 +194,8 @@ def lint_draft(
 
     # filler
     flat_all = _flat(subject + "\n" + body)
+    for phrase in canned_well_wishes(flat_all):
+        issues.append(LintIssue("filler", 'filler phrase "%s"' % phrase))
     for phrase in FILLER_PHRASES:
         if phrase in flat_all:
             issues.append(LintIssue("filler", 'filler phrase "%s"' % phrase))

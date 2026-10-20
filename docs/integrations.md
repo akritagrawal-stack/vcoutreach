@@ -119,8 +119,11 @@ on a login or challenge page and does not try to get around one.
 
 **What it does.** The "Generate hook" button on a partner's page (open one from Partners) sends the contact's
 enrichment facts plus your sender profile and approved claims to the model and asks
-for a hook and subject. The result is checked by the app's own validation before it
-is saved. With the default `auto` choice the app tries Gemini first (model
+for a short opener and subject. Enrich the contact first. If no draft exists,
+Generate hook creates a base draft automatically. The saved hook contains only
+the opener, with 1 to 2 sentences. Review its grounding badge before approval;
+the last generation error stays visible on the partner page until generation succeeds.
+With the default `auto` choice the app tries Gemini first (model
 `GEMINI_MODEL`, default `gemini-2.5-flash-lite`), then Claude Haiku, then Claude
 Sonnet; `ANTHROPIC_MODEL`, if set, replaces the two Claude model names.
 `VERTEX_STRICT=1` limits it to Gemini on Vertex AI. Vertex needs
@@ -163,7 +166,10 @@ decide for yourself whether to use it.
 
 - **Web search enrichment.** The "Enrich" button on a partner's page (open one from Partners) searches the web for facts
   about a contact. It uses a SearXNG server at `SEARXNG_URL` (default
-  `http://localhost:8080`, which you run yourself) and can fall back to the Brave
+  `http://localhost:8080`). Start one with
+  `docker compose -f packaging/searxng/docker-compose.yml up -d` (binds to
+  127.0.0.1 only; needs Docker). Some upstream engines rate-limit or show a
+  CAPTCHA now and then, and SearXNG uses the others. The app can also fall back to the Brave
   Search API when `ENABLE_BRAVE_FALLBACK=1` and `BRAVE_API_KEY` are set. Brave
   charges per its plan.
 - **Other allowlisted names.** The Settings form also accepts `OPENROUTER_API_KEY`,

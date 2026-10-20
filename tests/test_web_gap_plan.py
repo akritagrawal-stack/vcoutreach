@@ -16,7 +16,13 @@ CONTACTS = [ADA, GRACE, LINUS, BEA, CYD]
 
 
 def by_contact(w) -> dict:
-    return {column(r, "contact"): r for r in plan_rows(w)}
+    rows = {}
+    for row in plan_rows(w):
+        cell = column(row, "contact")
+        contact = next(c for c in CONTACTS if c["email"] in cell)
+        assert contact["name"] in cell
+        rows[contact["email"]] = row
+    return rows
 
 
 def planned(w) -> list:
@@ -35,13 +41,13 @@ def targets(w) -> list:
 @pytest.mark.parametrize("live", [False, True], ids=["test-mode", "live-mode"])
 def test_the_plan_leaves_out_passed_and_hold_contacts(make_web, stage, live):
     w = ready_web(make_web, [ADA, GRACE, LINUS])
-    assert planned(w) == ["ada", "grace", "linus"], "control: all three are eligible before the stage change"
+    assert planned(w) == [ADA["email"], GRACE["email"], LINUS["email"]], "control: all three are eligible before the stage change"
     set_stage(w, "grace@example.com", stage)
     if live:
         go_live(w)
         assert banner_mode(w) == "live"
-    assert planned(w) == ["ada", "linus"], f"a contact marked {stage} must not be planned"
-    row = by_contact(w)["grace"]
+    assert planned(w) == [ADA["email"], LINUS["email"]], f"a contact marked {stage} must not be planned"
+    row = by_contact(w)[GRACE["email"]]
     assert column(row, "result").strip().lower() != "planned"
     assert "grace@example.com" not in " ".join(targets(w)), "its address must not be offered as a delivery target"
 
@@ -51,9 +57,9 @@ def test_the_plan_leaves_out_a_suppressed_contact(make_web, live):
     w = ready_web(make_web, [ADA, GRACE])
     if live:
         go_live(w)
-    assert planned(w) == ["ada", "grace"], "control: both are eligible first"
+    assert planned(w) == [ADA["email"], GRACE["email"]], "control: both are eligible first"
     sql_exec(w, "UPDATE partners SET dropped_reason='asked to be removed' WHERE slug='grace'")
-    assert planned(w) == ["ada"]
+    assert planned(w) == [ADA["email"]]
     assert "grace@example.com" not in " ".join(targets(w))
 
 
@@ -66,8 +72,8 @@ def test_the_live_plan_leaves_out_unapproved_drafts(make_web):
     go_live(w)
     assert banner_mode(w) == "live"
     got = planned(w)
-    assert "grace" not in got, "a draft nobody approved must not be planned for a real send"
-    assert got == ["ada", "linus"], "control: the approved and verified ones are planned"
+    assert GRACE["email"] not in got, "a draft nobody approved must not be planned for a real send"
+    assert got == [ADA["email"], LINUS["email"]], "control: the approved and verified ones are planned"
     assert "grace@example.com" not in " ".join(targets(w))
 
 
@@ -76,8 +82,8 @@ def test_the_live_plan_leaves_out_unverified_addresses(make_web):
     go_live(w)
     assert banner_mode(w) == "live"
     got = planned(w)
-    assert "grace" not in got, "an address that was never verified must not be planned for a real send"
-    assert got == ["ada", "linus"]
+    assert GRACE["email"] not in got, "an address that was never verified must not be planned for a real send"
+    assert got == [ADA["email"], LINUS["email"]]
     assert "grace@example.com" not in " ".join(targets(w))
 
 
@@ -87,7 +93,7 @@ def test_the_live_plan_with_a_mix_lists_exactly_the_approved_verified_unblocked_
     set_stage(w, "grace@example.com", "passed")
     go_live(w)
     # ada: ok. grace: passed. linus: not verified. bea: ok. cyd: not approved.
-    assert planned(w) == ["ada", "bea"]
+    assert planned(w) == [ADA["email"], BEA["email"]]
 
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -137,12 +143,22 @@ def test_the_test_mode_plan_shows_the_test_inbox_not_the_contact(make_web):
         assert column(r, "mode").strip().upper() == "TEST"
 
 
+def test_test_mode_plan_holds_an_unapproved_draft_with_a_review_reason(make_web):
+    w = ready_web(make_web, [ADA, GRACE], approve=["ada"])
+    assert banner_mode(w) == "test"
+    assert planned(w) == [ADA["email"]]
+    held = by_contact(w)[GRACE["email"]]
+    assert column(held, "result").strip().lower().startswith("held")
+    assert "approv" in " ".join(held.values()).lower()
+    assert w.transport.calls == []
+
+
 def test_the_live_plan_shows_the_contact_address_as_the_delivery_target(make_web):
     """Control for the TEST mode check above."""
     w = ready_web(make_web, [ADA, GRACE])
     go_live(w)
-    got = {column(r, "contact"): column(r, "target").strip() for r in plan_rows(w)}
-    assert got == {"ada": "ada@example.com", "grace": "grace@example.com"}
+    got = {email: column(row, "target").strip() for email, row in by_contact(w).items()}
+    assert got == {ADA["email"]: ADA["email"], GRACE["email"]: GRACE["email"]}
     assert all(column(r, "mode").strip().upper() == "LIVE" for r in plan_rows(w))
 
 

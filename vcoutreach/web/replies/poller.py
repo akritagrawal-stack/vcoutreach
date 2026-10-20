@@ -6,7 +6,7 @@ Algorithm:
 2. For each sent message, fetch metadata to get threadId.
 3. Group by threadId (dedupe).
 4. For each thread: fetch full thread, find messages where sender != our address.
-5. For each new reply (not in replies table): extract text, classify, save.
+5. For the first inbound reply per thread: extract text, classify, save if new.
 6. Fallback: also search INBOX for mail from known partner emails in last 7 days.
 
 Returns a summary dict.
@@ -20,13 +20,10 @@ from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
-# Our sender address - fetched from Gmail profile at poll-time
-_MY_EMAIL: str | None = None
-
-
-def _get_my_email(service) -> str:
-    profile = service.users().getProfile(userId='me').execute()
-    return profile.get('emailAddress', '').lower()
+def _get_my_email() -> str:
+    from vcoutreach.web.gmail.api import get_profile
+    profile = get_profile()
+    return profile.get('emailAddress', '').strip().casefold()
 
 
 def _get_header(message: dict, name: str) -> str:
@@ -160,6 +157,13 @@ def _get_partner_name(partner_id: int | None) -> str | None:
         conn.close()
 
 
+def _is_own_message(message: dict, my_email: str) -> bool:
+    _, from_email = _parse_sender(_get_header(message, 'From'))
+    return 'SENT' in message.get('labelIds', []) or bool(
+        my_email and from_email.strip().casefold() == my_email.strip().casefold()
+    )
+
+
 def _process_reply_message(message: dict, service, my_email: str) -> dict | None:
     """
     Given a Gmail message that is a candidate reply, classify and save it.
@@ -173,7 +177,7 @@ def _process_reply_message(message: dict, service, my_email: str) -> dict | None
     from_name, from_email = _parse_sender(from_header)
 
     # Skip our own messages
-    if from_email == my_email:
+    if _is_own_message(message, my_email):
         return None
 
     # Skip if already in DB
@@ -233,8 +237,29 @@ def poll_gmail_for_replies(limit: int | None = None) -> dict:
             'replies': [list of new reply summaries],
         }
     """
-    from vcoutreach.web.gmail.api import get_service, get_message, get_thread, list_threads_in_inbox, GmailAuthNotReady
     from vcoutreach.web.db import get_conn
+
+    conn = get_conn()
+    try:
+        sent_rows = conn.execute(
+            "SELECT id, partner_id, gmail_message_id FROM drafts "
+            "WHERE status IN ('sent', 'live_sent', 'test_sent') AND gmail_message_id IS NOT NULL"
+        ).fetchall()
+        partner_emails = conn.execute(
+            "SELECT email FROM partners WHERE email IS NOT NULL AND email != ''"
+        ).fetchall()
+    finally:
+        conn.close()
+
+    if not sent_rows and not partner_emails:
+        return {
+            'threads_scanned': 0,
+            'new_replies': 0,
+            'errors': [],
+            'replies': [],
+        }
+
+    from vcoutreach.web.gmail.api import get_service, get_message, get_thread, list_threads_in_inbox, GmailAuthNotReady
 
     try:
         service = get_service()
@@ -246,26 +271,26 @@ def poll_gmail_for_replies(limit: int | None = None) -> dict:
             'replies': [],
         }
 
-    my_email = _get_my_email(service)
+    my_email = _get_my_email()
     errors: list[str] = []
     new_replies: list[dict] = []
     thread_ids_seen: set[str] = set()
 
     # ── Primary pass: walk sent drafts → get threadIds ─────────────────────
-    conn = get_conn()
-    try:
-        sent_rows = conn.execute(
-            "SELECT id, partner_id, gmail_message_id FROM drafts "
-            "WHERE status IN ('sent', 'live_sent', 'test_sent') AND gmail_message_id IS NOT NULL"
-        ).fetchall()
-    finally:
-        conn.close()
+    cap = max(0, min(limit, 200)) if limit is not None else 200
 
-    cap = limit if limit else 200  # hard cap to avoid quota abuse
-    processed = 0
+    def process_thread(thread: dict, thread_id: str):
+        for msg in thread.get('messages', []):
+            if _is_own_message(msg, my_email):
+                continue
+            result = _process_reply_message({**msg, 'threadId': thread_id}, service, my_email)
+            if result:
+                new_replies.append(result)
+            # Stop even if this first inbound reply was saved by an earlier poll.
+            break
 
     for row in sent_rows:
-        if processed >= cap:
+        if len(thread_ids_seen) >= cap:
             break
         sent_msg_id = row['gmail_message_id']
         try:
@@ -285,29 +310,19 @@ def poll_gmail_for_replies(limit: int | None = None) -> dict:
             errors.append(f'get_thread({thread_id}): {exc}')
             continue
 
-        processed += 1
-        for msg in thread.get('messages', []):
-            result = _process_reply_message(msg, service, my_email)
-            if result:
-                new_replies.append(result)
+        process_thread(thread, thread_id)
 
     # ── Fallback pass: inbox search from known partner emails ─────────────
-    conn = get_conn()
-    try:
-        partner_emails = conn.execute(
-            "SELECT email FROM partners WHERE email IS NOT NULL"
-        ).fetchall()
-    finally:
-        conn.close()
-
-    if partner_emails:
+    if partner_emails and len(thread_ids_seen) < cap:
         email_list = [r['email'] for r in partner_emails if r['email']]
         # Gmail OR queries work up to ~200 terms; 47 is fine
         from_clause = ' OR '.join(f'from:{e}' for e in email_list[:50])
         fallback_query = f'in:inbox newer_than:7d ({from_clause})'
         try:
-            thread_stubs = list_threads_in_inbox(fallback_query, max_results=50)
+            thread_stubs = list_threads_in_inbox(fallback_query, max_results=min(50, cap - len(thread_ids_seen)))
             for stub in thread_stubs:
+                if len(thread_ids_seen) >= cap:
+                    break
                 tid = stub.get('id', '')
                 if not tid or tid in thread_ids_seen:
                     continue
@@ -317,10 +332,7 @@ def poll_gmail_for_replies(limit: int | None = None) -> dict:
                 except Exception as exc:
                     errors.append(f'fallback get_thread({tid}): {exc}')
                     continue
-                for msg in thread.get('messages', []):
-                    result = _process_reply_message(msg, service, my_email)
-                    if result:
-                        new_replies.append(result)
+                process_thread(thread, tid)
         except Exception as exc:
             errors.append(f'Fallback inbox search failed: {exc}')
 

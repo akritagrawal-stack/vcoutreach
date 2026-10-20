@@ -94,6 +94,14 @@ def test_a_duplicate_email_or_slug_is_refused_even_when_the_case_differs(web):
     assert [x["email"] for x in export_rows(web)] == ["ada@example.com"]
 
 
+def test_csv_import_rejects_lowercase_id_already_stored_in_uppercase(web):
+    seed_contacts(web, [{**ADA, "id": "ADA"}])
+    assert [(r["id"], r["email"]) for r in export_rows(web)] == [("ADA", ADA["email"])]
+    response = import_csv(web, csv_text([{**GRACE, "id": "ada"}]))
+    assert "duplicate id" in page_text(response).lower()
+    assert [(r["id"], r["email"]) for r in export_rows(web)] == [("ADA", ADA["email"])]
+
+
 def test_hostile_text_in_a_contact_is_escaped_on_every_page_that_shows_it(web):
     evil = '<script>alert(1)</script>'
     create(web, ADA, name=evil + " Ada", org='"><img src=x onerror=alert(1)>')
@@ -205,16 +213,17 @@ def test_one_bad_row_blocks_the_whole_import_and_every_bad_row_is_named_in_visib
     assert export_rows(web) == []
 
 
-def test_duplicates_inside_the_file_block_the_import(web):
+def test_duplicates_inside_the_file_are_skipped_and_counted(web):
     r = import_csv(web, csv_text([ADA, {**GRACE, "email": "ada@example.com"}]))
-    assert "duplicate email" in page_text(r)
-    assert export_rows(web) == []
+    assert "Imported 1 new contact; skipped 1 already in this workspace" in page_text(r)
+    assert [x["email"] for x in export_rows(web)] == [ADA["email"]]
 
 
-def test_an_email_already_in_the_workspace_blocks_the_whole_import(web):
+def test_existing_emails_are_skipped_while_new_contacts_are_imported(web):
     create(web, ADA)
-    import_csv(web, csv_text([GRACE, {**LINUS, "email": "ADA@example.com"}]))
-    assert [x["id"] for x in export_rows(web)] == ["ada"]
+    response = import_csv(web, csv_text([GRACE, {**LINUS, "email": "ADA@example.com"}]))
+    assert "Imported 1 new contact; skipped 1 already in this workspace" in page_text(response)
+    assert {x["email"] for x in export_rows(web)} == {ADA["email"], GRACE["email"]}
 
 
 @pytest.mark.parametrize("text, fragment", [

@@ -1,4 +1,4 @@
 {% extends 'base.html' %}
 {% block page_id %}error{% endblock %}
-{% block title %}Request unavailable / Publikreach{% endblock %}
+{% block title %}Request unavailable{% endblock %}
 {% block content %}<section class="crm-panel form-shell"><h1>Request unavailable.</h1><p>{{ message|default(error|default('This request could not be completed.')) }}</p><a class="crm-button crm-button-primary" href="/crm">Back to overview</a></section>{% endblock %}

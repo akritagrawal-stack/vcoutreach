@@ -1,13 +1,20 @@
 {% extends 'base.html' %}
 {% block page_id %}send_plan{% endblock %}
-{% block title %}Send plan / Publikreach{% endblock %}
+{% block title %}Send plan{% endblock %}
 {% block content %}
-<div class="crm-shell">
-  <header class="crm-hero"><div><div class="crm-eyebrow">SEND GATE / READ ONLY</div><h1>Send plan.</h1><p>Nothing is sent from this screen. Review gate results before using the send controls.</p></div><a class="crm-button crm-button-secondary" href="/crm/drafts">Review drafts</a></header>
+<div class="crm-shell send-plan-page">
+  <header class="crm-hero"><div><div class="crm-eyebrow">SEND GATE / READ ONLY</div><h1>Send plan.</h1><p>Nothing is sent from this screen.</p></div><a class="crm-button crm-button-secondary" href="/crm/drafts">Review drafts</a></header>
+  <section class="crm-metrics send-stats" aria-label="Plan totals">
+    <div class="crm-metric"><span>PLANNED</span><strong>{{ summary.planned }}</strong><small>Passed every gate</small></div>
+    <div class="crm-metric"><span>HELD</span><strong>{{ summary.held }}</strong><small>Blocked by a gate, reason shown</small></div>
+    <div class="crm-metric"><span>MODE</span><strong>{{ g_send_mode|upper }}</strong><small>{{ 'Test mailbox only' if g_send_mode == 'test' else 'Real recipients' }}</small></div>
+  </section>
   {% if error %}<p class="flash flash-error" role="status">{{ error }}</p>{% endif %}
-  <section class="crm-panel"><h2>Gate summary</h2><dl class="plan-summary">{% for key, value in summary.items() %}<div><dt>{{ key|replace('_',' ')|title }}</dt><dd>{{ value }}</dd></div>{% endfor %}</dl></section>
-  <section class="crm-panel"><div class="crm-table-wrap"><table class="crm-table"><caption>Draft eligibility and delivery targets</caption><thead><tr><th>Contact</th><th>Delivery target</th><th>Subject</th><th>Mode</th><th>Result</th><th>Reason</th></tr></thead><tbody>
-    {% for row in rows %}<tr><td>{{ row.get('recipient_name', row.get('slug','Contact')) }}</td><td>{{ row.get('to', row.get('recipient_email', row.get('target_email','Not set'))) }}</td><td>{{ row.get('subject','') }}</td><td>{{ row.get('mode',g_send_mode)|upper }}</td><td>{{ row.get('status', row.get('state','Review')) }}</td><td>{{ row.get('detail',row.get('reason','')) }}</td></tr>{% else %}<tr><td colspan="6" class="crm-empty-row">No drafts to plan. <a href="/crm/drafts">Write drafts</a>.</td></tr>{% endfor %}
-  </tbody></table></div></section>
+  {% if g_send_mode == 'test' %}<p>Delivery target: {{ g_test_recipient or 'Test recipient not set' }}</p>{% endif %}
+  <section class="crm-panel">
+    <div class="crm-table-wrap"><table class="crm-table send-plan-table"><caption>Draft eligibility and delivery targets</caption><thead><tr><th>Contact</th><th>Delivery target</th><th>Approval</th><th>Subject</th><th>Mode</th><th>Result and reason</th></tr></thead><tbody>
+    {% for row in rows %}<tr><td>{{ row.recipient_name }}<span class="crm-table-subline">{{ row.recipient_email }}</span></td><td>{{ row.get('to') or 'Test recipient not set' }}</td><td>{{ row.approval_state }}</td><td>{{ row.get('subject', '') }}</td><td>{{ row.get('mode', g_send_mode)|upper }}</td><td><span class="badge {{ 'badge-success' if row.status == 'Planned' else 'badge-warning' }}">{{ row.status }}</span>{% if row.get('detail') %}<span class="crm-table-subline">{{ row.detail }}{% if 'Gmail is not connected.' in row.detail %} <a href="/settings">Open Settings</a>{% endif %}</span>{% endif %}</td></tr>{% else %}<tr><td colspan="6" class="crm-empty-row">No drafts to plan. <a href="/crm/drafts">Write drafts</a>.</td></tr>{% endfor %}
+    </tbody></table></div>
+  </section>
 </div>
 {% endblock %}

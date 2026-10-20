@@ -1,528 +1,188 @@
 {% extends 'base.html' %}
+{% from '_partner_macros.html' import verification_badge, status_badge, tier_badge, responsive_badge, empty_value %}
 {% block page_id %}partner_detail{% endblock %}
-{% block title %}Partner detail / {{ g_workspace.workspace_name }}{% endblock %}
+{% block title %}{{ partner['partner_name'] }}{% endblock %}
 
 {% block content %}
-<form method="post" action="{{ url_for('partner_verify_email_manually', partner_id=partner.id) }}">
-  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-  <button type="submit" class="crm-button crm-button-secondary">Mark email verified (I checked it myself)</button>
-</form>
+{% set evs = partner.get('email_verification_status') %}
+{% set email_verified = evs in ['valid', 'deliverable', 'pb_verified'] %}
+{% set locked = draft and draft['status'] in ('drafted', 'sent', 'test_sent', 'live_sent') %}
+{% set sent_to = (sent_to_map|default({})).get(draft['id']) if draft else none %}
 
-<!-- Breadcrumb -->
+{% if last_hook_error %}<div class="inset pd-banner pd-banner-bad" role="alert"><strong>Last hook error:</strong> {{ last_hook_error }}</div>{% endif %}
+
 <div class="breadcrumb">
   <a href="/partners">Partners</a>
   <span class="breadcrumb-sep">/</span>
   <span>{{ partner['partner_name'] }}</span>
 </div>
 
-<!-- Page heading -->
 <div class="section-header page-title">
   <div>
     <h1>{{ partner['partner_name'] }}</h1>
-    <p class="text-muted" style="margin-top:4px;font-size:14px;">{{ partner['firm'] or 'Unknown firm' }}</p>
+    <p class="text-muted pd-firm">{{ partner['firm'] or 'Unknown firm' }}</p>
   </div>
   <div class="flex gap-2 items-center">
-    {% if partner['tier'] == 1 %}
-      <span class="badge badge-tier1">Tier 1</span>
-    {% else %}
-      <span class="badge badge-tier2">Tier 2</span>
-    {% endif %}
-    {% set vs = partner.get('verification_status') or 'unverified' %}
-    {% if vs == 'verified_strong' %}
-      <span class="badge badge-verif-strong" style="font-size:12px;padding:3px 10px;">strong</span>
-    {% elif vs == 'verified' %}
-      <span class="badge badge-verif" style="font-size:12px;padding:3px 10px;">verified</span>
-    {% elif vs == 'weak' %}
-      <span class="badge badge-verif-weak" style="font-size:12px;padding:3px 10px;">weak</span>
-    {% else %}
-      <span class="badge badge-verif-none" style="font-size:12px;padding:3px 10px;">unverified</span>
-    {% endif %}
-    {% if partner['email_uncertain'] %}
-      <span class="badge badge-email-unverified" style="font-size:12px;padding:3px 10px;" title="Email address is uncertain">email unverified</span>
-    {% endif %}
-    {% if draft %}
-      {% set st = draft['status'] %}
-      {% if draft.get('live_sent_at') %}
-        <span class="badge badge-sent" style="background:#13713a;color:#fff;font-weight:700;"
-              title="Live sent to {{ draft.get('live_sent_to') }} on {{ (draft.get('live_sent_at') or '')[:10] }}">
-          LIVE SENT
-        </span>
-        {% if draft.get('test_sent_count') and draft['test_sent_count'] > 0 %}
-          <span class="badge badge-test-sent"
-                title="Also test-sent {{ draft['test_sent_count'] }} time(s)">
-            +{{ draft['test_sent_count'] }} test
-          </span>
-        {% endif %}
-      {% elif st == 'pending' %}
-        <span class="badge badge-pending">Pending</span>
-      {% elif st == 'approved' %}
-        <span class="badge badge-approved">Approved</span>
-      {% elif st == 'rejected' %}
-        <span class="badge badge-rejected">Rejected</span>
-      {% elif st == 'drafted' %}
-        <span class="badge badge-drafted">In Gmail</span>
-      {% elif st == 'test_sent' %}
-        <span class="badge badge-test-sent"
-              title="Test-sent {{ draft.get('test_sent_count', 1) }} time(s). Last: {{ (draft.get('last_test_sent_at') or '')[:10] }}">
-          test sent · {{ (draft.get('last_test_sent_at') or draft.get('sent_at') or '')[:10] }}
-        </span>
-      {% elif st == 'live_sent' %}
-        <span class="badge badge-sent" style="background:#13713a;color:#fff;font-weight:700;"
-              title="LIVE sent to {{ draft.get('live_sent_to') }} on {{ (draft.get('live_sent_at') or '')[:10] }}">
-          LIVE · {{ (draft.get('live_sent_at') or '')[:10] }} → {{ draft.get('live_sent_to') }}
-        </span>
-      {% elif st == 'sent' %}
-        {# legacy status  /  disambiguate by sent_to_address #}
-        {% if draft.get('test_sent_count') and draft['test_sent_count'] > 0 %}
-          <span class="badge badge-test-sent"
-                title="Test-sent {{ draft['test_sent_count'] }} time(s)">
-            test sent ({{ draft['test_sent_count'] }})
-          </span>
-        {% else %}
-          {% set sent_to = sent_to_map.get(draft['id']) %}
-          {% if sent_to and sent_to == g_test_recipient %}
-            <span class="badge badge-test-sent" title="Sent to {{ sent_to }}">test-sent</span>
-          {% else %}
-            <span class="badge badge-sent">sent</span>
-          {% endif %}
-        {% endif %}
-      {% endif %}
-    {% endif %}
+    {{ tier_badge(partner['tier']) }}
+    {{ verification_badge(evs, partner.get('verification_status')) }}
+    {% if partner['email_uncertain'] %}<span class="badge badge-email-unverified" title="Email address is uncertain">email uncertain</span>{% endif %}
+    {% if draft %}{{ status_badge(draft, sent_to, g_test_recipient) }}{% endif %}
   </div>
 </div>
 
 {% if draft and draft.get('live_sent_at') %}
-<div class="inset" style="background:#d1fae5;color:#065f46;border-left:4px solid #16a34a;margin-bottom:16px;font-size:14px;">
-  <strong style="font-size:15px;">Live sent to {{ draft.get('live_sent_to') }}</strong>
+<div class="inset pd-banner pd-banner-ok">
+  <strong>Live sent to {{ draft.get('live_sent_to') }}</strong>
   on {{ (draft.get('live_sent_at') or '')[:10] }}
-  {% if draft.get('live_subject') %}
-     /  Subject: <em>{{ draft.get('live_subject') }}</em>
-  {% endif %}
-  {% if draft.get('live_message_id') %}
-    <span class="text-faint" style="font-size:11px;margin-left:8px;">(Gmail ID: {{ draft.get('live_message_id') }})</span>
-  {% endif %}
+  {% if draft.get('live_subject') %}&middot; Subject: <em>{{ draft.get('live_subject') }}</em>{% endif %}
+  {% if draft.get('live_message_id') %}<span class="text-faint pd-mono">Gmail ID {{ draft.get('live_message_id') }}</span>{% endif %}
   {% if draft.get('test_sent_count') and draft['test_sent_count'] > 0 %}
-  <br><span style="font-size:12px;color:#047857;">
-    Test sends: {{ draft['test_sent_count'] }} time(s)
-    {% if draft.get('last_test_sent_at') %} /  last on {{ draft['last_test_sent_at'][:10] }}{% endif %}
-  </span>
+  <span class="text-faint">&middot; {{ draft['test_sent_count'] }} test send(s){% if draft.get('last_test_sent_at') %}, last {{ draft['last_test_sent_at'][:10] }}{% endif %}</span>
   {% endif %}
 </div>
 {% endif %}
 
-<div class="two-col">
-  <!-- ── Left column: metadata + actions ── -->
-  <div>
+{% if evs == 'invalid' %}
+<div class="inset pd-banner pd-banner-bad">
+  <strong>Email verified INVALID.</strong> The SMTP probe rejected this address. Live send is blocked. Correct the email address before sending.
+  {% if partner.get('email_verified_at') %}<span class="text-faint">Checked {{ partner['email_verified_at'][:10] }}</span>{% endif %}
+</div>
+{% elif evs == 'catch_all' %}
+<div class="inset pd-banner pd-banner-warn">
+  <strong>Catch-all domain.</strong> The server accepts all addresses, so this specific email cannot be confirmed.
+</div>
+{% endif %}
 
-    <!-- Partner metadata -->
-    <div class="section">
-      <div class="section-title mb-3">Partner Info</div>
-      <div class="meta-list">
-        <div class="meta-row">
-          <span class="meta-key">Email</span>
-          <span class="meta-val">
-            {{ partner['email'] }}
-            {% if partner['email_uncertain'] %}
-              <span class="badge badge-email-unverified" style="margin-left:6px;">uncertain</span>
-            {% endif %}
-            {% set evs = partner.get('email_verification_status') %}
-            {% if evs == 'valid' %}
-              <span class="badge" style="margin-left:6px;background:#13713a;color:#fff;" title="SMTP confirmed deliverable.">&#10003; Verified</span>
-            {% elif evs == 'invalid' %}
-              <span class="badge" style="margin-left:6px;background:#dc2626;color:#fff;" title="SMTP 5xx rejected  /  do not send">&#10007; INVALID</span>
-            {% elif evs == 'catch_all' %}
-              <span class="badge" style="margin-left:6px;background:#965000;color:#fff;" title="Catch-all: server accepts everything">&#9888; catch-all</span>
-            {% elif evs == 'mx_pattern_match' %}
-              <span class="badge" style="margin-left:6px;background:#2563eb;color:#fff;" title="MX-verified domain plus standard firm address pattern.">MX+pattern</span>
-            {% elif evs == 'mx_only' %}
-              <span class="badge" style="margin-left:6px;background:#6b7280;color:#fff;" title="Domain accepts mail (MX records valid). Specific address not SMTP-verified  /  local network blocks port 25 probe.">MX-only</span>
-            {% elif evs == 'inconclusive' %}
-              <span class="badge" style="margin-left:6px;background:#6b7280;color:#fff;" title="Could not verify domain or address. Higher bounce risk.">Unverified</span>
-            {% endif %}
-          </span>
-        </div>
-        {% if partner.get('email_verified_at') %}
-        <div class="meta-row">
-          <span class="meta-key">Email check</span>
-          <span class="meta-val text-muted" style="font-size:12px;">
-            {{ evs or 'n/a' }}
-            (conf {{ "%.0f"|format((partner.get('email_verification_confidence') or 0) * 100) }}%)
-             /  {{ partner['email_verified_at'][:10] }}
-            via {{ partner.get('email_verification_method') or 'n/a' }}
-          </span>
-        </div>
-        {% endif %}
-        <div class="meta-row">
-          <span class="meta-key">Channel</span>
-          <span class="meta-val">
-            {% if partner['channel'] == 'twitter' %}
-              <span class="badge badge-twitter">Twitter DM</span>
-            {% else %}
-              Email
-            {% endif %}
-          </span>
-        </div>
-        <div class="meta-row">
-          <span class="meta-key">Responsive</span>
-          <span class="meta-val">
-            {% set resp = partner['responsiveness'] or '' %}
-            {% if resp == 'High' %}
-              <span class="badge badge-resp-high">High</span>
-            {% elif resp == 'Medium-High' %}
-              <span class="badge badge-resp-mh">Med-High</span>
-            {% elif resp == 'Medium' %}
-              <span class="badge badge-resp-medium">Medium</span>
-            {% elif resp == 'Low' %}
-              <span class="badge badge-resp-low">Low</span>
-            {% else %}
-              <span class="text-faint"> / </span>
-            {% endif %}
-          </span>
-        </div>
-        {% if partner['notes'] %}
-        <div class="meta-row">
-          <span class="meta-key">Notes</span>
-          <span class="meta-val text-muted">{{ partner['notes'] }}</span>
-        </div>
-        {% endif %}
-      </div>
-    </div>
-
-    {% if draft %}
-
-    <!-- Draft timestamps -->
-    <div class="section">
-      <div class="section-title mb-3">Draft History</div>
-      <div class="meta-list">
-        <div class="meta-row">
-          <span class="meta-key">Created</span>
-          <span class="meta-val text-muted">{{ draft['created_at'][:10] }}</span>
-        </div>
-        <div class="meta-row">
-          <span class="meta-key">Version</span>
-          <span class="meta-val"><code>{{ draft['boilerplate_version'] }}</code></span>
-        </div>
-        {% if draft['approved_at'] and draft['status'] == 'approved' %}
-        <div class="meta-row">
-          <span class="meta-key">Approved</span>
-          <span class="meta-val text-muted">{{ draft['approved_at'][:10] }}</span>
-        </div>
-        {% endif %}
-        {% if draft['drafted_at'] %}
-        <div class="meta-row">
-          <span class="meta-key">Drafted</span>
-          <span class="meta-val text-muted">{{ draft['drafted_at'][:10] }}</span>
-        </div>
-        {% endif %}
-        {% if draft['sent_at'] %}
-        <div class="meta-row">
-          <span class="meta-key">Sent</span>
-          <span class="meta-val text-muted">{{ draft['sent_at'][:10] }}</span>
-        </div>
-        {% endif %}
-        {% if draft['gmail_message_id'] %}
-        <div class="meta-row">
-          <span class="meta-key">Gmail ID</span>
-          <span class="meta-val"><code>{{ draft['gmail_message_id'] }}</code></span>
-        </div>
-        {% endif %}
-        {% if sent_to_map.get(draft['id']) %}
-        <div class="meta-row">
-          <span class="meta-key">Sent to</span>
-          <span class="meta-val text-muted">{{ sent_to_map.get(draft['id']) }}
-            {% if sent_to_map.get(draft['id']) == g_test_recipient %}
-              <span class="badge badge-test-sent" style="margin-left:6px;">test</span>
-            {% endif %}
-          </span>
-        </div>
-        {% endif %}
-        {# Live send columns (migration 009) #}
-        {% if draft.get('live_sent_at') %}
-        <div class="meta-row" style="border-top:2px solid #16a34a;margin-top:8px;padding-top:8px;">
-          <span class="meta-key" style="color:#16a34a;font-weight:700;">LIVE Sent</span>
-          <span class="meta-val" style="color:#16a34a;font-weight:600;">{{ (draft.get('live_sent_at') or '')[:10] }}</span>
-        </div>
-        <div class="meta-row">
-          <span class="meta-key">Live to</span>
-          <span class="meta-val">{{ draft.get('live_sent_to') }}</span>
-        </div>
-        {% if draft.get('live_subject') %}
-        <div class="meta-row">
-          <span class="meta-key">Live subject</span>
-          <span class="meta-val text-muted"><em>{{ draft.get('live_subject') }}</em></span>
-        </div>
-        {% endif %}
-        {% if draft.get('live_message_id') %}
-        <div class="meta-row">
-          <span class="meta-key">Live Gmail ID</span>
-          <span class="meta-val"><code>{{ draft.get('live_message_id') }}</code></span>
-        </div>
-        {% endif %}
-        {% endif %}
-        {% if draft.get('test_sent_count') and draft['test_sent_count'] > 0 %}
-        <div class="meta-row">
-          <span class="meta-key">Test sends</span>
-          <span class="meta-val text-muted">{{ draft['test_sent_count'] }} time(s)
-            {% if draft.get('last_test_sent_at') %} /  last {{ draft['last_test_sent_at'][:10] }}{% endif %}
-          </span>
-        </div>
-        {% endif %}
-      </div>
-
-      {% if draft['review_notes'] %}
-      <div class="inset mt-4" style="background:var(--warning-dim);color:var(--warning);">
-        <strong>Review notes:</strong> {{ draft['review_notes'] }}
-      </div>
-      {% endif %}
-    </div>
-
-    <!-- Actions -->
-    {% if draft and draft['status'] not in ('drafted', 'sent', 'test_sent', 'live_sent') %}
-    <div class="section">
-      <div class="section-title mb-3">Actions</div>
-      <div class="action-group">
-
-        {% if draft['status'] != 'approved' %}
-        <form method="POST" action="/partners/{{ partner['id'] }}/approve">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-          <button type="submit" class="btn btn-success btn-full">Approve draft for sending</button>
-        </form>
-        {% else %}
-        <button class="btn btn-success btn-full" disabled>Already Approved</button>
-        {% endif %}
-
-        <!-- Reject (collapse) -->
-        <button type="button" class="btn btn-secondary btn-full" id="rejectToggle"
-                data-action="partner_detail-0" >Reject</button>
-        <div id="rejectPanel" class="collapsible-content" style="margin-top:4px;">
-          <form method="POST" action="/partners/{{ partner['id'] }}/reject">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-            <div class="form-group">
-              <textarea aria-label="Review Notes" name="review_notes" class="form-control" rows="2"
-                        placeholder="Reason for rejection (optional)"></textarea>
-            </div>
-            <button type="submit" class="btn btn-danger btn-full">Confirm Reject</button>
-          </form>
-        </div>
-
-      </div>
-    </div>
-    {% endif %}
-
-    <!-- Send section -->
-    <div class="section">
-      <div class="section-title mb-3">Send Email</div>
-
-      {% if partner.get('email_verification_status') == 'invalid' %}
-        <div class="inset" style="background:#fef2f2;color:#991b1b;border-left:4px solid #dc2626;margin-bottom:10px;font-size:13px;">
-          <strong>&#10007; Email verified INVALID</strong>  /  SMTP probe rejected this address.
-          Live send is blocked. Correct the email address before sending.
-          {% if partner.get('email_verified_at') %}
-            <br><span class="text-faint">Checked: {{ partner['email_verified_at'][:10] }}</span>
-          {% endif %}
-        </div>
-      {% elif partner.get('email_verification_status') == 'catch_all' %}
-        <div class="inset" style="background:#fffbeb;color:#92400e;border-left:4px solid #d97706;margin-bottom:10px;font-size:13px;">
-          <strong>&#9888; Catch-all domain</strong>  /  server accepts all addresses; cannot confirm this specific email.
-        </div>
-      {% endif %}
-
-      {% if draft and draft.get('live_sent_at') %}
-        {# Already live-sent  /  show banner, keep test-send available #}
-        <div class="inset" style="background:#d1fae5;color:#065f46;font-size:13px;margin-bottom:8px;">
-          Already live sent to <strong>{{ draft.get('live_sent_to') }}</strong>
-          on {{ (draft.get('live_sent_at') or '')[:10] }}.
-        </div>
-        {% if g_send_mode == 'live' %}
-        <button class="btn btn-full" disabled
-                style="background:#9ca3af;color:#fff;border:none;cursor:not-allowed;"
-                title="Already sent live. Re-send requires deletion of live_sent_at via admin.">
-          Send to {{ partner['email'] }} (already sent)
-        </button>
-        <p class="text-faint" style="font-size:11px;margin-top:4px;">
-          Already sent live. Re-send requires admin reset of live_sent_at.
-        </p>
-        {% endif %}
-      {% elif draft and draft['status'] in ('sent', 'test_sent') %}
-        {% set sent_to = sent_to_map.get(draft['id']) %}
-        <div class="inset" style="background:var(--success-dim,#d4edda);color:var(--success,#155724);font-size:13px;">
-          <strong>Test sent</strong>
-          {% if draft.get('last_test_sent_at') %}on {{ draft['last_test_sent_at'][:10] }}{% elif draft['sent_at'] %}on {{ draft['sent_at'][:10] }}{% endif %}
-          {% if sent_to %}to <strong>{{ sent_to }}</strong>{% endif %}
-          <span class="badge badge-test-sent" style="margin-left:4px;">test</span>
-        </div>
-      {% else %}
-        {% if g_send_mode == 'test' %}
-          <!-- TEST mode: 1-click send -->
-          <form method="POST" action="/partners/{{ partner['id'] }}/send">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-            <button type="submit" class="btn btn-full"
-                    style="background:#2563eb;color:#fff;border:none;"
-                    title="Sends to {{ g_test_recipient }} (test mode)">
-              Send test email
-            </button>
-          </form>
-          <p class="text-faint" style="font-size:11px;margin-top:4px;">
-            Routes to {{ g_test_recipient }} (test mode)
-          </p>
-        {% else %}
-          <!-- LIVE mode: confirm phrase required -->
-          <button type="button" class="btn btn-full"
-                  style="background:#dc2626;color:#fff;border:none;"
-                  data-action="partner_detail-1" >
-            Send to {{ partner['email'] }}
-          </button>
-          <div id="liveSendPanel" style="display:none;margin-top:8px;">
-            <form method="POST" action="/partners/{{ partner['id'] }}/send">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-              <div class="form-group">
-                <label class="form-label" style="color:#dc2626;" for="partner_detail-field-1">
-                  Type exactly: <code>SEND TO {{ partner['email'] }}</code>
-                </label>
-                <input id="partner_detail-field-1" type="text" name="confirm_text" class="form-control"
-                       placeholder="SEND TO {{ partner['email'] }}"
-                       autocomplete="off" style="font-family:monospace;">
-              </div>
-              <button type="submit" class="btn btn-danger btn-full">Confirm Send</button>
-            </form>
-          </div>
-        {% endif %}
-      {% endif %}
-    </div>
-
-    <!-- Schedule send section -->
-    {% if not (draft and draft['status'] in ('sent', 'test_sent', 'live_sent')) %}
-    <div class="section">
-      <div class="section-title mb-3">Schedule Send</div>
-      <button type="button" class="btn btn-secondary btn-full"
-              id="scheduleToggle1"
-              data-action="partner_detail-2" >
-        Schedule for later
-      </button>
-      <div id="schedulePanel1" style="display:none;margin-top:10px;">
-        <form method="POST" action="/schedule-send" id="schedForm1">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-          {% if draft %}
-          <input type="hidden" name="draft_ids" value="{{ draft['id'] }}">
-          {% endif %}
-          <div class="form-group">
-            <label class="form-label" for="sd1">Date</label>
-            <input type="date" name="sched_date" id="sd1" class="form-control"
-                   required style="font-family:inherit;">
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="st1">Time</label>
-            <input type="time" name="sched_time" id="st1" class="form-control"
-                   required style="font-family:inherit;">
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="sm1">Mode</label>
-            <select name="sched_mode" id="sm1" class="form-control" style="font-family:inherit;">
-              <option value="test" {% if g_send_mode == 'test' %}selected{% endif %}>Test (safe)</option>
-              <option value="live" {% if g_send_mode == 'live' %}selected{% endif %}>Live (real emails)</option>
-            </select>
-          </div>
-          <div id="schedEta1" class="inset" style="font-size:12px;background:var(--surface-alt,#f8f8f8);margin-bottom:8px;display:none;"></div>
-          <div id="liveSchedConfirm1" style="display:none;" class="form-group">
-            <label class="form-label" style="color:#dc2626;" for="partner_detail-field-2">Type exactly: <code>SCHEDULE LIVE FOR 1</code></label>
-            <input id="partner_detail-field-2" type="text" name="confirm_text" class="form-control"
-                   placeholder="SCHEDULE LIVE FOR 1" autocomplete="off" style="font-family:monospace;">
-          </div>
-          <button type="submit" class="btn btn-full" style="background:#7c3aed;color:#fff;border:none;">
-            Schedule 1 send
-          </button>
-        </form>
-      </div>
-    </div>
-    {% endif %}
-
-    <!-- Utility buttons -->
-    <div class="section">
-      <div class="section-title mb-3">Tools</div>
-      <div class="action-group">
-
-        <form method="POST" action="/partners/{{ partner['id'] }}/send-test">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-          <button type="submit" class="btn btn-secondary btn-full btn-sm"
-                  title="Sends to {{ g_test_recipient }} regardless of SEND_MODE or approval">
-            Send test → {{ g_test_recipient }}
-          </button>
-        </form>
-
-        {% if draft and draft['status'] not in ('drafted', 'sent', 'test_sent', 'live_sent') %}
-        <form method="POST" action="/partners/{{ partner['id'] }}/generate-hook">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-          <button type="submit" class="btn btn-secondary btn-full btn-sm"
-                  title="Regenerate hook and subject using LLM + enrichment facts">
-            Regenerate hook with LLM
-          </button>
-        </form>
-        {% endif %}
-
-        <form method="POST" action="/partners/{{ partner['id'] }}/enrich">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-          <button type="submit" class="btn btn-ghost btn-full btn-sm"
-                  title="Run web search + LinkedIn + email guess enrichment">
-            Enrich partner data
-          </button>
-        </form>
-
-        {% if pitchbook_enabled %}
-        <form method="POST" action="/partners/{{ partner['id'] }}/pitchbook-enrich">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-          <button type="submit" class="btn btn-ghost btn-full btn-sm"
-                  style="color:#1a4f8a;"
-                  title="Run PitchBook enrichment ({{ pitchbook_lookups_used }}/{{ pitchbook_lookups_cap }} used today)">
-            Enrich via PitchBook
-            <span class="badge badge-pitchbook" style="margin-left:6px;">{{ pitchbook_lookups_used }}/{{ pitchbook_lookups_cap }}</span>
-          </button>
-        </form>
-        {% else %}
-        <button class="btn btn-ghost btn-full btn-sm" disabled title="Set PITCHBOOK_ENABLED=1 in .env">
-          PitchBook (disabled)
-        </button>
-        {% endif %}
-
-      </div>
-    </div>
-
-    <!-- Edit hook/subject -->
-    {% if draft and draft['status'] not in ('drafted', 'sent', 'test_sent', 'live_sent') %}
-    <div class="section">
-      <div class="section-title mb-3">Edit Draft</div>
-      <form method="POST" action="/partners/{{ partner['id'] }}/update">
+{# ── One action row: approve, reject, send, schedule, tools ── #}
+<div class="section pd-actions-wrap">
+  <div class="pd-actions">
+    {% if draft and not locked %}
+      {% if draft['status'] != 'approved' %}
+      <form method="POST" action="/partners/{{ partner['id'] }}/approve">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <div class="form-group">
-          <label class="form-label" for="partner_detail-field-3">Subject</label>
-          <input id="partner_detail-field-3" type="text" name="subject" class="form-control" value="{{ draft['subject'] }}">
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="partner_detail-field-4">
-            Hook
-            <span class="form-hint" style="display:inline;text-transform:none;letter-spacing:0;"> /  personalized opener, 1-3 sentences</span>
-          </label>
-          <textarea id="partner_detail-field-4" name="hook" class="form-control" rows="6">{{ draft['hook'] }}</textarea>
-        </div>
-        <button type="submit" class="btn btn-secondary btn-sm">Save Changes</button>
+        <button type="submit" class="btn btn-success btn-sm"{% if draft.blocked_reason %} disabled title="blocked: {{ draft.blocked_reason }}"{% endif %}>Approve draft</button>
+        {% if draft.blocked_reason %}<span class="crm-source-note">blocked: {{ draft.blocked_reason }}</span>{% endif %}
       </form>
-    </div>
+      {% else %}
+      <button type="button" class="btn btn-success btn-sm" disabled>Approved</button>
+      {% endif %}
+      <button type="button" class="btn btn-secondary btn-sm" id="rejectToggle" data-action="partner_detail-0">Reject</button>
     {% endif %}
 
+    {% if draft and draft.get('live_sent_at') %}
+      {% if g_send_mode == 'live' %}
+      <button type="button" class="btn btn-secondary btn-sm" disabled title="Already sent live. Re-send requires admin reset of live_sent_at.">Already sent live</button>
+      {% endif %}
+    {% elif draft and draft['status'] in ('sent', 'test_sent') %}
+      <span class="text-muted pd-note">Test sent{% if sent_to %} to <strong>{{ sent_to }}</strong>{% endif %}{% if draft.get('last_test_sent_at') %} on {{ draft['last_test_sent_at'][:10] }}{% elif draft['sent_at'] %} on {{ draft['sent_at'][:10] }}{% endif %}</span>
+    {% elif g_send_mode == 'test' %}
+      <form method="POST" action="/partners/{{ partner['id'] }}/send">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit" class="btn btn-primary btn-sm" title="Sends to {{ g_test_recipient }} (test mode)">Send test email</button>
+      </form>
     {% else %}
-    <!-- No draft -->
-    <div class="inset">
-      <p class="text-muted" style="font-size:13px;">No draft found for this partner.</p>
-    </div>
+      <button type="button" class="btn btn-danger btn-sm" data-action="partner_detail-1">Send to {{ partner['email'] }}</button>
     {% endif %}
 
+    {% if not (draft and draft['status'] in ('sent', 'test_sent', 'live_sent')) %}
+    <button type="button" class="btn btn-secondary btn-sm" id="scheduleToggle1" data-action="partner_detail-2">Schedule for later</button>
+    {% endif %}
+
+    <span class="pd-actions-sep" aria-hidden="true"></span>
+
+    {% if g_send_mode != 'test' %}
+    <form method="POST" action="/partners/{{ partner['id'] }}/send-test">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button type="submit" class="btn btn-ghost btn-sm" title="Sends to {{ g_test_recipient }} regardless of approval">Send test to {{ g_test_recipient }}</button>
+    </form>
+    {% endif %}
+    {% if not locked %}
+    <form method="POST" action="/partners/{{ partner['id'] }}/generate-hook">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button type="submit" class="btn btn-ghost btn-sm" title="Generate an opener from saved research; creates a base draft if needed">{{ 'Regenerate hook' if draft else 'Generate hook' }}</button>
+    </form>
+    {% endif %}
+    <form method="POST" action="/partners/{{ partner['id'] }}/enrich">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button type="submit" class="btn btn-ghost btn-sm" title="Run web search, LinkedIn and email guess enrichment">Enrich</button>
+    </form>
+    {% if pitchbook_enabled %}
+    <form method="POST" action="/partners/{{ partner['id'] }}/pitchbook-enrich">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button type="submit" class="btn btn-ghost btn-sm" title="Run PitchBook enrichment ({{ pitchbook_lookups_used }}/{{ pitchbook_lookups_cap }} used today)">
+        PitchBook <span class="badge badge-pitchbook">{{ pitchbook_lookups_used }}/{{ pitchbook_lookups_cap }}</span>
+      </button>
+    </form>
+    {% endif %}
+    {% if not email_verified %}
+    <form method="post" action="{{ url_for('partner_verify_email_manually', partner_id=partner.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button type="submit" class="btn btn-ghost btn-sm" title="Use only after you checked the address yourself">Mark email verified</button>
+    </form>
+    {% endif %}
   </div>
 
-  <!-- ── Right column: email preview + enrichment ── -->
-  <div>
+  {% if draft and not locked %}
+  <div id="rejectPanel" class="collapsible-content">
+    <form method="POST" action="/partners/{{ partner['id'] }}/reject" class="pd-panel-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <textarea aria-label="Review Notes" name="review_notes" class="form-control" rows="2" placeholder="Reason for rejection (optional)"></textarea>
+      <button type="submit" class="btn btn-danger btn-sm">Confirm reject</button>
+    </form>
+  </div>
+  {% endif %}
 
+  {% if g_send_mode != 'test' and not (draft and (draft.get('live_sent_at') or draft['status'] in ('sent', 'test_sent'))) %}
+  <div id="liveSendPanel" class="pd-panel" hidden>
+    <form method="POST" action="/partners/{{ partner['id'] }}/send" class="pd-panel-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div class="form-group">
+        <label class="form-label text-danger" for="partner_detail-field-1">Type exactly: <code>SEND TO {{ partner['email'] }}</code></label>
+        <input id="partner_detail-field-1" type="text" name="confirm_text" class="form-control mono-input" placeholder="SEND TO {{ partner['email'] }}" autocomplete="off">
+      </div>
+      <button type="submit" class="btn btn-danger btn-sm">Confirm send</button>
+    </form>
+  </div>
+  {% endif %}
+
+  {% if not (draft and draft['status'] in ('sent', 'test_sent', 'live_sent')) %}
+  <div id="schedulePanel1" class="pd-panel" hidden>
+    <form method="POST" action="/schedule-send" id="schedForm1" class="pd-panel-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      {% if draft %}<input type="hidden" name="draft_ids" value="{{ draft['id'] }}">{% endif %}
+      <div class="pd-sched-fields">
+        <div class="form-group">
+          <label class="form-label" for="sd1">Date</label>
+          <input type="date" name="sched_date" id="sd1" class="form-control" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="st1">Time</label>
+          <input type="time" name="sched_time" id="st1" class="form-control" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="sm1">Mode</label>
+          <select name="sched_mode" id="sm1" class="form-control">
+            <option value="test" {% if g_send_mode == 'test' %}selected{% endif %}>Test (safe)</option>
+            <option value="live" {% if g_send_mode == 'live' %}selected{% endif %}>Live (real emails)</option>
+          </select>
+        </div>
+      </div>
+      <div id="schedEta1" class="inset bulk-eta"></div>
+      <div id="liveSchedConfirm1" class="form-group pd-live-schedule"{% if g_send_mode == 'test' %} hidden{% endif %}>
+        <label class="form-label text-danger" for="partner_detail-field-2">Type exactly: <code>SCHEDULE LIVE FOR 1</code></label>
+        <input id="partner_detail-field-2" type="text" name="confirm_text" class="form-control mono-input" placeholder="SCHEDULE LIVE FOR 1" autocomplete="off">
+      </div>
+      <button type="submit" class="btn btn-primary btn-sm">Schedule 1 send</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+
+<div class="pd-grid">
+  <div class="pd-main">
     {% if assembled %}
     <div class="section">
-      <div class="section-title mb-3">Email Preview</div>
+      <div class="section-title mb-3">Email preview</div>
       <div class="email-preview-wrap">
         <div class="email-preview-header">
           <div class="email-preview-meta">
@@ -531,65 +191,102 @@
           </div>
         </div>
         <div class="email-preview-toolbar">
-          <button class="preview-tab active" id="tab-text" data-action="partner_detail-3" >Plain text</button>
-          <button class="preview-tab" id="tab-html" data-action="partner_detail-4" >HTML</button>
+          <button type="button" class="preview-tab active" id="tab-text" data-action="partner_detail-3">Plain text</button>
+          <button type="button" class="preview-tab" id="tab-html" data-action="partner_detail-4">HTML</button>
         </div>
         <div id="preview-text">
           <div class="email-body">{{ assembled['body_text'] }}</div>
         </div>
-        <div id="preview-html" style="display:none;">
-          <iframe sandbox="" title="Email HTML preview" srcdoc="{{ assembled['body_html'] | e }}" style="width:100%;min-height:400px;border:0;"></iframe>
+              <div id="preview-html" hidden>
+          <iframe class="pd-preview-frame" sandbox="" title="Email HTML preview" srcdoc="{{ assembled['body_html'] | e }}"></iframe>
         </div>
       </div>
     </div>
     {% elif draft %}
-    <div class="inset" style="background:var(--warning-dim);">
-      <p style="font-size:13px;color:var(--warning);">Could not assemble email preview. Check that data/boilerplate.json is valid.</p>
-    </div>
+    <div class="inset pd-banner pd-banner-warn">Could not assemble the email preview. Check that data/boilerplate.json is valid.</div>
     {% else %}
-    <div class="empty-state">
-      <p>No draft to preview.</p>
+    <div class="empty-state"><p>No draft found for this partner.</p></div>
+    {% endif %}
+
+    {% if draft and not locked %}
+    <div class="section">
+      <div class="section-title mb-3">Edit draft</div>
+      <form method="POST" action="/partners/{{ partner['id'] }}/update">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <div class="form-group">
+          <label class="form-label" for="partner_detail-field-3">Subject</label>
+          <input id="partner_detail-field-3" type="text" name="subject" class="form-control" value="{{ draft['subject'] }}">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="partner_detail-field-4">Hook <span class="form-hint">personalized opener, 1 to 2 sentences</span></label>
+          <textarea id="partner_detail-field-4" name="hook" class="form-control" rows="6">{{ draft['hook'] }}</textarea>
+        </div>
+        <button type="submit" class="btn btn-secondary btn-sm">Save changes</button>
+      </form>
+    </div>
+    {% endif %}
+  </div>
+
+  <aside class="pd-side">
+    <div class="section">
+      <div class="section-title mb-3">Partner info</div>
+      <div class="meta-list">
+        <div class="meta-row"><span class="meta-key">Email</span><span class="meta-val">{{ partner['email'] }}</span></div>
+        {% if partner.get('email_verified_at') %}
+        <div class="meta-row">
+          <span class="meta-key">Email check</span>
+          <span class="meta-val text-muted">{{ evs or 'n/a' }} (conf {{ "%.0f"|format((partner.get('email_verification_confidence') or 0) * 100) }}%), {{ partner['email_verified_at'][:10] }} via {{ partner.get('email_verification_method') or 'n/a' }}</span>
+        </div>
+        {% endif %}
+        <div class="meta-row"><span class="meta-key">Channel</span><span class="meta-val">{% if partner['channel'] == 'twitter' %}<span class="badge badge-twitter">Twitter DM</span>{% else %}Email{% endif %}</span></div>
+        <div class="meta-row"><span class="meta-key">Responsive</span><span class="meta-val">{{ responsive_badge(partner['responsiveness'] or '') }}</span></div>
+        {% if partner['notes'] %}<div class="meta-row"><span class="meta-key">Notes</span><span class="meta-val text-muted">{{ partner['notes'] }}</span></div>{% endif %}
+      </div>
+    </div>
+
+    {% if draft %}
+    <div class="section">
+      <div class="section-title mb-3">Draft history</div>
+      <div class="meta-list">
+        <div class="meta-row"><span class="meta-key">Created</span><span class="meta-val text-muted">{{ draft['created_at'][:10] }}</span></div>
+        <div class="meta-row"><span class="meta-key">Version</span><span class="meta-val"><code>{{ draft['boilerplate_version'] }}</code></span></div>
+        <div class="meta-row"><span class="meta-key">Grounding</span><span class="meta-val">{{ hook_grounding_state(draft) }}</span></div>
+        {% if draft['approved_at'] and draft['status'] == 'approved' %}<div class="meta-row"><span class="meta-key">Approved</span><span class="meta-val text-muted">{{ draft['approved_at'][:16] }} UTC</span></div>{% endif %}
+        {% if draft['drafted_at'] %}<div class="meta-row"><span class="meta-key">Drafted</span><span class="meta-val text-muted">{{ draft['drafted_at'][:10] }}</span></div>{% endif %}
+        {% if draft['sent_at'] %}<div class="meta-row"><span class="meta-key">Sent</span><span class="meta-val text-muted">{{ draft['sent_at'][:10] }}{% if sent_to %} to {{ sent_to }}{% endif %}</span></div>{% endif %}
+        {% if draft['gmail_message_id'] %}<div class="meta-row"><span class="meta-key">Gmail ID</span><span class="meta-val"><code>{{ draft['gmail_message_id'] }}</code></span></div>{% endif %}
+        {% if draft.get('test_sent_count') and draft['test_sent_count'] > 0 %}
+        <div class="meta-row"><span class="meta-key">Test sends</span><span class="meta-val text-muted">{{ draft['test_sent_count'] }}{% if draft.get('last_test_sent_at') %}, last {{ draft['last_test_sent_at'][:10] }}{% endif %}</span></div>
+        {% endif %}
+      </div>
+      {% if draft['review_notes'] %}
+      <div class="inset pd-banner pd-banner-warn mt-4"><strong>Review notes:</strong> {{ draft['review_notes'] }}</div>
+      {% endif %}
     </div>
     {% endif %}
 
-    <!-- Enrichment facts -->
-    {% if enrichment_facts %}
-    <div class="section mt-8">
+    <div class="section">
       <div class="section-header mb-3">
-        <div class="section-title">Enrichment Facts</div>
-        <span class="badge badge-default">{{ enrichment_facts|length }}</span>
+        <div class="section-title">Enrichment facts</div>
+        {% if enrichment_facts %}<span class="badge badge-default">{{ enrichment_facts|length }}</span>{% endif %}
       </div>
+      {% if enrichment_facts %}
       <div class="fact-list">
         {% for fact in enrichment_facts %}
         <div class="fact-item">
           <div class="fact-source">
-            {% if fact.source.startswith('pitchbook') %}
-              <span class="badge badge-pitchbook">pitchbook</span>
-            {% else %}
-              <span class="badge badge-default">{{ fact.source }}</span>
-            {% endif %}
+            {% if fact.source.startswith('pitchbook') %}<span class="badge badge-pitchbook">pitchbook</span>{% else %}<span class="badge badge-default">{{ fact.source }}</span>{% endif %}
           </div>
           <div class="fact-text">{{ fact.text }}</div>
         </div>
         {% endfor %}
       </div>
+      {% elif partner.get('enriched_at') %}
+      <div class="inset pd-banner pd-banner-warn">Partner was enriched but no usable facts were extracted. Try re-enriching.</div>
+      {% else %}
+      <div class="empty-state pd-empty"><p>No enrichment data yet.</p><p class="text-faint">Use Enrich in the action row above.</p></div>
+      {% endif %}
     </div>
-    {% elif partner.get('enriched_at') %}
-    <div class="inset mt-8" style="background:var(--warning-dim);color:var(--warning);font-size:13px;">
-      Partner was enriched but no usable facts were extracted. Try re-enriching.
-    </div>
-    {% else %}
-    <div class="empty-state mt-8">
-      <p>No enrichment data yet.</p>
-      <p class="text-faint">Click "Enrich partner data" to run enrichment.</p>
-    </div>
-    {% endif %}
-
-  </div>
+  </aside>
 </div>
-
-{% endblock %}
-
-{% block scripts %}
-
 {% endblock %}

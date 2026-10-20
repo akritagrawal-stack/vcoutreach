@@ -48,6 +48,43 @@ _PODCAST_MARKERS = [
      "my first million", 
 ]
 
+# Pages that can mention "interview" or " on " but are never a podcast episode.
+_NOT_PODCAST_DOMAINS = ('linkedin.com', 'ycombinator.com', 'a16z.com', 'crunchbase.com', 'wikipedia.org',
+                        'twitter.com', 'x.com', 'amazon.com', 'goodreads.com')
+_WEAK_PODCAST_MARKERS = {' on ', 'talks about', 'discusses', 'interview'}
+
+
+def _can_be_podcast(url: str, combined: str, title: str = '', partner_name: str = '') -> bool:
+    """A podcast fact needs a podcast-like source: not LinkedIn, YC or news pages, not book pages."""
+    domain = _domain_from_url(url)
+    if any(domain == d or domain.endswith('.' + d) for d in _NOT_PODCAST_DOMAINS):
+        return False
+    if _is_writing_domain(url) or re.search(r'/(books?|news)(/|$)', (url or '').lower()):
+        return False
+    from urllib.parse import urlparse
+    path = urlparse(url or '').path.lower()
+    if re.search(r'/\d{4}(?:/\d{1,2})?/?$', path):
+        return False
+    name = re.escape(partner_name.strip())
+    guest = bool(name) and bool(re.search(r'\b(?:guest(?:\s+is)?|with|featuring|joined by)\s+' + name + r'\b', combined, re.IGNORECASE))
+    podcast_host = ('podcast' in domain
+                    or domain in {'acquired.com', 'acquired.fm', 'possible.fm', 'mastersofscale.com', '20vc.com',
+                                  'open.spotify.com', 'transistor.fm', 'simplecast.fm'}
+                    or domain.endswith(('.transistor.fm', '.simplecast.fm')))
+    podcast_path = bool(re.search(r'/(?:podcasts?|episodes?)(?:/|$)|/ep[-_]\d+(?:/|$)', path))
+    title_signal = bool(re.search(r'\bepisode\s*(?:#?\d+|with|:)\b|\bpodcast\b', title, re.IGNORECASE))
+    blog_post = bool(re.search(r'/\d{4}/\d{1,2}/\d{1,2}/|/(?:blog|posts?|p)/', path))
+    if blog_post and not guest and not podcast_path:
+        return False
+    return podcast_host or podcast_path or title_signal or guest and 'podcast' in combined
+
+
+def _authored_by_partner(title: str, snippet: str, partner_name: str) -> bool:
+    """Own-essay typing needs the text itself to say 'by <partner>'."""
+    name = (partner_name or '').strip()
+    return bool(name) and re.search(r'\bby\s+' + re.escape(name), f'{title} {snippet}', re.IGNORECASE) is not None
+
+
 # Phrases that often precede a thesis statement
 _THESIS_MARKERS = [
     'thesis', 'we invest in', 'we focus on', 'we back', 'looking for',
@@ -134,7 +171,7 @@ def _extract_from_web_results(results: list[dict], partner_name: str) -> list[di
             ]
             is_generic = any(re.search(p, title, re.IGNORECASE) for p in skip_title_patterns)
 
-            if not is_generic and is_writing:
+            if not is_generic and is_writing and _authored_by_partner(title, snippet, partner_name):
                 facts.append({
                     'type': 'essay_title',
                     'text': _cap(title),
@@ -172,7 +209,7 @@ def _extract_from_web_results(results: list[dict], partner_name: str) -> list[di
                 break  # one per result
 
         # -- Podcast detection --
-        if any(pm in combined for pm in _PODCAST_MARKERS):
+        if _can_be_podcast(url, combined, title, partner_name):
             # Extract the podcast name from title if possible
             podcast_text = title if title else snippet[:120]
             facts.append({
@@ -540,7 +577,7 @@ def _is_yc_batch_label(text: str) -> bool:
     return bool(_YC_BATCH_PATTERN.match(text.strip()))
 
 
-def facts_to_llm_format(facts: list[dict]) -> list[dict]:
+def facts_to_llm_format(facts: list[dict], *, limit: int | None = 10) -> list[dict]:
     """
     Convert internal fact dicts to the {source, text} format expected by
     build_hook_prompt() in app/llm/prompts.py.
@@ -702,7 +739,7 @@ def facts_to_llm_format(facts: list[dict]) -> list[dict]:
             continue
         ftype = f.get('type', 'unknown')
         cap = TYPE_CAPS.get(ftype, 3)
-        if type_counts.get(ftype, 0) >= cap:
+        if limit is not None and type_counts.get(ftype, 0) >= cap:
             continue
         prefix = text[:60].lower()
         if prefix in seen_prefixes:
@@ -711,7 +748,11 @@ def facts_to_llm_format(facts: list[dict]) -> list[dict]:
         type_counts[ftype] = type_counts.get(ftype, 0) + 1
         result.append({
             'source': ftype,
+            'type': ftype,
+            'provider': f.get('provider') or f.get('source', ''),
+            'source_url': f.get('source_url', ''),
+            'person_specific': f.get('person_specific', False),
             'text': text,
         })
 
-    return result[:10]  # cap at 10 facts for prompt length control
+    return result if limit is None else result[:limit]

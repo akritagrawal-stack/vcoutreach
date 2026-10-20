@@ -113,7 +113,6 @@ def _apply_auto_approve_gate(
     Returns True if auto-approved, False otherwise.
     Errors are logged to data/logs/gate_errors.log and status left as 'pending'.
     """
-    import json as _json
     from pathlib import Path as _Path
 
     def _gate_log(msg: str) -> None:
@@ -219,12 +218,17 @@ def _apply_auto_approve_gate(
                                 'claims': [],
                             }
 
-                        # Always store the judge result
+                        from vcoutreach.web.llm.hook_grounding import check_hook_grounding
+                        from vcoutreach.web.vendor import load_sender_context
+                        sender,sender_facts=load_sender_context()
+                        deterministic_ok,deterministic_reason=check_hook_grounding(hook,dict(partner),facts,sender,sender_facts)
+                        judge_ok=not hallucination_result.get('any_unsupported',not hallucination_result.get('grounded',False))
+                        check='grounded' if deterministic_ok and judge_ok else 'ungrounded: '+(deterministic_reason or 'the grounding judge found unsupported claims')
                         conn = get_conn(db_path)
                         try:
                             conn.execute(
                                 'UPDATE drafts SET hallucination_check=? WHERE id=?',
-                                (_json.dumps(hallucination_result), draft_id),
+                                (check, draft_id),
                             )
                             conn.commit()
                         finally:
@@ -236,7 +240,7 @@ def _apply_auto_approve_gate(
                             has_hallucination = hallucination_result['any_unsupported']
                         else:
                             has_hallucination = not hallucination_result.get('grounded', False)
-                        if has_hallucination:
+                        if has_hallucination or not deterministic_ok:
                             skip_reason = 'hallucination_detected'
                         else:
                             skip_reason = None
@@ -300,7 +304,8 @@ def upsert_draft(
 ) -> int:
     """
     Insert draft for (partner_id, boilerplate_version) or update hook/subject if exists.
-    Does NOT change status if draft already exists (preserves user's review state).
+    Unchanged copy preserves review state. Changed copy withdraws approval, and
+    a changed hook invalidates its previous grounding result.
 
     After insert/update, runs the auto-approve gate unless skip_auto_approve=True.
     The gate may flip status to 'approved' if all quality checks pass; otherwise
@@ -317,7 +322,10 @@ def upsert_draft(
             ON CONFLICT(partner_id, boilerplate_version) DO UPDATE SET
                 hook           = excluded.hook,
                 subject        = excluded.subject,
-                sender_account = excluded.sender_account
+                sender_account = excluded.sender_account,
+                hallucination_check = CASE WHEN drafts.hook != excluded.hook THEN NULL ELSE drafts.hallucination_check END,
+                status = CASE WHEN drafts.hook != excluded.hook OR drafts.subject != excluded.subject THEN 'pending' ELSE drafts.status END,
+                approved_at = CASE WHEN drafts.hook != excluded.hook OR drafts.subject != excluded.subject THEN NULL ELSE drafts.approved_at END
             """,
             (partner_id, hook, subject, boilerplate_version, sender_account),
         )
@@ -385,6 +393,26 @@ def _has_column(conn: sqlite3.Connection, table: str, column: str) -> bool:
     return any(r[1] == column for r in rows)
 
 
+def _partner_counts(conn: sqlite3.Connection) -> dict[str, int]:
+    """Partner level counters (verified, dropped): the one source for every header counter."""
+    counts = {'verified': 0, 'dropped': 0}
+    try:
+        if _has_column(conn, 'partners', 'verification_status'):
+            row = conn.execute(
+                "SELECT COUNT(*) AS cnt FROM partners "
+                "WHERE verification_status IN ('verified_strong', 'verified')"
+            ).fetchone()
+            counts['verified'] = row['cnt'] if row else 0
+        if _has_column(conn, 'partners', 'dropped_reason'):
+            row = conn.execute(
+                'SELECT COUNT(*) AS cnt FROM partners WHERE dropped_reason IS NOT NULL'
+            ).fetchone()
+            counts['dropped'] = row['cnt'] if row else 0
+    except sqlite3.Error:
+        pass
+    return counts
+
+
 def get_all_drafts_with_partners_filtered(
     show_dropped: bool = False,
     db_path: Path | None = None,
@@ -431,34 +459,7 @@ def get_all_drafts_with_partners_filtered(
         # Convert to plain dicts so templates can use .get() safely
         rows = [dict(r) for r in raw_rows]
 
-        # Compute counts for counter display
-        counts: dict = {}
-        try:
-            if has_verif:
-                verif_rows = conn.execute(
-                    """SELECT verification_status, COUNT(*) AS cnt FROM partners
-                       GROUP BY verification_status"""
-                ).fetchall()
-                verified_count = sum(
-                    r['cnt'] for r in verif_rows
-                    if r['verification_status'] in ('verified_strong', 'verified')
-                )
-                counts['verified'] = verified_count
-            else:
-                counts['verified'] = 0
-        except Exception:
-            counts['verified'] = 0
-
-        try:
-            if has_dropped:
-                dropped_row = conn.execute(
-                    'SELECT COUNT(*) AS cnt FROM partners WHERE dropped_reason IS NOT NULL'
-                ).fetchone()
-                counts['dropped'] = dropped_row['cnt'] if dropped_row else 0
-            else:
-                counts['dropped'] = 0
-        except Exception:
-            counts['dropped'] = 0
+        counts = _partner_counts(conn)
 
         return rows, counts
     finally:
@@ -473,14 +474,14 @@ def update_draft_hook_subject(
     skip_gate: bool = False,
 ) -> None:
     """
-    Save hook/subject edits. Does NOT change status unless skip_gate=False.
+    Save opener/subject edits and withdraw any previous approval.
 
     If skip_gate=False (default), runs the auto-approve gate after updating.
     The gate may flip status to 'approved' if all quality checks pass; otherwise
     the draft stays 'pending' and auto_approve_skip_reason is recorded.
 
-    Set skip_gate=True to bypass the gate (e.g. in bulk migrations where you'll
-    run gate separately or want to preserve existing status).
+    Set skip_gate=True to skip optional auto-approval. Grounding is still checked
+    and edited drafts require review again.
     """
     # First, get partner_id from the draft so we can apply gate
     conn = get_conn(db_path)
@@ -494,26 +495,30 @@ def update_draft_hook_subject(
     finally:
         conn.close()
 
+    from vcoutreach.email_copy import opener_from_body
+    partner=get_partner(partner_id,db_path)
+    hook=opener_from_body(hook,partner['first_name'])
     if draft['boilerplate_version'].startswith('engine-'):
         from vcoutreach.web.drafts_service import get_engine_draft,save_draft
-        partner=get_partner(partner_id,db_path)
+        from vcoutreach.email_copy import replace_opener
         previous=get_engine_draft(partner['slug'])
-        # Legacy editor exposes the whole body. Hook regeneration supplies only one paragraph.
-        body=hook
-        if '\n\n' not in hook:
-            parts=previous.body.split('\n\n')
-            if len(parts)>1:
-                parts[1]=hook
-                body='\n\n'.join(parts)
+        body=replace_opener(previous.body,hook,partner['first_name'])
         save_draft(partner['slug'],{'subject':subject,'body':body})
         return
 
     # Update hook/subject
     with cursor_ctx(db_path) as (_, cur):
         cur.execute(
-            'UPDATE drafts SET hook=?, subject=? WHERE id=?',
+            "UPDATE drafts SET hook=?, subject=?, hallucination_check=NULL, status=CASE WHEN status='approved' THEN 'pending' ELSE status END, approved_at=NULL WHERE id=?",
             (hook, subject, draft_id),
         )
+
+    from vcoutreach.web.llm.hook_grounding import check_hook_grounding
+    from vcoutreach.web.enrichment.orchestrator import get_enrichment_facts
+    from vcoutreach.web.vendor import load_sender_context
+    sender,facts=load_sender_context()
+    grounded,reason=check_hook_grounding(hook,dict(get_partner(partner_id,db_path)),get_enrichment_facts(partner_id,db_path,limit=None),sender,facts)
+    set_hook_check(draft_id,'grounded' if grounded else 'ungrounded: '+reason,db_path)
 
     # Apply gate unless caller opted out
     if not skip_gate:
@@ -524,6 +529,14 @@ def update_draft_hook_subject(
                 'auto_approve_gate crashed for draft %d / partner %d: %s',
                 draft_id, partner_id, gate_exc,
             )
+
+
+def set_hook_check(draft_id: int, value: str, db_path: Path | None = None) -> None:
+    """Record the hook grounding result. An ungrounded hook can never stay approved."""
+    with cursor_ctx(db_path) as (_, cur):
+        cur.execute('UPDATE drafts SET hallucination_check=? WHERE id=?', (value, draft_id))
+        if value != 'grounded':
+            cur.execute("UPDATE drafts SET status='pending', approved_at=NULL WHERE id=? AND status='approved'", (draft_id,))
 
 
 def set_draft_status(
@@ -717,6 +730,9 @@ def get_status_counts(db_path: Path | None = None) -> dict[str, int]:
         ).fetchall()
         counts = {r['status']: r['cnt'] for r in rows}
         counts['total'] = sum(counts.values())
+        partner_totals = _partner_counts(conn)
+        counts['partners_verified'] = partner_totals['verified']
+        counts['partners_dropped'] = partner_totals['dropped']
         return counts
     finally:
         conn.close()

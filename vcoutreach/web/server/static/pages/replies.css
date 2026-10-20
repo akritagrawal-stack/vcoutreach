@@ -1,0 +1,29 @@
+/* Publikreach replies lane styles: page-specific rules only. */
+
+/* Reply detail */
+.reply-detail .crm-detail-main,
+.reply-detail .crm-detail-side { align-content: start; }
+.reply-review-state { display: inline-flex; align-items: center; gap: 8px; color: var(--text-muted); font-size: 12px; }
+.reply-led-open { background: var(--warning-dim); }
+.reply-label-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.reply-label-bounce { opacity: .75; }
+.reply-confidence { font-size: 12px; }
+.reply-block { margin-top: 14px; }
+.reply-field-label { margin-bottom: 4px; }
+.reply-text { font-size: 13px; }
+.reply-text-strong { font-size: 13px; font-weight: 500; }
+.reply-suggested { background: var(--info-dim); color: var(--info); }
+.reply-suggested .reply-field-label { color: var(--info); margin-bottom: 3px; }
+.reply-classified { margin-top: 14px; font-size: 11px; }
+.reply-meta-muted { font-size: 12px; }
+.reply-firm { margin-left: 6px; }
+.reply-fallback { font-size: 13px; font-style: italic; }
+.reply-label-select { flex: 1 1 200px; min-width: 0; }
+.reply-note { margin-top: 10px; font-size: 12px; }
+
+/* Scheduled sends */
+.sched-when { white-space: nowrap; }
+.sched-failed { color: var(--danger); font-weight: 600; }
+.sched-cancel-form { display: inline; margin: 0; }
+.sched-cancel { color: var(--danger); border-color: var(--danger); background: var(--surface); }
+.sched-cancel:hover { color: var(--danger); background: var(--danger-dim); border-color: var(--danger); }

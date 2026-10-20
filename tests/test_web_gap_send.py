@@ -389,7 +389,12 @@ def _html_of(call: RecordedCall) -> str:
 
 @pytest.mark.parametrize("mode", ["test", "live"])
 def test_the_html_alternative_escapes_ampersands_tags_and_quotes_from_the_body(make_web, mode):
+    from test_enrichment_facts_reach_drafts import fact, put_enrichment
+
     w = ready_web(make_web, [ADA])
+    put_enrichment(w, "ada", [fact(
+        'your essay on how small teams ship weekly, and the R&D part, the <b>bold</b> idea and "quoted words" stood out.',
+        url="https://example.com/essay")])
     draft = read_draft_file(w.ws, "ada")
     body_text = draft.body.replace(
         "and I found it interesting.",
@@ -400,15 +405,14 @@ def test_the_html_alternative_escapes_ampersands_tags_and_quotes_from_the_body(m
         "body": body_text}, follow=True)
     saved = read_draft_file(w.ws, "ada")
     assert "R&D" in saved.body and "<b>bold</b>" in saved.body, "precondition: the edit was saved as typed"
-    if saved.status != "ok":
-        pytest.skip(f"the engine blocks this wording ({saved.status}); the escaping cannot be observed from it")
+    assert saved.status == "ok", "precondition: the grounded edit is ready to send"
     if mode == "test":
-        send_test(w, "ada")
+        response = send_test(w, "ada")
     else:
         w.post(w.url("approve", id=partner_row_id(w, "ada")), {}, follow=True)
         live(w)
-        send_live(w, "ada", "SEND TO ada@example.com")
-    assert len(w.transport.calls) == 1, "the send itself must have happened"
+        response = send_live(w, "ada", "SEND TO ada@example.com")
+    assert len(w.transport.calls) == 1, page_text(response)
     call = w.transport.calls[0]
     html = _html_of(call)
     assert "R&amp;D" in html

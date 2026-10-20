@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 {% block page_id %}crm_tracking{% endblock %}
-{% block title %}Cloudflare tracking / Relationship CRM{% endblock %}
+{% block title %}Cloudflare tracking{% endblock %}
 
 {% block content %}
 <div class="crm-shell crm-dashboard">
@@ -9,11 +9,11 @@
     <div>
       <div class="crm-eyebrow"><span class="crm-led"></span> PRODUCTION WORKER / AGGREGATE VIEW</div>
       <h1>Cloudflare tracking</h1>
-      <p>Observed requests from tracked email links and pixels. Scanners and mail proxies can create these events, so they do not prove a person opened or read a message.</p>
+      <p>Observed requests from tracked email links and pixels over a 30 day aggregate. Scanners and mail proxies create these events too, so they are not a reply or a reliable sign a person read a message. Contact profiles show counts only when a verified local activation links the contact to an opaque Cloudflare action.</p>
     </div>
-    <div class="crm-hero-meta">
-      <span class="source-reference">Open protected Worker dashboard <span class="text-muted">({{ tracking_dashboard_url }})</span> <button type="button" class="copy-source" data-copy-text="{{ tracking_dashboard_url }}">Copy URL</button></span>
-      <a class="crm-button crm-button-secondary" href="{{ url_for('crm_tracking') }}">Refresh snapshot</a>
+    <div class="crm-toolbar">
+      {% if tracking_dashboard_url %}<span class="source-reference"><a href="{{ tracking_dashboard_url }}" rel="noopener noreferrer">Worker dashboard ↗</a> <button type="button" class="copy-source" data-copy-text="{{ tracking_dashboard_url }}">Copy URL</button></span>{% endif %}
+      <a class="crm-button crm-button-small crm-button-secondary" href="{{ url_for('crm_tracking') }}">Refresh snapshot</a>
     </div>
   </header>
 
@@ -33,9 +33,7 @@
       <tr><td>{{ kind|title }}</td><td>{{ snapshot.event_type_counts[kind].automation_likely }}</td><td>{{ snapshot.event_type_counts[kind].unknown }}</td><td>{{ snapshot.event_type_counts[kind].human_likely }}</td></tr>
       {% endfor %}
     </tbody></table></div>
-    <p class="crm-source-note">This is a 30 day aggregate. Contact profiles show classified request counts only when a verified local activation links that contact to an opaque Cloudflare action. Scanner and proxy requests are not a reply or reliable human-interest signal.</p>
   </section>
   {% endif %}
-  <footer class="crm-footer"><span>PRODUCTION CLOUDFLARE WORKER</span><span>OPAQUE ACTIONS / LOCAL IDENTITY JOIN</span></footer>
 </div>
 {% endblock %}

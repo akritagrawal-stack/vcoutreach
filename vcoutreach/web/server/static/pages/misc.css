@@ -1,0 +1,52 @@
+/* Publikreach misc lane styles: Send plan and Draft editor. Page-specific rules only. */
+
+/* Send plan: stat strip (uses .crm-metrics from style.css, three cells instead of four) */
+.send-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 20px; }
+.send-stats .crm-metric { min-height: 96px; }
+.send-plan-page .crm-panel { margin-top: 16px; }
+.send-plan-table td:first-child { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 11px; }
+.send-plan-table td .badge { vertical-align: middle; }
+
+/* Draft editor: header, form, action row */
+.draft-page .crm-hero h1 { overflow-wrap: anywhere; }
+.draft-page .draft-editor-layout { margin-top: 20px; }
+.draft-form { display: grid; gap: 18px; min-width: 0; }
+.draft-form label { display: grid; gap: 7px; min-width: 0; font-size: 11px; color: var(--text-muted); }
+.draft-form input, .draft-form select, .draft-form textarea {
+  width: 100%; min-width: 0; min-height: 39px; padding: 9px 12px;
+  border: 1px solid var(--border); border-radius: 0; background: var(--surface-raised); color: var(--text);
+  font: inherit; font-size: 12px;
+}
+.draft-form input:focus, .draft-form select:focus, .draft-form textarea:focus { outline: 0; border-color: var(--accent); }
+.draft-form textarea { min-height: 360px; font-family: 'IBM Plex Mono', ui-monospace, monospace; line-height: 1.6; resize: vertical; }
+.draft-meta { display: grid; grid-template-columns: minmax(180px, 240px) minmax(0, 1fr); gap: 18px; align-items: start; }
+.draft-thread { min-width: 0; }
+.draft-thread summary { min-height: 39px; display: flex; align-items: center; cursor: pointer; color: var(--text-muted); font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 10px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+.draft-thread[open] summary { color: var(--text); }
+.draft-thread label { margin-top: 12px; }
+.draft-clear { margin: 0 0 16px; color: var(--text-muted); font-size: 12px; }
+.draft-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding-top: 16px; border-top: 1px solid var(--border-muted); }
+.draft-back { margin-left: auto; color: var(--text-muted); font-size: 11px; text-decoration: underline; }
+.draft-page .crm-source-note { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border-muted); }
+
+/* Draft editor: sibling list, one row per draft with the status badge on the right */
+.draft-siblings li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; align-items: start; }
+.draft-siblings li > a { grid-column: 1; grid-row: 1; min-width: 0; overflow-wrap: anywhere; }
+.draft-siblings li > .badge { grid-column: 2; grid-row: 1; justify-self: end; }
+.draft-siblings li > .crm-table-subline { grid-column: 1 / -1; grid-row: 2; }
+.draft-siblings li.is-current { background: var(--surface-soft); }
+
+@media (max-width: 1280px) {
+  .draft-meta { grid-template-columns: minmax(160px, 200px) minmax(0, 1fr); }
+}
+@media (max-width: 1100px) {
+  .draft-page .draft-editor-layout { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 800px) {
+  .send-stats { grid-template-columns: minmax(0, 1fr); }
+  .draft-meta { grid-template-columns: minmax(0, 1fr); }
+  .draft-back { margin-left: 0; }
+}
+@media (min-width: 1600px) {
+  .draft-form textarea { min-height: 460px; }
+}

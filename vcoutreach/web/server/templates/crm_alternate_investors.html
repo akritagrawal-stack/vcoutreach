@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 {% block page_id %}crm_alternate_investors{% endblock %}
-{% block title %}Other investors at {{ result.firm or 'this firm' }} / Relationship CRM{% endblock %}
+{% block title %}Other investors at {{ result.firm or 'this firm' }}{% endblock %}
 {% block content %}
 <div class="crm-shell crm-contact-page">
   <nav class="crm-breadcrumb" aria-label="Breadcrumb"><a href="{{ url_for('crm_contact', partner_id=result.source_partner_id) }}">Contact profile</a><span>/</span><span>Other investors</span></nav>

@@ -1,0 +1,126 @@
+/* Publikreach partners lane styles: partners, partner detail, candidates, enrichment, verification.
+   Uses only existing tokens (var(--...)); works in light and dark. */
+
+/* ── Shared small helpers ── */
+.page-count { color: var(--text-faint); font-size: 18px; font-weight: 400; }
+.pl-counters { margin-top: 6px; font-size: 13px; }
+.text-ok { color: var(--success); }
+.text-warn { color: var(--warning); }
+.mono-input { font-family: 'IBM Plex Mono', monospace; font-size: 13px; }
+.chip-clear { color: var(--danger); border-color: var(--danger); }
+#chip-clear { display: none; }
+.pl-search { margin-left: auto; }
+.pl-badge-live { background: var(--success); color: var(--bg); font-weight: 700; }
+
+/* ── Tables (partners, candidates, enrichment): one pattern, cards under 800px ── */
+.pl-table td .badge + .badge, .pl-table td .badge + .row-link, .pl-table td .row-link + .badge { margin-left: 5px; }
+.pl-table .col-check { width: 32px; }
+.pl-table .col-action { width: 64px; text-align: right; }
+.pl-table .row-link { color: var(--text); text-decoration: none; }
+.pl-table .row-link:hover { color: var(--accent); }
+.pl-table .cell-sub { display: block; margin-top: 2px; font-size: 12px; }
+.pl-table .cell-small { font-size: 12px; }
+.pl-table .cell-wide { max-width: 260px; }
+.pl-table .cell-center { text-align: center; white-space: nowrap; }
+.pl-table .cell-num { text-align: right; font-weight: 600; }
+.pl-table .cell-nowrap { white-space: nowrap; }
+.pl-table .table-sort { white-space: nowrap; }
+.empty-state .btn { margin-top: 4px; }
+
+.en-stats { margin-bottom: 20px; }
+.en-legend { margin: 0 0 12px; font-size: 12px; }
+.en-ok { color: var(--success); font-size: 15px; }
+.en-bad { color: var(--danger); font-size: 15px; }
+
+/* ── One bulk control: bar plus schedule drawer anchored above it ── */
+.bulk-bar {
+  display: none; position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+  align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center;
+  max-width: calc(100vw - 24px); padding: 10px 16px; z-index: 999;
+  background: var(--surface); border: 1px solid var(--border-strong); box-shadow: 0 4px 24px rgba(0, 0, 0, .18);
+  font-size: 13px;
+}
+.bulk-count { font-weight: 600; }
+.bulk-live-confirm { display: none; align-items: center; gap: 8px; }
+.bulk-live-confirm .form-control { width: 190px; }
+.bulk-drawer {
+  display: none; position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%);
+  width: min(560px, calc(100vw - 24px)); max-height: calc(100vh - 120px); overflow-y: auto; z-index: 1000;
+}
+.bulk-drawer-panel { padding: 16px 18px; background: var(--surface); border: 1px solid var(--border-strong); box-shadow: 0 8px 40px rgba(0, 0, 0, .25); }
+.bulk-drawer-title { margin: 0 0 12px; font-size: 15px; }
+.bulk-drawer-fields, .pd-sched-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.bulk-eta { margin: 8px 0; font-size: 12px; background: var(--bg-subtle); }
+.bulk-eta:empty { display: none; }
+.bulk-live-schedule, .pd-live-schedule { display: none; }
+.bulk-drawer-actions { display: flex; gap: 8px; margin-top: 12px; }
+
+/* ── Partner detail: full width, one action row, main + side grid (no two-col) ── */
+.pd-firm { margin-top: 4px; font-size: 14px; }
+.pd-banner { margin-bottom: 14px; font-size: 13px; border-left: 4px solid var(--border-strong); }
+.pd-banner-ok { background: var(--success-dim); color: var(--text); border-left-color: var(--success); }
+.pd-banner-bad { background: var(--danger-dim); color: var(--text); border-left-color: var(--danger); }
+.pd-banner-warn { background: var(--warning-dim); color: var(--text); border-left-color: var(--warning); }
+.pd-mono { margin-left: 8px; font-size: 11px; }
+.pd-note { font-size: 13px; }
+.pd-actions-wrap { margin-bottom: 20px; }
+.pd-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.pd-actions form { margin: 0; }
+.pd-actions-sep { width: 1px; height: 22px; background: var(--border-muted); }
+.pd-panel { margin-top: 10px; padding: 12px 14px; border: 1px solid var(--border-muted); background: var(--surface); max-width: 560px; }
+.pd-panel-form { display: grid; gap: 10px; margin-top: 8px; max-width: 560px; }
+.pd-panel-form .btn { justify-self: start; }
+.pd-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; align-items: start; }
+@media (min-width: 1100px) { .pd-grid { grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr); } }
+.pd-main, .pd-side { min-width: 0; }
+.pd-preview-frame { width: 100%; min-height: 400px; border: 0; }
+.pd-empty { padding: 24px 12px; }
+
+/* ── Email verification: compact hero, responsive table ── */
+.verification-shell .verification-hero { min-height: 0; }
+.verification-shell .verification-hero > div:first-child { padding: 22px 24px; }
+.verification-shell .verification-hero h1 { margin: 10px 0 8px; font-size: clamp(26px, 3vw, 34px); line-height: 1.1; letter-spacing: -.02em; }
+.verification-shell .verification-guardrail { padding: 20px 24px; gap: 8px; }
+.verification-shell .verification-guardrail strong { font-size: 18px; }
+.verification-shell .verification-guardrail a { align-self: start; }
+.verification-shell .verification-table { min-width: 0; }
+.verification-shell .verification-table td { min-width: 0; }
+.verification-shell .verification-table td:last-child { min-width: 0; }
+.verification-shell .verification-actions { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
+.verification-shell .verification-actions button { width: 100%; min-height: 31px; }
+.verification-shell .verification-actions button:disabled { cursor: not-allowed; opacity: .4; }
+.verification-shell .verification-filters button { min-height: 31px; }
+.verification-more { margin-top: 10px; }
+.verification-more summary { cursor: pointer; color: var(--text-muted); font-size: 11px; }
+.verification-more .verification-attempt-grid { margin-top: 8px; }
+.verification-empty a { color: var(--accent); }
+
+@media (max-width: 1000px) {
+  .verification-shell .verification-hero { grid-template-columns: minmax(0, 1fr); }
+  .verification-shell .verification-hero > div:first-child { border-right: 0; border-bottom: 1px solid var(--border); }
+  .verification-shell .verification-provider-grid, .verification-shell .verification-attempts { grid-template-columns: minmax(0, 1fr); }
+  .verification-shell .verification-provider-card:first-child { border-right: 0; border-bottom: 1px solid var(--border); }
+  .verification-shell .verification-attempt { border-right: 0; }
+  .verification-shell .verification-workspace-head { flex-direction: column; align-items: stretch; }
+  .verification-shell .verification-filters { min-width: 0; grid-template-columns: minmax(0, 1fr) auto; }
+  .verification-shell .verification-filters select { grid-column: 1 / -1; border-right: 1px solid var(--border); order: 3; }
+}
+
+/* Cards: tables stack so nothing needs horizontal scroll on narrow screens */
+@media (max-width: 800px) {
+  .pl-table thead, .verification-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .pl-table, .pl-table tbody, .pl-table tr, .pl-table td,
+  .verification-table, .verification-table tbody, .verification-table tr, .verification-table td { display: block; width: 100%; }
+  .pl-table tr, .verification-table tr { padding: 10px 12px; border-bottom: 1px solid var(--border-muted); }
+  .pl-table td, .verification-table td { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 4px 0; border: 0; text-align: right; }
+  .pl-table td[data-label]::before, .verification-table td[data-label]::before { content: attr(data-label); flex: none; color: var(--text-faint); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; text-align: left; }
+  .pl-table td.col-check, .pl-table td.col-action { width: auto; }
+  .pl-table td.cell-center, .pl-table td.cell-num { text-align: right; }
+  .pl-table .cell-wide { max-width: none; }
+  .verification-table td { flex-wrap: wrap; }
+  .verification-table td .verification-actions { width: 100%; }
+  .pl-search { margin-left: 0; }
+  .bulk-drawer-fields, .pd-sched-fields { grid-template-columns: minmax(0, 1fr); }
+  .pd-actions-sep { display: none; }
+  .search-wrap.pl-search { max-width: none; width: 100%; }
+}

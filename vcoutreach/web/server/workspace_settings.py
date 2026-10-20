@@ -12,6 +12,33 @@ from urllib.parse import urlparse
 from vcoutreach.web.config import WorkspacePath, get_workspace
 SETTINGS_PATH = WorkspacePath('data', 'workspace-settings.json')
 
+from vcoutreach.web.keys import KEY_NAMES
+CONNECTION_SETTING_NAMES = KEY_NAMES | {'SEARXNG_URL'}
+
+def validate_http_url(value: str) -> str:
+    from urllib.parse import urlsplit
+    parsed = urlsplit(value)
+    try:
+        parsed.port
+    except ValueError:
+        raise ValueError('URL must use http or https and include a valid host.') from None
+    if (parsed.scheme not in {'http','https'} or not parsed.hostname or parsed.username or parsed.password
+            or any(c.isspace() or ord(c) < 32 for c in value)):
+        raise ValueError('URL must use http or https and include a valid host.')
+    return value.rstrip('/')
+
+def save_connection_settings(values):
+    from vcoutreach.web.keys import write_env
+    from vcoutreach.web.server.runtime_secrets import store_searxng_url, validate_secret
+    if set(values) - CONNECTION_SETTING_NAMES:
+        raise ValueError('Unsupported setting name.')
+    if values.get('SEARXNG_URL'):
+        validate_http_url(values['SEARXNG_URL'])
+        validate_secret(values['SEARXNG_URL'])
+    write_env({key:value for key,value in values.items() if key != 'SEARXNG_URL'})
+    if 'SEARXNG_URL' in values:
+        store_searxng_url(values['SEARXNG_URL'])
+
 DISCOVERY_SOURCES = {
     "pitchbook": "PitchBook plus official sources",
     "manual_csv": "Manual CSV or spreadsheet",
@@ -150,6 +177,9 @@ def load_settings() -> dict:
 
 
 def save_settings(payload: dict) -> dict:
+    for name in ('website','pitch_deck_url'):
+        if payload.get(name):
+            validate_http_url(payload[name])
     normalized = normalize_settings({**payload, "initialized": True})
     return _persist_settings(normalized)
 

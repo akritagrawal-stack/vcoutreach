@@ -44,6 +44,7 @@ vcoutreach = [
     "web/migrations/*.sql",
     "web/server/templates/*.html",
     "web/server/static/*",
+    "web/server/static/pages/*",
     "web/sample/*",
     "web/scripts/*",
 ]

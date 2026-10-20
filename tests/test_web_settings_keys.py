@@ -47,6 +47,36 @@ def key_form(name: str, value: str):
     return {name: value, "name": name, "key": name, "value": value}
 
 
+def test_ftp_search_url_is_refused_and_the_saved_http_url_survives_restart(web):
+    saved = "http://127.0.0.1:8080"
+    accepted = post_keys(web, {"SEARXNG_URL": saved})
+    assert accepted.status_code == 200
+    assert read_env(web.ws)["SEARXNG_URL"] == saved
+    before = web.text("/settings")
+    refused = post_keys(web, {"SEARXNG_URL": "ftp://search.example.com/index"})
+    assert refused.status_code == 200
+    assert "http or https" in new_text(before, page_text(refused)).lower()
+    assert read_env(web.ws)["SEARXNG_URL"] == saved
+    restarted = Web(create_web_app(web.ws), web.ws)
+    restarted.login()
+    assert saved in restarted.html("/settings")
+
+
+def test_workspace_name_is_limited_to_sixty_characters_when_saved(web):
+    import json
+
+    name = "Cedar Grove Research Outreach Workspace for Independent Founders and Investors"
+    response = web.post("/settings", {"workspace_name": name}, follow=True)
+    assert response.status_code == 200
+    persisted = json.loads((web.ws / "data" / "workspace-settings.json").read_text())
+    assert persisted["workspace_name"] == name[:60]
+    restarted = Web(create_web_app(web.ws), web.ws)
+    restarted.login()
+    markup = restarted.html("/settings")
+    assert f'value="{name[:60]}"' in markup
+    assert name not in markup
+
+
 # ---------------------------------------------------------------------------------------------------------------
 # Sender profile
 # ---------------------------------------------------------------------------------------------------------------
@@ -100,12 +130,12 @@ def test_the_first_touch_subject_is_used_for_the_next_drafts(make_web):
 
 
 def test_the_settings_page_has_a_gmail_card_that_says_how_to_connect(web):
-    """SPEC_V2 section 9 names the command `vcoutreach auth gmail`; SPEC_V3 section 5 moves the instructions to the
-    README. The Settings card must show the connection state and say where the steps are (SPEC_QUESTIONS.md Q10)."""
+    """The browser connection flow directs a person to Settings and Connect Gmail."""
     text = web.text("/settings")
     low = text.lower()
     assert "gmail" in low and re.search(r"(?i)not connected|connected", text)
-    assert "vcoutreach auth gmail" in text or "readme" in low
+    assert "settings" in low and "connect gmail" in low
+    assert "vcoutreach auth gmail" not in low
 
 
 # ---------------------------------------------------------------------------------------------------------------

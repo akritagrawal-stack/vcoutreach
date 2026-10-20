@@ -18,7 +18,7 @@ from flask import (
     Flask,
     Response,
     abort,
-    flash,
+    flash as flask_flash,
     redirect,
     render_template,
     request,
@@ -193,6 +193,31 @@ def _write_relationship_updates(payload: dict[str, dict]) -> None:
     temporary.replace(_RELATIONSHIP_UPDATES_PATH)
     _RELATIONSHIP_UPDATES_PATH.chmod(0o600)
 
+_SECRET_PATTERN = re.compile(r'(?i)(bearer\s+[A-Za-z0-9._~+/=-]+|sk-[A-Za-z0-9_-]{8,}|[A-Za-z0-9_-]{32,}|key=[^&\s]+)')
+
+def flash(message, category='message'):
+    flask_flash(drafts_service.friendly_message(message).replace('first..','first.'), category)
+
+def _hook_failure_reason(exc: Exception) -> str:
+    """Say what failed (missing key, rate limit, network, bad output) without leaking secrets."""
+    detail = _SECRET_PATTERN.sub('[hidden]', _EMAIL_PATTERN.sub('[email hidden]', ' '.join(str(exc).split())))[:200]
+    lowered = detail.lower()
+    if 'linkedin' in lowered and any(word in lowered for word in ('not seeded','linkedin-auth','not set up')):
+        return 'LinkedIn is not set up; skipped'
+    if any(word in lowered for word in ('no api key', 'api key', 'not configured', 'no provider', 'missing key')):
+        kind = 'missing or rejected API key'
+    elif any(word in lowered for word in ('rate limit', '429', 'quota')):
+        kind = 'rate limit'
+    elif any(word in lowered for word in ('timeout', 'timed out', 'connection', 'network', 'unreachable', 'dns')):
+        kind = 'network problem'
+    elif 'validation failed' in lowered:
+        kind = 'the model output failed validation'
+    elif 'without enrichment facts' in lowered:
+        kind = 'no enrichment facts yet'
+    else:
+        return 'Provider operation failed; check its connection in Settings'
+    return f'{kind}: {detail}' if detail else kind
+
 def _redact_dashboard_text(value: str | None) -> str:
     return _EMAIL_PATTERN.sub('[email hidden]', value or '')
 
@@ -249,11 +274,12 @@ def _local_provider_statuses(data=False):
 
 def _selected_draft_ids():
     raw=request.form.getlist('draft_ids') or request.form.getlist('draft_ids[]')
-    return list(dict.fromkeys(int(value) for value in raw if value.isdigit()))
+    return list(dict.fromkeys(int(value) for value in raw if value.isdigit() and len(value)<20 and int(value)<=9223372036854775807))
 
 def _show_send_result(result):
-    flash(f"Sent {result['sent']}; refused or failed {result['failed']}.",'success' if result['sent'] else 'warning')
-    for error in result.get('errors',[])[:5]:
+    message=f"Sent {result['sent']}; refused or failed {result['failed']}." if result['sent'] else f"Nothing sent: {result['failed']} drafts were refused (see reasons below)."
+    flash(message,'success' if result['sent'] else 'warning')
+    for error in result.get('errors',[]):
         flash(error,'error')
 
 def _gmail_connection_state() -> str:
@@ -274,8 +300,87 @@ def _gmail_connection_state() -> str:
         return 'add OAuth client'
     return 'OAuth required'
 
+_SERVICE_MARKS = {'pitchbook': 'Pb', 'apollo': 'Ap', 'enrow': 'En', 'gemini': 'Ge', 'openai': 'Oa', 'anthropic': 'An', 'openrouter': 'Or', 'tracking': 'Tr'}
+
+_TRACKING_URL_NAMES = ('TRACKING_WORKER_URL', 'CLOUDFLARE_TRACKING_URL', 'TRACKER_PUBLIC_URL', 'TRACKING_ORIGIN')
+_TRACKING_TOKEN_NAMES = ('TRACKING_WORKER_TOKEN', 'CLOUDFLARE_TRACKING_TOKEN', 'TRACKING_API_TOKEN')
+_CARD_ALIASES = frozenset(_TRACKING_URL_NAMES + _TRACKING_TOKEN_NAMES) | {'GOOGLE_API_KEY'}
+
+def _settings_services(gemini_status: dict, health: dict) -> list:
+    """One dict per Connections card (not Gmail, which has its own state machine). Never includes a key value."""
+    def secret(name, label='API key'):
+        return {'name': name, 'label': label, 'type': 'password', 'placeholder': 'Paste key, never shown again'}
+    def state(configured, ok=False):
+        return 'ok' if ok else 'saved' if configured else 'unset'
+    cards = [{'id': 'pitchbook', 'name': 'PitchBook', 'state': 'unset', 'fields': [], 'action': '', 'test': 'pitchbook',
+              'hint': 'No key. Sign in with your own account in the dedicated browser, then set PITCHBOOK_ENABLED under More settings.'}]
+    for provider in _local_provider_statuses(data=True):
+        ok = (health.get(provider['id']) or {}).get('health_status') == 'connected'
+        cards.append({'id': provider['id'], 'name': provider['label'], 'state': state(provider['configured'], ok),
+                      'action': '/api/data-provider/key', 'provider': provider['id'], 'test': 'data',
+                      'fields': [dict(secret('api_key'), label=provider['env_var'])],
+                      'hint': f"{provider['capability']}. {provider['credit_note']}"})
+    for provider in _local_provider_statuses():
+        gemini = provider['id'] == 'gemini'
+        cards.append({'id': provider['id'], 'name': provider['label'], 'action': '/api/model-provider/key', 'provider': provider['id'],
+                      'state': state(provider['configured'], gemini and bool(gemini_status.get('ok'))),
+                      'test': 'gemini' if gemini else '', 'fields': [dict(secret('api_key'), label=provider['env_var'])],
+                      'hint': ('Model ' + provider['default_model'] + '. Test runs 3 anonymized emails.') if gemini
+                              else 'Shared by the app and the drafting CLI.'})
+    tracking = key_status()
+    cards.append({'id': 'tracking', 'name': 'Cloudflare tracking', 'action': '/settings/keys', 'test': 'tracking',
+                  'state': state(any(tracking.get(n) for n in _TRACKING_URL_NAMES) and any(tracking.get(n) for n in _TRACKING_TOKEN_NAMES)),
+                  'fields': [{'name': 'TRACKING_WORKER_URL', 'label': 'Worker URL', 'type': 'url', 'placeholder': 'https://your-worker.example.workers'},
+                             secret('TRACKING_WORKER_TOKEN', 'Worker token')],
+                  'hint': 'Open and click tracking Worker. HTTPS URL without a path.'})
+    for card in cards:
+        card['mark'] = _SERVICE_MARKS.get(card['id'], card['name'][:2])
+    return cards
+
+def _more_settings(services: list) -> list:
+    """Every writable setting that has no Connections card, with a set/unset flag only."""
+    used = {field['name'] for card in services for field in card['fields']} | _CARD_ALIASES
+    used |= {spec['env_var'] for spec in (_local_provider_statuses() + _local_provider_statuses(data=True))}
+    status = key_status()
+    return [{'name': name, 'set': bool(status.get(name)),
+             'type': 'email' if name in ('TEST_RECIPIENT_EMAIL', 'SENDER_EMAIL') else 'url' if name.endswith(('_URL', '_ORIGIN')) else 'password'
+                     if name.endswith(('_KEY', '_TOKEN')) else 'text'}
+            for name in sorted(KEY_NAMES - used)]
+
+def _gmail_view(app) -> dict:
+    """Server-rendered first paint for the Gmail card; the status poll keeps it current."""
+    state = _gmail_connection_state()
+    setup = app.extensions.get('gmail_setup')
+    running, failed = bool(setup and setup.running), bool(setup and setup.error)
+    view = 'running' if running else 'failed' if failed else 'connected' if state == 'connected' else 'no-client' if state == 'add OAuth client' else 'ready'
+    return {'view': view, 'state': {'running': 'saved', 'failed': 'fail', 'connected': 'ok', 'no-client': 'unset'}.get(view, 'saved')}
+
+def _partner_table_counts(rows) -> dict[str, int]:
+    """Verified and dropped counters for the partners list, taken from the same rows the table renders.
+
+    Verified mirrors the table's Verified cell (verification_badge): an invalid or catch-all address is
+    never verified, a verified address is verified, otherwise partner level verification_status decides.
+    Dropped mirrors the table's dropped badge (dropped_reason set).
+    """
+    verified=0
+    dropped=0
+    for row in rows:
+        email_status=row.get('email_verification_status')
+        verif=row.get('verification_status')
+        if email_status in ('valid','deliverable','pb_verified'):
+            is_verified=True
+        elif email_status in ('invalid','catch_all'):
+            is_verified=False
+        else:
+            is_verified=verif in ('verified_strong','verified')
+        verified+=1 if is_verified else 0
+        dropped+=1 if row.get('dropped_reason') else 0
+    return {'partners_verified':verified,'partners_dropped':dropped}
+
+
 def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
     app = Flask(__name__, template_folder='templates', static_folder='static')
+    app.url_map.strict_slashes = False
     workspace = configure_workspace(workspace or os.environ.get('OUTREACH_HOME') or Path.cwd())
     workspace.initialize()
     values = workspace.env()
@@ -291,6 +396,38 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
     from vcoutreach.web.gmail.setup import register_setup_routes
     register_setup_routes(app, _gmail_connection_state)
     drafts_service.register_routes(app)
+
+    @app.before_request
+    def confine_ids_and_flashes():
+        if any(isinstance(value,int) and value > 9223372036854775807 for value in (request.view_args or {}).values()):
+            session.pop('_flashes',None)
+            abort(404)
+        target=session.pop('_flash_target',None)
+        if request.method=='GET' and (request.endpoint is None or target and request.path != target):
+            session.pop('_flashes',None)
+        messages=session.get('_flashes',[])
+        collapsed=[]
+        for category,message in messages:
+            if not collapsed or collapsed[-1] != (category,message):
+                collapsed.append((category,message))
+        if messages:
+            session['_flashes']=collapsed
+
+    @app.after_request
+    def scope_flashes(response):
+        if response.status_code in {301,302,303,307,308} and session.get('_flashes'):
+            from urllib.parse import urlsplit
+            session['_flash_target']=urlsplit(response.headers.get('Location','')).path
+        elif request.method=='GET':
+            session.pop('_flashes',None)
+        return response
+
+    @app.errorhandler(404)
+    def record_not_found(exc):
+        session.pop('_flashes',None)
+        if request.path.startswith('/api/') or request.is_json:
+            return {'error':'Record not found.'},404
+        return render_template('error.html',message='Record not found.',active_page=''),404
 
     @app.get('/healthz')
     def healthz():
@@ -315,7 +452,12 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
     # ── Context processor - inject send_mode + test_recipient globally ────────
     @app.context_processor
     def inject_send_mode():
-        return {'g_send_mode':send_mode(),'g_test_recipient':_env('TEST_RECIPIENT_EMAIL')}
+        from vcoutreach.web.llm.hook_grounding import grounding_state
+        def display_grounding(row):
+            reason=dict(row).get('blocked_reason')
+            return 'blocked: '+reason if reason else grounding_state(row)
+        return {'g_send_mode':send_mode(),'g_test_recipient':_env('TEST_RECIPIENT_EMAIL'),
+                'hook_grounding_state':display_grounding}
 
     @app.context_processor
     def inject_workspace():
@@ -424,6 +566,9 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
             q=query, view=view, stage=stage, page=page, tag=tag, draft=draft,
             db_path=app.config['CRM_DB_PATH'],
         )
+        if page > counts['pages']:
+            flash('That page is beyond the last page. Showing the last page.','info')
+            return redirect(url_for('crm_dashboard',**{**request.args.to_dict(),'page':counts['pages']}))
         try:
             leads = crm_lead_scores(app.config['CRM_DB_PATH'])
             hot_leads_preview = [row for row in leads if row['bucket'] == 'hot'][:5]
@@ -456,19 +601,18 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
                   f"{result['inserted']} new exact-address matches.", 'success')
         return redirect(url_for('crm_dashboard'))
 
+    @app.get('/drafts')
     @app.get('/crm/drafts')
     def crm_drafts():
         drafts=drafts_service.list_drafts()
         status=request.args.get('status',request.args.get('type','all'))
         query=request.args.get('q','').strip()
-        counts={key:sum(row['status']==key for row in drafts) for key in ('ok','blocked')}
-        counts['all']=len(drafts)
-        rows=[row for row in drafts if (status not in {'ok','blocked'} or row['status']==status)
+        rows=[row for row in drafts if (status not in {'ok','pending','approved','rejected','blocked'} or (row['status']=='ok' if status=='ok' else row['approval_state']==status))
               and (not query or query.casefold() in (row['recipient_name']+' '+row['subject']+' '+row['firm']).casefold())]
         from vcoutreach.providers import configured_providers
         providers=configured_providers(drafts_service.engine_settings())
-        return render_template('crm_drafts.html',drafts=rows,draft_count=len(rows),draft_counts=counts,
-            type_filter=status,status_filter=status,query=query,providers=['auto','template','publik','openai','anthropic'],
+        return render_template('crm_drafts.html',drafts=rows,draft_count=len(rows),
+            status_filter=status,query=query,providers=['auto','template','publik','openai','anthropic'],
             provider_status=', '.join(providers) + ' configured; no key uses a placeholder template',active_page='drafts')
 
     @app.get('/crm/tracking')
@@ -476,7 +620,7 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
         # GET only reads the snapshot cached by the explicit sync action.
         snapshot=get_workspace().read_json('data/tracking-snapshot.json')
         return render_template('crm_tracking.html',snapshot=snapshot,error=None if snapshot else 'Sync tracking to load your Worker data.',
-            tracking_dashboard_url=_env('TRACKING_WORKER_URL',_env('TRACKING_ORIGIN')) + '/dashboard',active_page='tracking')
+            tracking_dashboard_url=(_env('TRACKING_WORKER_URL',_env('TRACKING_ORIGIN')).rstrip('/') + '/dashboard') if _env('TRACKING_WORKER_URL',_env('TRACKING_ORIGIN')) else None,active_page='tracking')
 
     @app.get('/crm/review-preview')
     def crm_review_preview():
@@ -609,7 +753,8 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
 
     @app.post('/crm/<int:partner_id>/profile')
     def crm_profile_update(partner_id: int):
-        if crm_get_contact(partner_id, db_path=app.config['CRM_DB_PATH']) is None:
+        detail=crm_get_contact(partner_id, db_path=app.config['CRM_DB_PATH'])
+        if detail is None:
             abort(404)
         def money(name: str) -> int | None:
             raw = request.form.get(name, '').strip()
@@ -621,17 +766,37 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
             return value
         try:
             fields = {}
-            for name, limit in (('tags', 1000), ('notes', 10000), ('next_action', 1000)):
+            for name, limit in (('tags', 1000), ('notes', 5000), ('next_action', 1000), ('name',200), ('org',200), ('role',200), ('email',254)):
                 if name in request.form:
-                    value = request.form[name].strip()
+                    value = drafts_service.clean_contact_text(request.form[name],limit,notes=name=='notes')
                     if len(value) > limit or (name == 'tags' and any(c in value for c in '\r\n')):
                         raise ValueError('Invalid contact field.')
-                    fields[name] = value
+                    fields[{'name':'partner_name','org':'firm'}.get(name,name)] = value
+            if 'partner_name' in fields and not fields['partner_name']:
+                raise ValueError('Contact name is required.')
+            if 'email' in fields:
+                try:
+                    contact=drafts_service.form_contact({'name':fields.get('partner_name',detail['partner']['partner_name']),'email':fields['email']})
+                    fields['email']=contact.email
+                except drafts_service.OutreachError:
+                    raise ValueError('Enter a valid email address.') from None
+                with cursor_ctx(app.config['CRM_DB_PATH']) as (conn,_):
+                    if conn.execute('SELECT 1 FROM partners WHERE lower(email)=? AND id!=?',(fields['email'],partner_id)).fetchone():
+                        raise ValueError('Another contact already has this email address.')
+                if fields['email'] != detail['partner']['email']:
+                    fields.update(email_verification_status=None,email_verification_method=None,email_verified_at=None)
+            if 'firm' in fields:
+                fields['company']=fields['firm']
+            if 'partner_name' in fields:
+                fields['first_name']=fields['partner_name'].split()[0]
             due = request.form.get('next_follow_up_at', '').strip() or None
             if due:
-                datetime.fromisoformat(due)
+                try:
+                    datetime.fromisoformat(due)
+                except ValueError:
+                    raise ValueError('Enter a valid follow-up date.') from None
             crm_save_profile(partner_id, {
-                'stage': request.form.get('stage', 'prospect').strip(),
+                'stage': request.form.get('stage', detail['profile']['stage']).strip(),
                 'fit_grade': request.form.get('fit_grade', 'unreviewed').strip().lower(),
                 'fit_rationale': request.form.get('fit_rationale', '').strip()[:1000],
                 'on_update_list': request.form.get('on_update_list') == '1',
@@ -641,13 +806,15 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
                 'next_follow_up_at': due,
                 'follow_up_reason': request.form.get('follow_up_reason', '').strip()[:500],
             }, db_path=app.config['CRM_DB_PATH'])
-        except (ValueError, OverflowError):
-            flash('Check the stage, fit grade, check size, and follow-up date.', 'error')
+        except (ValueError, OverflowError) as exc:
+            flash(str(exc) or 'Check the stage, fit grade, check size, and follow-up date.', 'error')
         else:
             if fields:
                 with cursor_ctx(app.config['CRM_DB_PATH']) as (_, cur):
                     assignments = ','.join(name + '=?' for name in fields)
                     cur.execute('UPDATE partners SET ' + assignments + ' WHERE id=?', (*fields.values(), partner_id))
+                    if fields.get('email') and fields['email'] != detail['partner']['email']:
+                        cur.execute("UPDATE drafts SET status='pending',approved_at=NULL WHERE partner_id=? AND status='approved'",(partner_id,))
             flash('Relationship profile saved locally.', 'success')
         return redirect(url_for('crm_contact', partner_id=partner_id))
 
@@ -678,19 +845,20 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
         return redirect(url_for('crm_contact', partner_id=partner_id))
 
     @app.get('/setup')
-    @app.get('/settings')
     @app.get('/knowledge')
+    @app.get('/settings')
     def workspace_settings():
         settings=load_settings()
         from vcoutreach.web.enrichment.contact_provider_store import connection_health
-        connections={'database':'ready','pitch deck':'ready' if settings.get('pitch_deck_path') and Path(settings['pitch_deck_path']).is_file() else 'not set',
-                     'pitchbook':'connect on click','gmail':_gmail_connection_state(),'calendar':'manual snapshot'}
+        gmail=_gmail_view(app)
+        services=_settings_services(load_gemini_status(configured=bool(_env('GEMINI_API_KEY'))),connection_health())
+        deck_ready=bool(settings.get('pitch_deck_path') and Path(settings['pitch_deck_path']).is_file())
+        tiles=[('Database','ok','Ready','sec-identity'),('Pitch deck','ok' if deck_ready else 'unset','Ready' if deck_ready else 'Missing','sec-package'),
+               ('PitchBook','unset','Not set','svc-pitchbook'),('Gmail',gmail['state'],{'ok':'Connected','fail':'Failed','unset':'Not set'}.get(gmail['state'],'Key saved'),'svc-gmail'),
+               ('Calendar','unset','Manual','sec-snapshot')]
         return render_template('settings.html',settings=settings,audiences=AUDIENCE_TYPES,discovery_sources=DISCOVERY_SOURCES,
-            instructions=setup_instructions(settings,pitchbook_ready=False,calendar_live=False),connections=connections,
-            sample_email=build_sample_email(settings),gemini_status=load_gemini_status(configured=bool(_env('GEMINI_API_KEY'))),
-            model_providers=_local_provider_statuses(),data_providers=_local_provider_statuses(data=True),data_provider_health=connection_health(),
-            outreach_status=_safe_outreach_state(),outreach_cli='vcoutreach draft --contacts contacts.csv --sender sender.json',
-            sender=drafts_service.sender_dict(),sender_fields=drafts_service.SENDER_FIELDS,key_status=key_status(),key_names=sorted(KEY_NAMES),active_page='settings')
+            sample_email=build_sample_email(settings),gmail=gmail,services=services,more_settings=_more_settings(services),tiles=tiles,
+            sender=drafts_service.sender_dict(),searxng_url=_env('SEARXNG_URL'),active_page='settings')
 
     @app.post('/settings')
     def update_workspace_settings():
@@ -715,11 +883,23 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
 
     @app.post('/api/gemini/key')
     def store_dashboard_gemini_key():
+        value=request.form.get('api_key','')
+        clear=request.form.get('action') in {'clear','remove'}
+        wants_json=request.accept_mimetypes.best=='application/json'
+        if not value.strip() and not clear:
+            message='No key entered; saved key unchanged'
+            if wants_json or not request.form.get('return_to'):
+                return {'ok':True,'status':'unchanged','message':message}
+            flash(message,'info')
+            return redirect('/settings')
         try:
-            write_env({'GEMINI_API_KEY':request.form.get('api_key','')})
+            write_env({'GEMINI_API_KEY':'' if clear else value})
         except ValueError as exc:
             return {'ok':False,'error':str(exc)},400
-        return {'ok':True,'status':'configured','storage':'workspace_env','secret_stored_in_workspace':True}
+        if request.form.get('return_to') == 'settings' and not wants_json:
+            flash('Key removed.' if clear else 'Key saved.','success')
+            return redirect('/settings')
+        return {'ok':True,'status':'unset' if clear else 'configured','storage':'workspace_env','secret_stored_in_workspace':True}
 
     @app.post('/api/model-provider/key')
     def store_dashboard_model_provider_key():
@@ -727,11 +907,23 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
         names={'gemini': 'GEMINI_API_KEY', 'openai': 'OPENAI_API_KEY', 'anthropic': 'ANTHROPIC_API_KEY', 'openrouter': 'OPENROUTER_API_KEY', 'publik': 'PUBLIK_API_KEY'}
         if provider not in names:
             return {'ok':False,'error':'Unknown provider.'},400
+        value=request.form.get('api_key','')
+        clear=request.form.get('action') in {'clear','remove'}
+        wants_json=request.accept_mimetypes.best=='application/json'
+        if not value.strip() and not clear:
+            message='No key entered; saved key unchanged'
+            if wants_json or not request.form.get('return_to'):
+                return {'ok':True,'status':'unchanged','message':message}
+            flash(message,'info')
+            return redirect('/settings')
         try:
-            write_env({names[provider]:request.form.get('api_key','')})
+            write_env({names[provider]:'' if clear else value})
         except ValueError as exc:
             return {'ok':False,'error':str(exc)},400
-        return {'ok':True,'provider':provider,'status':'configured','storage':'workspace_env','secret_stored_in_workspace':True}
+        if request.form.get('return_to') == 'settings' and not wants_json:
+            flash('Key removed.' if clear else 'Key saved.','success')
+            return redirect('/settings')
+        return {'ok':True,'provider':provider,'status':'unset' if clear else 'configured','storage':'workspace_env','secret_stored_in_workspace':True}
 
     @app.post('/api/data-provider/key')
     def store_dashboard_data_provider_key():
@@ -739,11 +931,37 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
         names={'enrow': 'ENROW_API_KEY', 'apollo': 'APOLLO_API_KEY'}
         if provider not in names:
             return {'ok':False,'error':'Unknown provider.'},400
+        value=request.form.get('api_key','')
+        clear=request.form.get('action') in {'clear','remove'}
+        wants_json=request.accept_mimetypes.best=='application/json'
+        if not value.strip() and not clear:
+            message='No key entered; saved key unchanged'
+            if wants_json or not request.form.get('return_to'):
+                return {'ok':True,'status':'unchanged','message':message}
+            flash(message,'info')
+            return redirect('/settings')
         try:
-            write_env({names[provider]:request.form.get('api_key','')})
+            write_env({names[provider]:'' if clear else value})
         except ValueError as exc:
             return {'ok':False,'error':str(exc)},400
-        return {'ok':True,'provider':provider,'status':'configured','storage':'workspace_env','secret_stored_in_workspace':True}
+        if request.form.get('return_to') == 'settings' and not wants_json:
+            flash('Key removed.' if clear else 'Key saved.','success')
+            return redirect('/settings')
+        return {'ok':True,'provider':provider,'status':'unset' if clear else 'configured','storage':'workspace_env','secret_stored_in_workspace':True}
+
+    @app.post('/api/searxng/test')
+    def test_searxng_connection():
+        from vcoutreach.web.server.workspace_settings import validate_http_url
+        from urllib.parse import urlsplit
+        try:
+            url=validate_http_url(request.form.get('url') or _env('SEARXNG_URL'))
+            with urlopen(url.rstrip('/')+'/search?q=test&format=json',timeout=5) as response:
+                if urlsplit(response.geturl()).scheme not in {'http','https'}:
+                    raise ValueError('Invalid response URL.')
+                payload=json.load(response)
+            return {'ok':True,'message':'SearXNG is reachable and returned JSON.'}
+        except (ValueError,OSError,URLError):
+            return {'ok':False,'message':'Could not reach SearXNG or its response was not JSON.'},400
 
     @app.post('/api/data-provider/test')
     def test_dashboard_data_provider():
@@ -776,6 +994,19 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
             'credit_consuming': False,
             'delivery_authority': False,
         }, status_code
+
+    @app.post('/api/tracking/test')
+    def test_dashboard_tracking():
+        """Lightest authenticated check: fetch the aggregate snapshot. Never returns secrets or upstream detail."""
+        try:
+            fetch_tracking_snapshot()
+        except TrackingUnavailable as exc:
+            text = str(exc)
+            known = text if text.startswith('Configure a') else ''
+            return {'ok': False, 'message': known or 'Could not verify the tracking Worker.'}, 400
+        except Exception:
+            return {'ok': False, 'message': 'Could not verify the tracking Worker.'}, 400
+        return {'ok': True, 'message': 'Worker reachable and token accepted.'}
 
     @app.get('/api/gemini/status')
     def dashboard_gemini_status():
@@ -923,7 +1154,7 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
             }
             flash('Investor added to the post-meeting update queue.', 'success')
         _write_relationship_updates(updates)
-        return redirect(url_for('dashboard') + '#relationshipDesk')
+        return redirect(url_for('partner_detail', partner_id=partner_id))
 
     @app.post('/demo/pitchbook-visible')
     def demo_pitchbook_visible():
@@ -1140,6 +1371,9 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
             if row['id'] not in with_drafts:
                 item=dict(row);item.update(partner_id=row['id'],partner_email=row['email'],status='pending',hook='',subject='',draft_id=None)
                 rows.append(item)
+        engine_rows=drafts_service.list_drafts()
+        for row in rows:
+            row['blocked_reason']=drafts_service.draft_block_reason(row,engine_rows)
         status=request.args.get('status','');tier=request.args.get('tier','');query=request.args.get('q','')
         rows=[row for row in rows if (not status or row['status']==status)
             and (not tier or str(row.get('tier') or '')==tier)
@@ -1147,8 +1381,9 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
         counts=get_status_counts()
         for name in ('pending','approved','rejected','sent','test_sent','live_sent','drafted','manual_review','dropped','superseded'):
             counts.setdefault(name,0)
+        partner_counts=_partner_table_counts(rows)
         return render_template('partners_list.html',partners=rows,rows=rows,status_filter=status,tier_filter=tier,
-            search=query,query=query,counts=counts,active_page='partners')
+            search=query,query=query,counts=counts,partner_counts=partner_counts,active_page='partners')
 
     # ── Toggle send mode ──────────────────────────────────────────────────────
 
@@ -1171,8 +1406,7 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
     def partner_detail(partner_id: int):
         _partner_row = get_partner(partner_id)
         if _partner_row is None:
-            flash(f'Partner {partner_id} not found.', 'error')
-            return redirect(url_for('partners_list'))
+            abort(404)
         # Convert to dict so templates can use .get() safely (handles optional columns)
         partner = dict(_partner_row)
 
@@ -1181,6 +1415,8 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
         from vcoutreach.web.pipeline.loader import get_draft_for_partner
         _draft_row = get_draft_for_partner(partner_id)
         draft = dict(_draft_row) if _draft_row is not None else None
+        if draft:
+            draft['blocked_reason']=drafts_service.draft_block_reason(draft)
 
         # Assemble email preview (always fresh - reflects current hook + boilerplate)
         assembled = None
@@ -1217,6 +1453,7 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
                                draft=draft,
                                assembled=assembled,
                                enrichment_facts=enrichment_facts,
+                               last_hook_error=session.get('hook_errors', {}).get(str(partner_id)),
                                active_page='partners')
 
     # ── Save hook/subject ─────────────────────────────────────────────────────
@@ -1226,7 +1463,7 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
         from vcoutreach.web.pipeline.loader import get_draft_for_partner
         draft = get_draft_for_partner(partner_id)
         if draft is None:
-            flash('No draft found for this partner.', 'error')
+            flash('No draft exists for this partner yet. Open Drafts and click "Write drafts for everyone without one", then try again.', 'error')
             return redirect(url_for('partner_detail', partner_id=partner_id))
 
         hook = request.form.get('hook', '').strip()
@@ -1241,7 +1478,7 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
         update_draft_hook_subject(draft['id'], hook, subject)
         updated = get_draft_for_partner(partner_id)
         has_issues = bool(updated['auto_approve_skip_reason'])
-        flash('Draft saved with issues. Review it in the draft editor.' if has_issues else 'Draft saved.',
+        flash('Edit saved; draft returned to Pending and needs re-approval' if draft['status']=='approved' else 'Draft saved with issues. Review it in the draft editor.' if has_issues else 'Draft saved.',
               'warning' if has_issues else 'success')
         return redirect(url_for('partner_detail', partner_id=partner_id))
 
@@ -1259,9 +1496,14 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
             flash('Draft already pushed to Gmail.', 'info')
             return redirect(url_for('partner_detail', partner_id=partner_id))
 
-        if draft['boilerplate_version'].startswith('engine-') and draft['auto_approve_skip_reason']:
-            flash('Draft is blocked. Save and check it in the draft editor before approval.','error')
+        blocked_reason=drafts_service.draft_block_reason(draft)
+        if blocked_reason:
+            flash('Draft cannot be approved; blocked: '+blocked_reason,'error')
             return redirect(url_for('partner_detail',partner_id=partner_id))
+        from vcoutreach.web.llm.hook_grounding import hook_is_ungrounded, UNGROUNDED_APPROVAL_MESSAGE
+        if hook_is_ungrounded(draft):
+            flash(UNGROUNDED_APPROVAL_MESSAGE, 'error')
+            return redirect(url_for('partner_detail', partner_id=partner_id))
         set_draft_status(draft['id'], 'approved')
         flash('Draft approved. Select it on Partners when you are ready to send.', 'success')
         return redirect(url_for('partner_detail', partner_id=partner_id))
@@ -1276,7 +1518,7 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
             flash('No draft found for this partner.', 'error')
             return redirect(url_for('partner_detail', partner_id=partner_id))
 
-        review_notes = request.form.get('review_notes', '').strip() or None
+        review_notes = request.form.get('review_notes', '').strip()[:500] or None
         set_draft_status(draft['id'], 'rejected', review_notes=review_notes)
         flash('Draft rejected.', 'warning')
         return redirect(url_for('partner_detail', partner_id=partner_id))
@@ -1292,7 +1534,7 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
         if send_mode()=='live' and (request.form.get('confirm_text') or request.form.get('confirm'))!=f'SEND BATCH OF {len(ids)}':
             flash(f'Type exactly: SEND BATCH OF {len(ids)}','error')
         else:
-            _show_send_result(send_with_throttle(ids))
+            _show_send_result(drafts_service.send_reviewed_batch(ids))
         return redirect(url_for('partners_list'))
 
     # ── Send-test (one partner, always to test recipient) ─────────────────────
@@ -1322,7 +1564,7 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
         if send_mode()=='live' and (request.form.get('confirm_text') or request.form.get('confirm'))!=f'SEND TO {partner["email"]}':
             flash(f'Type exactly: SEND TO {partner["email"]}','error')
         else:
-            _show_send_result(send_with_throttle([draft['id']]))
+            _show_send_result(drafts_service.send_reviewed_batch([draft['id']]))
         return redirect(url_for('partner_detail',partner_id=partner_id))
 
     # ── Bulk send batch ───────────────────────────────────────────────────────
@@ -1336,7 +1578,7 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
         elif send_mode()=='live' and (request.form.get('confirm_text') or request.form.get('confirm'))!=f'SEND BATCH OF {len(ids)}':
             flash(f'Type exactly: SEND BATCH OF {len(ids)}','error')
         else:
-            _show_send_result(send_with_throttle(ids))
+            _show_send_result(drafts_service.send_reviewed_batch(ids))
         return redirect(url_for('partners_list'))
 
     # ── Enrich partner (web search + LinkedIn + email guess) ─────────────────
@@ -1351,7 +1593,7 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
 
         try:
             result = enrich_partner(partner_id)
-            facts = get_enrichment_facts(partner_id)
+            facts = get_enrichment_facts(partner_id, limit=None)
             errors = result.get('errors', [])
             facts_count = len(facts)
             msg = (
@@ -1359,10 +1601,13 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
                 f'{", ".join(result.get("sources_run", []))}.'
             )
             if errors:
-                msg += f' ({len(errors)} provider error(s); check credentials and service status.)'
+                msg += ' Provider errors: ' + '; '.join(_hook_failure_reason(ValueError(error)) for error in errors) + '.'
+            preserved = result.get('preserved_sources', [])
+            if preserved:
+                msg += ' Kept saved facts from ' + ', '.join(preserved) + ' because the provider failed or returned no usable results.'
             flash(msg, 'success' if not errors or facts_count > 0 else 'warning')
         except Exception as exc:
-            flash(f'Enrichment failed: check your settings', 'error')
+            flash(f'Enrichment failed: {_hook_failure_reason(exc)}. Existing saved facts were kept.', 'error')
 
         return redirect(url_for('partner_detail', partner_id=partner_id))
 
@@ -1484,8 +1729,16 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
 
         draft = get_draft_for_partner(partner_id)
         if draft is None:
-            flash('No draft found for this partner.', 'error')
-            return redirect(url_for('partner_detail', partner_id=partner_id))
+            try:
+                drafts_service.write_drafts([partner['slug']], provider='template')
+                draft = get_draft_for_partner(partner_id)
+                if draft is None:
+                    raise ValueError('Could not create the base draft. Save a sender profile first.')
+            except (ValueError, drafts_service.OutreachError) as exc:
+                message = 'Hook generation could not create a base draft: ' + _hook_failure_reason(exc)
+                session['hook_errors'] = {**session.get('hook_errors', {}), str(partner_id): message}
+                flash(message, 'error')
+                return redirect(url_for('partner_detail', partner_id=partner_id))
 
         partner_dict = dict(partner)
         # Load any available enrichment facts
@@ -1499,10 +1752,23 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
         try:
             result = generate_hook(partner_dict, enrichment_facts=enrichment_facts)
         except HookGenerationError as exc:
-            flash(f'LLM hook generation failed: check your settings', 'error')
+            message = f'Hook generation failed: {_hook_failure_reason(exc)}. Retry after addressing this reason.'
+            session['hook_errors'] = {**session.get('hook_errors', {}), str(partner_id): message}
+            flash(message, 'error')
             return redirect(url_for('partner_detail', partner_id=partner_id))
 
-        update_draft_hook_subject(draft['id'], result['hook'], result['subject'])
+        session['hook_errors'] = {key: value for key, value in session.get('hook_errors', {}).items() if key != str(partner_id)}
+
+        check = result.get('hallucination_check') or ''
+        from vcoutreach.web.pipeline.loader import set_hook_check
+        ungrounded = check.startswith('ungrounded')
+        update_draft_hook_subject(draft['id'], result['hook'], result['subject'], skip_gate=ungrounded)
+        if check:
+            set_hook_check(draft['id'], check)
+        if ungrounded:
+            flash(f'Hook regenerated but it is not fully backed by the saved research ({check[len("ungrounded: "):]}). '
+                  'It cannot be approved until you regenerate or edit it.', 'warning')
+            return redirect(url_for('partner_detail', partner_id=partner_id))
         flash(
             f'Hook regenerated via {result["model_used"]} '
             f'({result["attempts"]} attempt(s)). Review and approve when ready.',
@@ -1681,7 +1947,7 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
             # All drafts
             draft_rows = conn.execute(
                 """
-                SELECT partner_id, hook, updated_at
+                SELECT partner_id, hook, updated_at, hallucination_check
                 FROM drafts
                 ORDER BY partner_id
                 """
@@ -1731,7 +1997,13 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
         draft_index: dict[int, dict] = {}
         for row in draft_rows:
             pid = row['partner_id']
-            draft_index[pid] = {'hook': row['hook'] or '', 'updated_at': row['updated_at'] or ''}
+            draft_index[pid] = {
+                'hook': row['hook'] or '',
+                'updated_at': row['updated_at'] or '',
+                'checked': bool((row['hallucination_check'] or '').strip()),
+                'ungrounded': (row['hallucination_check'] or '').startswith('ungrounded'),
+                'grounded': (row['hallucination_check'] or '') == 'grounded',
+            }
 
         # Build PitchBook company-name index for cite heuristic
         # {partner_id: set_of_company_names}
@@ -1817,8 +2089,10 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
             # hook_cites_specific: does hook mention a company from PB facts?
             if not has_hook:
                 hook_quality = 'no_hook'
+            elif draft.get('ungrounded'):
+                hook_quality = 'ungrounded'
             elif not fetched_times:
-                hook_quality = 'no_enrichment'
+                hook_quality = 'no_enrichment' if draft.get('checked') else 'not_checked'
             else:
                 companies = pb_companies.get(pid, set())
                 if companies:
@@ -1827,6 +2101,12 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
                     hook_quality = 'cite_specific' if cited else 'generic'
                 else:
                     hook_quality = 'unknown'
+                # No company evidence either way: a NULL hallucination_check means the
+                # hook was never checked, which is different from "cannot tell".
+                if hook_quality == 'unknown' and not draft.get('checked'):
+                    hook_quality = 'not_checked'
+                elif hook_quality == 'unknown' and draft.get('grounded'):
+                    hook_quality = 'grounded'
 
             rows_out.append({
                 'partner_id': pid,
@@ -1864,7 +2144,7 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
         )
         needs_hook_regen = sum(
             1 for r in rows_out
-            if r['hook_quality'] in ('generic', 'no_hook', 'unknown')
+            if r['hook_quality'] in ('generic', 'no_hook', 'unknown', 'not_checked', 'ungrounded')
         )
 
         stats = {
@@ -1953,7 +2233,7 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
                 ids = _json.loads(r['draft_ids'])
                 count = len(ids)
             except Exception:
-                count = 0
+                count = None
 
             try:
                 result = _json.loads(r['result_json']) if r['result_json'] else None

@@ -1,0 +1,27 @@
+/* Publikreach crm lane styles: page-specific rules only. */
+.crm-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+.crm-toolbar form { margin: 0; }
+.crm-chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 5px 10px; border: 1px solid var(--border-muted); background: var(--surface-soft); color: var(--text-muted) !important; font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 600; letter-spacing: .04em; text-decoration: none; }
+.crm-chip:hover { border-color: var(--accent); color: var(--text) !important; }
+.crm-icon { flex: 0 0 auto; width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.crm-dashboard .crm-filters { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+.crm-dashboard .crm-filters .crm-search-field { grid-column: span 2; }
+.crm-dashboard .crm-filters > .crm-button { justify-self: start; }
+.crm-pager { justify-content: flex-end; margin-top: 10px; }
+.crm-collapse > summary { font-family: 'IBM Plex Mono', monospace; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.crm-collapse > :not(summary) { margin-left: 18px; margin-right: 18px; }
+.crm-collapse[open] { padding-bottom: 14px; }
+.crm-form-more > summary { margin: 8px 0; }
+.crm-switch { display: inline-grid; grid-template-columns: auto minmax(160px, 1fr); align-items: center; gap: 8px; }
+.crm-switch > span { color: var(--text-muted); font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 600; letter-spacing: .08em; }
+.crm-switch select { min-height: 31px; padding: 4px 8px; border: 1px solid var(--border-muted); border-radius: 0; color: var(--text); background: var(--surface-raised); font: inherit; font-size: 11px; }
+.crm-bucket-notes { display: grid; gap: 2px; margin: 8px 0 12px; padding: 0; list-style: none; color: var(--text-muted); font-size: 10px; line-height: 1.45; }
+.crm-bucket-notes li[hidden], .crm-table tr[hidden] { display: none; }
+.crm-counts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; padding-top: 8px; }
+.crm-counts-grid dl { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; margin: 0; }
+.crm-counts-grid dd { margin: 0; font-family: 'IBM Plex Mono', monospace; text-align: right; }
+@media (max-width: 800px) {
+  .crm-toolbar { justify-content: flex-start; }
+  .crm-dashboard .crm-filters .crm-search-field { grid-column: auto; }
+  .crm-switch { grid-template-columns: minmax(0, 1fr); }
+}

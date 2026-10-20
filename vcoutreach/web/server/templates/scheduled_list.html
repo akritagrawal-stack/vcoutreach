@@ -1,90 +1,104 @@
 {% extends 'base.html' %}
 {% block page_id %}scheduled_list{% endblock %}
-{% block title %}Scheduled sends / {{ g_workspace.workspace_name }}{% endblock %}
+{% block title %}Scheduled sends{% endblock %}
 
 {% block content %}
+{% macro utc_time(value) -%}
+  {%- if value -%}{{ value[:16].replace('T', ' ') }} UTC{%- else -%}Not set{%- endif -%}
+{%- endmacro %}
 
-<div class="section-header page-title">
-  <h1>Scheduled Sends</h1>
-</div>
+{% macro mode_badge(mode) -%}
+  {%- if mode == 'test' -%}
+    <span class="badge badge-default">test</span>
+  {%- else -%}
+    <span class="badge badge-danger">live</span>
+  {%- endif -%}
+{%- endmacro %}
 
-{% if not schedule_rows %}
-<div class="section">
-  <p class="text-muted" style="font-size:14px;">No scheduled sends yet. <a href="/partners">Review partners to schedule a send</a>.</p>
+{# One status map for every scheduled send state. Unknown states fall through to a neutral badge. #}
+{% macro status_badge(status) -%}
+  {%- set spec = {
+        'pending': ('pending', 'badge-info'),
+        'running': ('running', 'badge-accent'),
+        'completed': ('done', 'badge-success'),
+        'failed': ('failed', 'badge-danger'),
+        'cancelled': ('cancelled', 'badge-default'),
+      }.get(status) -%}
+  {%- if spec -%}
+    <span class="badge {{ spec[1] }}">{{ spec[0] }}</span>
+  {%- else -%}
+    <span class="badge badge-default">{{ status or 'unknown' }}</span>
+  {%- endif -%}
+{%- endmacro %}
+
+<div class="crm-shell">
+  <header class="crm-hero">
+    <div>
+      <div class="crm-eyebrow">SCHEDULE / QUEUED SENDS</div>
+      <h1>Scheduled sends</h1>
+      <p>All times are UTC. Cancelling removes a pending send; mail that has already gone out is not recalled.</p>
+    </div>
+  </header>
+
+  {% if not schedule_rows %}
+  <section class="crm-panel">
+    <p class="crm-empty-state">Nothing is scheduled. <a href="/partners">Schedule sends from the partners list</a>.</p>
+  </section>
+  {% else %}
+  <section class="crm-panel">
+    <div class="crm-table-wrap">
+      <table class="crm-table">
+        <caption class="sr-only">Scheduled sends</caption>
+        <thead>
+          <tr>
+            <th scope="col">Scheduled</th>
+            <th scope="col">Drafts</th>
+            <th scope="col">Mode</th>
+            <th scope="col">Status</th>
+            <th scope="col">Result</th>
+            <th scope="col"><span class="sr-only">Action</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in schedule_rows %}
+          <tr>
+            <td class="sched-when">
+              {{ utc_time(r.scheduled_for) }}
+              {% if r.estimated_completion %}
+                <span class="crm-table-subline">Est. finish {{ utc_time(r.estimated_completion) }}</span>
+              {% endif %}
+            </td>
+            <td>{{ r.count if r.count is not none else 'Unknown' }}</td>
+            <td>{{ mode_badge(r.mode) }}</td>
+            <td>{{ status_badge(r.status) }}</td>
+            <td>
+              {% if r.result %}
+                sent {{ r.result.get('sent', 0) }},
+                failed <span class="{% if r.result.get('failed', 0) %}sched-failed{% endif %}">{{ r.result.get('failed', 0) }}</span>
+              {% elif r.status == 'running' %}
+                <span class="text-faint">In progress...</span>
+              {% else %}
+                <span class="text-faint">None yet</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if r.status == 'pending' %}
+              <form method="POST" action="/scheduled/{{ r.id }}/cancel" class="sched-cancel-form">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <button type="submit" class="crm-button crm-button-small sched-cancel"
+                        data-confirm="Cancel this scheduled send?">
+                  Cancel
+                </button>
+              </form>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  {% endif %}
 </div>
-{% else %}
-<div class="data-table-wrap">
-  <table class="data-table"><caption class="sr-only">Scheduled List records</caption>
-    <thead>
-      <tr>
-        <th>#</th>
-        <th>Scheduled For</th>
-        <th>Count</th>
-        <th>Mode</th>
-        <th>Est. Completion</th>
-        <th>Status</th>
-        <th>Result</th>
-        <th></th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for r in schedule_rows %}
-      <tr>
-        <td class="text-faint" style="font-size:11px;">{{ r.id }}</td>
-        <td style="font-size:13px;white-space:nowrap;">{{ r.scheduled_for[:16].replace('T',' ') }}</td>
-        <td><strong>{{ r.count }}</strong></td>
-        <td>
-          {% if r.mode == 'test' %}
-            <span class="badge badge-pending">test</span>
-          {% else %}
-            <span class="badge badge-danger" style="background:#dc2626;color:#fff;">live</span>
-          {% endif %}
-        </td>
-        <td class="text-muted" style="font-size:12px;">
-          {% if r.estimated_completion %}
-            by ~{{ r.estimated_completion[11:16] }}
-          {% else %}
-             / 
-          {% endif %}
-        </td>
-        <td>
-          {% if r.status == 'pending' %}
-            <span class="badge badge-approved">pending</span>
-          {% elif r.status == 'running' %}
-            <span class="badge badge-drafted">running</span>
-          {% elif r.status == 'completed' %}
-            <span class="badge badge-sent">done</span>
-          {% elif r.status == 'failed' %}
-            <span class="badge badge-rejected">failed</span>
-          {% elif r.status == 'cancelled' %}
-            <span class="badge badge-default" style="color:var(--text-faint);">cancelled</span>
-          {% endif %}
-        </td>
-        <td style="font-size:12px;">
-          {% if r.result %}
-            sent {{ r.result.get('sent', 0) }}, failed {{ r.result.get('failed', 0) }}
-          {% elif r.status == 'running' %}
-            <span class="text-faint">in progress…</span>
-          {% else %}
-             / 
-          {% endif %}
-        </td>
-        <td>
-          {% if r.status == 'pending' %}
-          <form method="POST" action="/scheduled/{{ r.id }}/cancel" style="display:inline;">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-            <button type="submit" class="btn btn-danger btn-sm"
-                    data-confirm="Cancel this scheduled send?">
-              Cancel
-            </button>
-          </form>
-          {% endif %}
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
-{% endif %}
 
 {% endblock %}

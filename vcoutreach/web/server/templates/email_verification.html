@@ -1,20 +1,20 @@
 {% extends 'base.html' %}
 {% block page_id %}email_verification{% endblock %}
-{% block title %}Email verification / {{ g_workspace.workspace_name }}{% endblock %}
+{% block title %}Email verification{% endblock %}
 
 {% block content %}
 <div class="verification-shell">
   <header class="verification-hero">
     <div>
       <span class="control-kicker"><span class="live-pixel"></span> CONTACT INTELLIGENCE LEDGER</span>
-      <h1>Find the person.<br><span>Prove the address.</span></h1>
-      <p>Apollo enriches named contacts. Enrow finds or verifies business email. Every result is retained in SQLite with its source, status, confidence, cost signal, and effect on the send gate.</p>
+      <h1>Email verification</h1>
+      <p>Apollo enriches named contacts and Enrow finds or verifies business email. Every result is kept with its source, status, confidence and effect on the send gate.</p>
     </div>
     <div class="verification-guardrail">
       <span>AUTHORITY BOUNDARY</span>
       <strong>NO EMAIL DELIVERY</strong>
-      <p>Provider calls can use credits. They cannot draft, approve, connect a mailbox, or send. Finder results require review before replacing an address.</p>
-      <a href="/knowledge#dataProviders">MANAGE PROVIDER KEYS</a>
+      <p>Provider calls can use credits. They cannot draft, approve, connect a mailbox or send. Finder results need review before they replace an address.</p>
+      <a class="crm-button crm-button-small crm-button-secondary" href="/knowledge#dataProviders">Manage provider keys</a>
     </div>
   </header>
 
@@ -37,6 +37,8 @@
         <div><span>{{ 'CREDITS' if provider.id == 'enrow' else 'LAST CHECK' }}</span><strong>{{ health.get('credits_remaining') if provider.id == 'enrow' and health.get('credits_remaining') is not none else (health.get('checked_at', 'NOT TESTED')[:10] if health.get('checked_at') else 'NOT TESTED') }}</strong></div>
       </div>
     </article>
+    {% else %}
+    <div class="verification-empty">No data providers are configured. Add an Apollo or Enrow key in <a href="/knowledge#dataProviders">settings</a>.</div>
     {% endfor %}
   </section>
 
@@ -55,7 +57,7 @@
           <option value="unverified" {% if filters.status == 'unverified' %}selected{% endif %}>Not deliverability verified</option>
           <option value="never_checked" {% if filters.status == 'never_checked' %}selected{% endif %}>No provider history</option>
         </select>
-        <button type="submit">FILTER</button>
+        <button type="submit" class="crm-button crm-button-small crm-button-primary">Filter</button>
       </form>
     </div>
 
@@ -68,50 +70,50 @@
           {% for contact in contacts %}
           {% set address_verified = contact.email_verification_status in ['valid', 'deliverable', 'pb_verified'] %}
           <tr>
-            <td>
+            <td data-label="Contact">
               <strong>{{ contact.partner_name }}</strong>
               <span>{{ contact.firm or 'Firm not set' }}</span>
               <small>{{ contact.firm_domain or 'DOMAIN REQUIRED FOR FINDER' }}</small>
             </td>
-            <td><code>{{ contact.email }}</code></td>
-            <td>
+            <td data-label="Current email"><code>{{ contact.email }}</code></td>
+            <td data-label="Deliverability">
               <span class="verification-state {{ 'verified' if address_verified else 'held' }}">{{ contact.email_verification_status or 'UNVERIFIED' }}</span>
-              <small>{{ 'ADDRESS VERIFIED; FIT AND HISTORY STILL REQUIRED' if address_verified else 'FINDER EVIDENCE IS NOT ENOUGH' }}</small>
+              <small>{{ 'Verified; fit and history still required' if address_verified else 'Finder evidence is not enough' }}</small>
             </td>
-            <td>
+            <td data-label="Latest provider">
               {% if contact.latest_provider %}
               <strong>{{ contact.latest_provider|upper }} / {{ (contact.latest_provider_state or 'unknown')|upper }}</strong>
               <span>{{ contact.provider_email_status or 'No provider email status' }}</span>
               <small>{{ contact.provider_observed_at[:10] if contact.provider_observed_at else '' }}</small>
               {% else %}
-              <span>NO PROVIDER HISTORY</span>
+              <span>No provider history</span>
               {% endif %}
             </td>
-            <td>
+            <td data-label="Provider actions">
               <div class="verification-actions">
                 <form method="post" action="/email-verification/{{ contact.id }}/run">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                   <input type="hidden" name="provider" value="apollo">
                   <input type="hidden" name="operation" value="person_enrich">
-                  <button type="submit" {% if not contact.can_apollo_enrich %}disabled{% endif %}>APOLLO ENRICH <small>0 TO 1 CREDIT</small></button>
+                  <button type="submit" class="crm-button crm-button-small crm-button-secondary" {% if not contact.can_apollo_enrich %}disabled{% endif %}>Apollo enrich <small>0 to 1 credit</small></button>
                 </form>
                 <form method="post" action="/email-verification/{{ contact.id }}/run">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                   <input type="hidden" name="provider" value="enrow">
                   <input type="hidden" name="operation" value="email_find">
-                  <button type="submit" {% if not contact.can_enrow_find %}disabled{% endif %}>ENROW FIND <small>UP TO 1 CREDIT</small></button>
+                  <button type="submit" class="crm-button crm-button-small crm-button-secondary" {% if not contact.can_enrow_find %}disabled{% endif %}>Enrow find <small>up to 1 credit</small></button>
                 </form>
                 <form method="post" action="/email-verification/{{ contact.id }}/run">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                   <input type="hidden" name="provider" value="enrow">
                   <input type="hidden" name="operation" value="email_verify">
-                  <button type="submit" {% if not contact.can_verify %}disabled{% endif %}>ENROW VERIFY <small>0.25 CREDIT</small></button>
+                  <button type="submit" class="crm-button crm-button-small crm-button-secondary" {% if not contact.can_verify %}disabled{% endif %}>Enrow verify <small>0.25 credit</small></button>
                 </form>
               </div>
             </td>
           </tr>
           {% else %}
-          <tr><td colspan="5" class="verification-empty">No contacts match this filter.</td></tr>
+          <tr><td colspan="5" class="verification-empty">{% if filters.q or filters.status %}No contacts match this filter. <a href="/email-verification">Clear the filter</a>.{% else %}No contacts yet. <a href="/crm/new">Add a contact</a> to start verifying addresses.{% endif %}</td></tr>
           {% endfor %}
         </tbody>
       </table>
@@ -134,22 +136,27 @@
           <div><span>CANDIDATE</span><code>{{ attempt.candidate_email or 'NONE RETURNED' }}</code></div>
           <div><span>PROVIDER STATUS</span><strong>{{ attempt.provider_email_status or 'N/A' }}</strong></div>
           <div><span>CONFIDENCE</span><strong>{{ ((attempt.confidence or 0) * 100)|round|int }}%</strong></div>
-          <div><span>PROVIDER COST</span><strong>{{ '%.2f CREDITS'|format((attempt.provider_cost_microunits or 0) / 1000000) if attempt.provider_cost_microunits else 'NOT REPORTED' }}</strong></div>
-          <div><span>REQUESTS</span><strong>{{ attempt.request_count }} / {{ attempt.retry_count }} RETRIES</strong></div>
           <div><span>SEND GATE</span><strong>{{ attempt.send_gate_effect|upper }}</strong></div>
-          <div><span>HTTP</span><strong>{{ attempt.http_status or 'N/A' }}</strong></div>
-          <div><span>OBSERVED</span><strong>{{ attempt.observed_at[:19]|replace('T', ' ') }}</strong></div>
         </div>
+        <details class="verification-more">
+          <summary>More detail</summary>
+          <div class="verification-attempt-grid">
+            <div><span>PROVIDER COST</span><strong>{{ '%.2f CREDITS'|format((attempt.provider_cost_microunits or 0) / 1000000) if attempt.provider_cost_microunits else 'NOT REPORTED' }}</strong></div>
+            <div><span>REQUESTS</span><strong>{{ attempt.request_count }} / {{ attempt.retry_count }} RETRIES</strong></div>
+            <div><span>HTTP</span><strong>{{ attempt.http_status or 'N/A' }}</strong></div>
+            <div><span>OBSERVED</span><strong>{{ attempt.observed_at[:19]|replace('T', ' ') }}</strong></div>
+          </div>
+        </details>
         {% if attempt.candidate_disposition == 'review_required' %}
         <div class="verification-review-actions">
           <form method="post" action="/email-verification/attempts/{{ attempt.id }}/apply">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <label for="email_verification-field-1-{{ attempt.id }}"><span>TYPE THE CANDIDATE EMAIL TO APPLY IT</span><input id="email_verification-field-1-{{ attempt.id }}" name="confirmation" type="email" autocomplete="off" required placeholder="{{ attempt.candidate_email }}"></label>
-            <button type="submit">APPLY AS UNVERIFIED</button>
+            <button type="submit" class="crm-button crm-button-small crm-button-primary">Apply as unverified</button>
           </form>
           <form method="post" action="/email-verification/attempts/{{ attempt.id }}/dismiss">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-            <button type="submit">DISMISS CANDIDATE</button>
+            <button type="submit" class="crm-button crm-button-small crm-button-secondary">Dismiss candidate</button>
           </form>
         </div>
         {% else %}
@@ -157,7 +164,7 @@
         {% endif %}
       </article>
       {% else %}
-      <div class="verification-empty">No Apollo or Enrow attempts have been recorded yet.</div>
+      <div class="verification-empty">No Apollo or Enrow attempts yet. Use a provider action on a contact above and the result is recorded here.</div>
       {% endfor %}
     </div>
   </section>

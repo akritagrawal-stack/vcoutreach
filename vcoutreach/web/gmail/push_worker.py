@@ -108,7 +108,6 @@ def _send(draft_id, mode):
         raise SendRefused('Set TEST_RECIPIENT_EMAIL before sending in TEST mode.')
     if mode=='test' and not _EMAIL_RE.fullmatch(test_to):
         raise SendRefused('TEST_RECIPIENT_EMAIL must be a single valid email address.')
-    service=require_gmail_connection()
     journal=Journal(workspace.path('.vcoutreach','journal.jsonl'))
     workspace.path('.vcoutreach','send.lock')
     workspace.path('.vcoutreach','journal.jsonl.lock')
@@ -123,6 +122,11 @@ def _send(draft_id, mode):
             if row is None:
                 raise SendRefused('Draft not found.')
             row=dict(row)
+            if row['status']=='blocked' or row['boilerplate_version'].startswith('engine-') and row['auto_approve_skip_reason']:
+                raise SendRefused('Draft is blocked. Save and check it before sending.')
+            from vcoutreach.web.llm.hook_grounding import hook_is_ungrounded, grounding_state
+            if hook_is_ungrounded(row):
+                raise SendRefused('This hook is not backed by the saved research ('+grounding_state(row)+'). Regenerate the hook or edit it before sending.')
             if row['stage'] in {'passed','hold'} or (not row['stage'] and row['latest_reply_label'] in {'pass','passed','bounce'}) or row['dropped_reason']:
                 raise SendRefused('Contact is passed, on hold, or suppressed. Nothing was sent.')
             if row['channel']!='email' or not _EMAIL_RE.fullmatch(row['email'] or ''):
@@ -181,6 +185,7 @@ def _send(draft_id, mode):
                 if not path.is_file():
                     raise SendRefused('Configured pitch deck is missing.')
                 message.add_attachment(path.read_bytes(),maintype='application',subtype='pdf',filename=path.name)
+            service=require_gmail_connection()
             cursor=conn.execute("INSERT INTO web_send_journal(draft_id,partner_id,recipient,lane,mode,state,target_email) VALUES (?,?,?,?,?,'sending',?)",
                 (draft_id,row['partner_id'],row['email'].lower(),lane,mode,target))
             attempt_id=cursor.lastrowid

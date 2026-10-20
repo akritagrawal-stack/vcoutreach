@@ -23,11 +23,13 @@ from __future__ import annotations
 import html
 import re
 import sys
+import unicodedata
 from email.message import EmailMessage
 from email.utils import formatdate, make_msgid
 from pathlib import Path
 
 from vcoutreach.web.workspace_facts import forbidden_phrases
+from vcoutreach.lint import canned_well_wishes, unfilled_placeholders, FILLER_PHRASES
 
 # ---------------------------------------------------------------------------
 # Lint gate
@@ -56,9 +58,27 @@ _FILLER_PHRASES: list[str] = [
     "delve",
     "it's worth noting",
 ]
+_FILLER_PHRASES = list(dict.fromkeys([*_FILLER_PHRASES, *FILLER_PHRASES]))
 
 
 _URL_RE = re.compile(r'https?://[^\s<>]+')
+
+
+def _safe_greeting(body: str) -> str:
+    """Fall back for malformed greeting names, preserving ordinary name spelling."""
+    match = re.match(r'(?P<prefix>\s*)(?:Hi|Hello|Hey) (?P<name>[^\r\n]*),[ \t]*(?=\r?\n|$)', body)
+    if not match:
+        return body
+    name = match.group('name')
+    valid = (
+        sum(ch.isalpha() for ch in name) >= 2
+        and all(ch.isalpha() or unicodedata.category(ch).startswith('M') or ch in " '-\u2019" for ch in name)
+        and all(part and part[0].isalpha() and (part[-1].isalpha() or unicodedata.category(part[-1]).startswith('M'))
+                for part in name.split())
+    )
+    if valid:
+        return body
+    return body[:match.start()] + match.group('prefix') + 'Hi there,' + body[match.end():]
 
 
 def _split_paragraphs(body: str) -> list[str]:
@@ -126,6 +146,8 @@ def lint_body(body: str, *, kind: str = "follow_up") -> list[str]:
     """
     del kind  # not used yet, kept for API stability
     errors: list[str] = []
+    for placeholder in unfilled_placeholders(body):
+        errors.append(f'unfilled placeholder in body: {placeholder}')
 
     first_line = body.lstrip("\n").split("\n", 1)[0].strip()
     if not re.fullmatch(r"(Hi|Hello|Hey) [^\s,][^,]*,", first_line):
@@ -140,7 +162,9 @@ def lint_body(body: str, *, kind: str = "follow_up") -> list[str]:
     paragraphs = _split_paragraphs(body)
     errors.extend(_lint_hard_wraps(paragraphs))
 
-    lower_body = body.lower()
+    lower_body = body.lower().replace('\u2019', "'").replace('\u2018', "'")
+    for phrase in canned_well_wishes(body):
+        errors.append(f'filler phrase found: "{phrase}"')
     for phrase in _FILLER_PHRASES:
         if phrase in lower_body:
             errors.append(f'filler phrase found: "{phrase}"')
@@ -248,16 +272,16 @@ def _linkify(text: str, deck_url: str | None) -> str:
     pieces = []
     last = 0
     for m in _URL_RE.finditer(text):
-        pieces.append(html.escape(text[last:m.start()]))
+        pieces.append(html.escape(text[last:m.start()], quote=True))
         url = m.group(0)
         href = html.escape(url, quote=True)
         if deck_url and url == deck_url:
             anchor_text = 'our updated deck'
         else:
-            anchor_text = html.escape(url)
+            anchor_text = html.escape(url, quote=True)
         pieces.append(f'<a href="{href}">{anchor_text}</a>')
         last = m.end()
-    pieces.append(html.escape(text[last:]))
+    pieces.append(html.escape(text[last:], quote=True))
     return ''.join(pieces)
 
 
@@ -266,6 +290,7 @@ def _render_line(line: str, deck_url: str | None) -> str:
 
 
 def _render_inner(body: str, deck_url: str | None, open_pixel_url: str | None) -> str:
+    body = _safe_greeting(body)
     paragraphs = _split_paragraphs(body)
     divs = []
     for i, para in enumerate(paragraphs):
@@ -329,9 +354,12 @@ def build_message(
     allow_warnings=False. Serialize the result with
     msg.as_bytes(policy=email.policy.SMTP).
     """
-    transformed = apply_deck_mode(body, deck_mode, deck_url)
+    transformed = _safe_greeting(apply_deck_mode(body, deck_mode, deck_url))
 
     errors = lint_body(transformed)
+    errors.extend(f'unfilled placeholder in body: {token}' for token in unfilled_placeholders(body)
+                  if f'unfilled placeholder in body: {token}' not in errors)
+    errors.extend(f'unfilled placeholder in subject: {token}' for token in unfilled_placeholders(subject))
     blocking = errors if not allow_warnings else [e for e in errors if not e.startswith('warn:')]
     if blocking:
         raise ValueError('lint_body failed: ' + '; '.join(blocking))

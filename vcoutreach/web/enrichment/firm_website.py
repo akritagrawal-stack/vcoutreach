@@ -108,8 +108,8 @@ def _fetch_static(url: str) -> Optional[str]:
 def _is_spa(html: str) -> bool:
     """
     Return True if the page is likely a JavaScript SPA (body mostly empty).
-    Heuristic: strip <script>/<style> from body; if remaining text < 300 chars
-    OR a framework root div (#root, #app, #__next) is present with no body text.
+    Heuristic: a script or framework root must be present, and body text
+    after stripping <script>/<style> must contain fewer than 300 chars.
     """
     try:
         BeautifulSoup = require_dependency("bs4").BeautifulSoup
@@ -117,6 +117,8 @@ def _is_spa(html: str) -> bool:
 
         # Check for common SPA root markers
         spa_markers = soup.find_all('div', id=re.compile(r'^(root|app|__next|main|gatsby-focus-wrapper)$'))
+        if not spa_markers and not soup.find('script'):
+            return False
         if spa_markers:
             body = soup.find('body')
             if body:
@@ -248,6 +250,23 @@ def _find_nav_link(soup, keywords: list[str], homepage_url: str) -> Optional[str
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
+def firm_site_matches(firm_name: str, url: str) -> bool:
+    """A page mentioning the firm is insufficient when its domain belongs elsewhere."""
+    host = (urlparse(url).hostname or '').lower().removeprefix('www.')
+    key = re.sub(r'[^a-z0-9]', '', (firm_name or '').lower())
+    aliases = {'andreessenhorowitz': 'a16z.com', 'yc': 'ycombinator.com'}
+    configured = _KNOWN_FIRM_DOMAINS.get((firm_name or '').lower().strip()) or aliases.get(key)
+    if configured:
+        expected = configured.lower().removeprefix('www.').strip('/')
+        if host == expected or host.endswith('.' + expected):
+            return True
+    ignored = {'capital', 'venture', 'ventures', 'partners', 'partner', 'fund', 'the', 'and', 'group', 'management'}
+    tokens = [token for token in re.findall(r'[a-z0-9]+', (firm_name or '').lower()) if token not in ignored]
+    labels = host.split('.')[:-1]
+    return bool(tokens) and any(token == label or label.startswith(token) or label.endswith(token)
+                                for token in tokens if len(token) >= 3 for label in labels)
+
+
 def find_firm_website(firm_name: str, fallback_search: bool = True) -> Optional[str]:
     """
     Try to derive the firm's homepage URL.
@@ -298,6 +317,8 @@ def find_firm_website(firm_name: str, fallback_search: bool = True) -> Optional[
             netloc = urlparse(url).netloc.lower().replace('www.', '')
             if any(skip in netloc for skip in _skip_domains):
                 continue
+            if not firm_site_matches(firm_name, url):
+                continue
             # Return the root of this domain
             parsed = urlparse(url)
             homepage = f'{parsed.scheme}://{parsed.netloc}'
@@ -326,6 +347,8 @@ def discover_team_url(homepage_url: str) -> Optional[str]:
     try:
         soup = _parse_soup(html)
         url = _find_nav_link(soup, _TEAM_KEYWORDS, homepage_url)
+        if not url:
+            url = _find_nav_link(soup, ['about'], homepage_url)
         if url:
             logger.info('discover_team_url: found %s', url)
         return url
@@ -1007,6 +1030,7 @@ def enrich_firm(
       }
     """
     result: dict = {
+        'verification_status': 'unverified',
         'firm_url': None,
         'team_page_url': None,
         'portfolio_page_url': None,
@@ -1020,9 +1044,14 @@ def enrich_firm(
     # 1. Find homepage
     firm_url = find_firm_website(firm_name)
     if not firm_url:
+        result['reason'] = 'No plausible official website found for ' + firm_name
         logger.warning('Could not find website for firm: %r', firm_name)
         return result
+    if not firm_site_matches(firm_name, firm_url):
+        result['reason'] = 'Resolved website does not plausibly belong to ' + firm_name
+        return result
     result['firm_url'] = firm_url
+    result['verification_status'] = 'verified'
 
     # 2. Discover team and portfolio page URLs from homepage
     team_url = discover_team_url(firm_url)
@@ -1107,6 +1136,9 @@ def to_enrichment_facts(enrich_result: dict, source_url: str) -> list[dict]:
     """
     facts: list[dict] = []
 
+    if enrich_result.get('verification_status') == 'unverified':
+        return facts
+
     # Thesis
     thesis = enrich_result.get('firm_thesis')
     if thesis and len(thesis.strip()) > 20:
@@ -1122,6 +1154,7 @@ def to_enrichment_facts(enrich_result: dict, source_url: str) -> list[dict]:
     if bio and len(bio.strip()) > 20:
         facts.append({
             'type': 'partner_bio',
+            'person_specific': True,
             'text': bio.strip()[:280],
             'source_url': source_url,
             'confidence': 0.88,
@@ -1132,6 +1165,7 @@ def to_enrichment_facts(enrich_result: dict, source_url: str) -> list[dict]:
     if title and len(title.strip()) > 3:
         facts.append({
             'type': 'partner_title',
+            'person_specific': True,
             'text': title.strip()[:120],
             'source_url': source_url,
             'confidence': 0.90,

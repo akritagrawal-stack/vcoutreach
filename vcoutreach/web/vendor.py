@@ -342,12 +342,30 @@ def require_dependency(name: str):
         raise ImportError('Integration needs ' + name + '. Run: pip install -e ".[integrations]"') from exc
 
 
+def _bare_host(url: str) -> str:
+    host = (urlsplit(url).hostname or "").lower()
+    return host[4:] if host.startswith("www.") else host
+
+
 def public_requests_get(url: str, **kwargs):
-    validated_url(url)
+    """GET a public HTTPS page, following at most 3 redirects within the same site (www or bare host)."""
+    from urllib.parse import urljoin
+    current = validated_url(url)
     requests = require_dependency("requests")
     kwargs["allow_redirects"] = False
-    response = requests.get(url, **kwargs)
-    # Do not silently treat a redirect as a successful empty page.
-    if 300 <= response.status_code < 400:
-        raise ValueError("Website redirects require an explicit destination URL")
-    return response
+    for _hop in range(4):
+        response = requests.get(current, **kwargs)
+        if not 300 <= response.status_code < 400:
+            return response
+        location = (getattr(response, "headers", None) or {}).get("Location") or ""
+        if not location or _hop == 3:
+            break
+        target = urljoin(current, location)
+        try:
+            target = validated_url(target)
+        except ValueError:
+            break
+        if _bare_host(target) != _bare_host(current):
+            break
+        current = target
+    raise ValueError("Website redirects require an explicit destination URL")

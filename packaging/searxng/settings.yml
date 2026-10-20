@@ -1,0 +1,12 @@
+use_default_settings: true
+general:
+  instance_name: "Publikreach search"
+search:
+  formats:
+    - html
+    - json
+server:
+  # Local only. Replace this value if you ever expose the instance.
+  secret_key: "change-me-local-only-publikreach"
+  limiter: false
+  image_proxy: false

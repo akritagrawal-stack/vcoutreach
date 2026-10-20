@@ -1,129 +1,85 @@
 {% extends 'base.html' %}
+{% from '_partner_macros.html' import verification_badge, status_badge, tier_badge, responsive_badge, empty_value %}
 {% block page_id %}partners_list{% endblock %}
-{% block title %}Partners / {{ g_workspace.workspace_name }}{% endblock %}
+{% block title %}Partners{% endblock %}
 
 {% block content %}
 {% set rows = partners|default(rows|default([])) %}
-{% set tier_filters = tier_filters|default([tier_filter] if tier_filter|default('') else []) %}
-{% set status_filters = status_filters|default([status_filter] if status_filter|default('') else []) %}
-{% set verif_filters = verif_filters|default(request.args.getlist('verif')) %}
-{% set channel_filter = channel_filter|default(request.args.get('channel','')) %}
-{% set show_dropped = show_dropped|default(false) %}
-{% set partner_counts = partner_counts|default(counts|default({})) %}
-
+{% set tier_filters = [tier_filter] if tier_filter|default('') else [] %}
+{% set status_filters = [status_filter] if status_filter|default('') else [] %}
+{% set verif_filters = request.args.getlist('verif') %}
+{% set channel_filter = request.args.get('channel', '') %}
+{% set partner_counts = partner_counts|default({}) %}
+{% set any_filter = tier_filters or status_filters or verif_filters or channel_filter or search|default('') %}
 
 <div class="section-header page-title">
-  <h1>Partners <span class="text-faint" style="font-size:18px;font-weight:400;">{{ rows|length }}</span></h1>
+  <h1>Partners <span class="page-count">{{ rows|length }}</span></h1>
+  {% if partner_counts %}
+  <p class="pl-counters text-muted">
+    <strong class="text-ok">{{ partner_counts.get('partners_verified', 0) }}</strong> verified
+    <span class="chip-sep">&middot;</span>
+    <strong>{{ partner_counts.get('partners_dropped', 0) }}</strong> dropped during cleanup
+  </p>
+  {% endif %}
 </div>
 
-<!-- Verified / dropped counter -->
-{% if partner_counts %}
-<p class="text-muted" style="font-size:13px;margin-bottom:16px;">
-  <strong style="color:var(--success);">{{ partner_counts.get('verified', 0) }}</strong> verified partners ready to review
-  &nbsp;·&nbsp;
-  <strong style="color:var(--text-faint);">{{ partner_counts.get('dropped', 0) }}</strong> dropped during cleanup
-  {% if not show_dropped and partner_counts.get('dropped', 0) > 0 %}
-   /  <a href="/partners?show_dropped=1" style="font-size:12px;">show dropped</a>
-  {% elif show_dropped %}
-   /  <a href="/partners" style="font-size:12px;">hide dropped</a>
-  {% endif %}
-</p>
-{% endif %}
-
-<!-- Filter chips  /  each chip toggles independently via JS URL manipulation -->
 <div class="filter-bar mb-6">
   <span class="filter-label">Tier</span>
-  <button type="button" class="chip {% if not tier_filters %}active{% endif %}"
-          data-action="partners_list-0" >All</button>
+  <button type="button" class="chip {% if not tier_filters %}active{% endif %}" data-action="partners_list-0">All</button>
   {% for tv, tl in [('1','Tier 1'),('2','Tier 2')] %}
-  <button type="button" class="chip {% if tv in tier_filters %}active{% endif %}"
-          data-action="partners_list-1" data-arg0="{{ tv }}">{{ tl }}</button>
+  <button type="button" class="chip {% if tv in tier_filters %}active{% endif %}" data-action="partners_list-1" data-arg0="{{ tv }}">{{ tl }}</button>
   {% endfor %}
 
-  <span class="chip-sep">·</span>
+  <span class="chip-sep">&middot;</span>
   <span class="filter-label">Status</span>
   {% for sv, sl in [('pending','Pending'),('approved','Approved'),('rejected','Rejected'),('drafted','Drafted'),('sent','Sent')] %}
-  <button type="button" class="chip {% if sv in status_filters %}active{% endif %}"
-          data-action="partners_list-2" data-arg0="{{ sv }}">{{ sl }}</button>
+  <button type="button" class="chip {% if sv in status_filters %}active{% endif %}" data-action="partners_list-2" data-arg0="{{ sv }}">{{ sl }}</button>
   {% endfor %}
 
-  <span class="chip-sep">·</span>
+  <span class="chip-sep">&middot;</span>
   <span class="filter-label">Verified</span>
   {% for vv, vl in [('verified_strong','Strong'),('verified','Verified'),('weak','Weak'),('unverified','Unverified')] %}
-  <button type="button" class="chip {% if vv in verif_filters %}active{% endif %}"
-          data-action="partners_list-3" data-arg0="{{ vv }}">{{ vl }}</button>
+  <button type="button" class="chip {% if vv in verif_filters %}active{% endif %}" data-action="partners_list-3" data-arg0="{{ vv }}">{{ vl }}</button>
   {% endfor %}
 
-  <span class="chip-sep">·</span>
+  <span class="chip-sep">&middot;</span>
   <span class="filter-label">Channel</span>
-  <button type="button" class="chip {% if channel_filter == 'twitter' %}active{% endif %}"
-          data-action="partners_list-4" >Twitter</button>
-
-  {% if show_dropped %}
-  <a href="/partners?show_dropped=1{% for t in tier_filters %}&tier={{ t }}{% endfor %}{% for s in status_filters %}&status={{ s }}{% endfor %}"
-     class="chip active" style="color:var(--text-faint);">Showing dropped</a>
-  {% endif %}
+  <button type="button" class="chip {% if channel_filter == 'twitter' %}active{% endif %}" data-action="partners_list-4">Twitter</button>
 
   {% if tier_filters or status_filters or channel_filter or verif_filters %}
-  <button type="button" class="chip" style="color:var(--danger);border-color:var(--danger-dim);"
-          data-action="partners_list-5" >&#x2715; Clear</button>
+  <button type="button" class="chip chip-clear" data-action="partners_list-5">&#x2715; Clear</button>
   {% endif %}
 
-  <!-- Search (client-side) -->
-  <div class="search-wrap" style="margin-left:auto;">
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-      <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-    </svg>
-    <input aria-label="Search contacts" class="search-input" id="partnerSearch" type="search" value="{{ search|default('') }}" placeholder="Search name, firm, or notes…" autocomplete="off">
+  <div class="search-wrap pl-search">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <input aria-label="Search contacts" class="search-input" id="partnerSearch" type="search" value="{{ search|default('') }}" placeholder="Search name, firm, or notes" autocomplete="off">
   </div>
 </div>
 
-<!-- Bulk send form wraps the table -->
 <form id="bulkForm" method="POST" action="/send-batch">
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 
-  <!-- Floating action bar (hidden until checkboxes selected) -->
-  <div id="bulkBar" style="
-       display:none;
-       position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
-       background:var(--surface,#fff);border:1.5px solid var(--border,#e0e0e0);
-       border-radius:10px;padding:12px 20px;
-       box-shadow:0 4px 24px rgba(0,0,0,.18);
-       z-index:999;display:none;align-items:center;gap:12px;font-size:14px;">
-    <span id="bulkCount" style="font-weight:600;"></span>
+  {# One bulk control: send (test submit, or typed live confirm) and schedule drawer share this bar. #}
+  <div id="bulkBar" class="bulk-bar" role="region" aria-label="Bulk actions">
+    <span id="bulkCount" class="bulk-count"></span>
     {% if g_send_mode == 'test' %}
-      <button type="submit" class="btn" style="background:#2563eb;color:#fff;border:none;">
-        Send selected (test mode)
-      </button>
+      <button type="submit" class="btn btn-primary btn-sm">Send selected (test mode)</button>
     {% else %}
-      <button type="button" id="bulkLiveBtn" class="btn"
-              style="background:#dc2626;color:#fff;border:none;"
-              data-action="partners_list-6" >
-        Send selected [LIVE]
-      </button>
-      <div id="bulkLiveConfirm" style="display:none;align-items:center;gap:8px;">
-        <input aria-label="Confirm Text" type="text" name="confirm_text" id="bulkConfirmInput" class="form-control"
-               placeholder="SEND BATCH OF N" autocomplete="off"
-               style="font-family:monospace;width:180px;font-size:13px;">
-        <button type="button" class="btn btn-danger btn-sm" data-action="partners_list-7" >Confirm</button>
+      <button type="button" id="bulkLiveBtn" class="btn btn-danger btn-sm" data-action="partners_list-6">Send selected [LIVE]</button>
+      <div id="bulkLiveConfirm" class="bulk-live-confirm">
+        <input aria-label="Confirm Text" type="text" name="confirm_text" id="bulkConfirmInput" class="form-control mono-input" placeholder="SEND BATCH OF N" autocomplete="off">
+        <button type="button" class="btn btn-danger btn-sm" data-action="partners_list-7">Confirm</button>
       </div>
     {% endif %}
-    <button type="button" class="btn btn-sm" style="background:#7c3aed;color:#fff;border:none;"
-            data-action="partners_list-8" >
-      Schedule for later
-    </button>
-    <button type="button" class="btn btn-ghost btn-sm" data-action="partners_list-9" >Cancel</button>
+    <button type="button" class="btn btn-secondary btn-sm" data-action="partners_list-8">Schedule for later</button>
+    <button type="button" class="btn btn-ghost btn-sm" data-action="partners_list-9">Cancel</button>
   </div>
 
-  <!-- Partners table -->
   <div class="data-table-wrap">
-    <table class="data-table" id="partnersTable"><caption class="sr-only">Partners List records</caption>
+    <table class="data-table pl-table" id="partnersTable"><caption class="sr-only">Partners List records</caption>
       <thead>
         <tr>
-          <th style="width:32px;">
-            <input aria-label="Select contact" type="checkbox" id="selectAll" title="Select all visible" data-action="partners_list-10" >
-          </th>
-          <th style="width:36px;">#</th>
+          <th class="col-check"><input aria-label="Select all visible contacts" type="checkbox" id="selectAll" title="Select all visible" data-action="partners_list-10"></th>
           <th>Partner</th>
           <th>Firm</th>
           <th>Verified</th>
@@ -131,157 +87,42 @@
           <th>Responsive</th>
           <th>Channel</th>
           <th>Status</th>
-          <th style="width:48px;"></th>
+          <th class="col-action"><span class="sr-only">Open</span></th>
         </tr>
       </thead>
       <tbody>
         {% for row in rows %}
-        {% set notes_lower = (row['notes'] or '')|lower %}
         {% set email_verified = row.get('email_verification_status') in ['valid','deliverable','pb_verified'] %}
         {% set verification = 'verified' if email_verified else (row.get('verification_status') or 'unverified') %}
-        <tr data-verif="{{ verification }}" data-channel="{{ row.get('channel') or 'email' }}" data-name="{{ row['partner_name']|lower }}" data-firm="{{ (row['firm'] or '')|lower }}" data-notes="{{ notes_lower }}">
-          <td>
-            <input aria-label="Select contact" type="checkbox" name="draft_ids" value="{{ row.get('draft_id') or row['id'] }}"
-                   class="row-check" {% if 'draft_id' in row and row.draft_id is none %}disabled{% endif %} data-action="partners_list-11" >
+        <tr data-verif="{{ verification }}" data-channel="{{ row.get('channel') or 'email' }}" data-name="{{ (row['partner_name'] or '')|lower }}" data-firm="{{ (row['firm'] or '')|lower }}" data-notes="{{ (row['notes'] or '')|lower }}">
+          <td class="col-check">
+            <input aria-label="Select {{ row['partner_name'] }}" type="checkbox" name="draft_ids" value="{{ row.get('draft_id') or row['id'] }}"
+                   class="row-check" {% if 'draft_id' in row and row.draft_id is none %}disabled{% endif %} data-action="partners_list-11">
           </td>
-          <td class="text-faint" style="font-size:11px;">{{ row['id'] }}</td>
-          <td>
-            <a href="/partners/{{ row['partner_id'] }}" class="fw-600" style="color:var(--text);text-decoration:none;">
-              {{ row['partner_name'] }}
-            </a>
-            {% if row['email_uncertain'] %}
-              <span class="badge badge-email-unverified" style="margin-left:5px;" title="Email address is uncertain">email?</span>
-            {% endif %}
-            {% set evs = row.get('email_verification_status') %}
-            {% if email_verified %}
-              <span class="badge" style="margin-left:5px;background:#13713a;color:#fff;font-size:10px;" title="Address marked verified.">&#10003; Verified</span>
-            {% elif evs == 'invalid' %}
-              <span class="badge" style="margin-left:5px;background:#dc2626;color:#fff;font-size:10px;" title="SMTP probe rejected this address  /  do not send">&#10007; invalid</span>
-            {% elif evs == 'catch_all' %}
-              <span class="badge" style="margin-left:5px;background:#965000;color:#fff;font-size:10px;" title="Catch-all domain  /  server accepts everything">&#9888; catch-all</span>
-            {% elif evs == 'mx_pattern_match' %}
-              <span class="badge" style="margin-left:5px;background:#2563eb;color:#fff;font-size:10px;" title="MX-verified domain plus standard firm address pattern.">MX+pattern</span>
-            {% elif evs == 'mx_only' %}
-              <span class="badge" style="margin-left:5px;background:#6b7280;color:#fff;font-size:10px;" title="Domain accepts mail (MX records valid). Specific address not SMTP-verified  /  local network blocks port 25 probe.">MX-only</span>
-            {% elif evs == 'inconclusive' %}
-              <span class="badge" style="margin-left:5px;background:#6b7280;color:#fff;font-size:10px;" title="Could not verify domain or address. Higher bounce risk.">Unverified</span>
-            {% endif %}
-            {% if not email_verified %}<button type="submit" form="manual-verify-{{ row.partner_id }}" class="crm-button crm-button-small crm-button-secondary">Mark email verified (I checked it myself)</button>{% endif %}
-            {% if row.get('dropped_reason') %}
-              <span class="badge badge-dropped" style="margin-left:5px;" title="{{ row['dropped_reason'] }}">dropped</span>
-            {% endif %}
+          <td data-label="Partner">
+            <a href="/partners/{{ row['partner_id'] }}" class="fw-600 row-link">{{ row['partner_name'] }}</a>
+            {% if row['email_uncertain'] %}<span class="badge badge-email-unverified" title="Email address is uncertain">email?</span>{% endif %}
+            {% if row.get('dropped_reason') %}<span class="badge badge-dropped" title="{{ row['dropped_reason'] }}">dropped</span>{% endif %}
           </td>
-          <td class="text-muted">{{ row['firm'] or ' / ' }}</td>
-          <td>
-            {% set vs = verification %}
-            {% if vs == 'verified_strong' %}
-              <span class="badge badge-verif-strong">strong</span>
-            {% elif vs == 'verified' %}
-              <span class="badge badge-verif">verified</span>
-            {% elif vs == 'weak' %}
-              <span class="badge badge-verif-weak">weak</span>
-            {% else %}
-              <span class="badge badge-verif-none">unverified</span>
-            {% endif %}
-          </td>
-          <td>
-            {% if row['tier'] == 1 %}
-              <span class="badge badge-tier1">T1</span>
-            {% else %}
-              <span class="badge badge-tier2">T2</span>
-            {% endif %}
-          </td>
-          <td>
-            {% set resp = row['responsiveness'] or '' %}
-            {% if resp == 'High' %}
-              <span class="badge badge-resp-high">High</span>
-            {% elif resp == 'Medium-High' %}
-              <span class="badge badge-resp-mh">Med-High</span>
-            {% elif resp == 'Medium' %}
-              <span class="badge badge-resp-medium">Medium</span>
-            {% elif resp == 'Low' %}
-              <span class="badge badge-resp-low">Low</span>
-            {% else %}
-              <span class="text-faint"> / </span>
-            {% endif %}
-          </td>
-          <td>
-            {% if row['channel'] == 'twitter' %}
-              <span class="badge badge-twitter">Twitter</span>
-            {% else %}
-              <span class="text-faint" style="font-size:12px;">Email</span>
-            {% endif %}
-          </td>
-          <td>
-            {# Live send badge  /  shown prominently when live_sent_at is set #}
-            {% if row.get('live_sent_at') %}
-              <span class="badge badge-sent" style="background:#13713a;color:#fff;font-weight:700;"
-                    title="Live sent to {{ row.get('live_sent_to') }} on {{ row.get('live_sent_at','')[:10] }}">
-                LIVE SENT
-              </span>
-              {% if row.get('test_sent_count') and row['test_sent_count'] > 0 %}
-                <span class="badge badge-test-sent"
-                      title="Also test-sent {{ row['test_sent_count'] }} time(s). Last: {{ row.get('last_test_sent_at','')[:10] }}">
-                  +{{ row['test_sent_count'] }}t
-                </span>
-              {% endif %}
-            {% else %}
-              {# Determine badge from status value #}
-              {% set st = row['status'] %}
-              {% if st == 'pending' %}
-                <span class="badge badge-pending">Pending</span>
-              {% elif st == 'approved' %}
-                <span class="badge badge-approved">Approved</span>
-              {% elif st == 'rejected' %}
-                <span class="badge badge-rejected">Rejected</span>
-              {% elif st == 'drafted' %}
-                <span class="badge badge-drafted">Drafted</span>
-              {% elif st == 'test_sent' %}
-                <span class="badge badge-test-sent"
-                      style="background:#6b7280;color:#fff;font-size:10px;border-radius:999px;padding:2px 7px;"
-                      title="Test-sent {{ row.get('test_sent_count', 1) }} time(s). Last: {{ (row.get('last_test_sent_at') or '')[:10] }}">
-                  test sent · {{ (row.get('last_test_sent_at') or row.get('sent_at') or '')[:10] }}
-                </span>
-                {% if row.get('test_sent_count') and row['test_sent_count'] > 1 %}
-                  <span class="badge" style="background:#d1d5db;color:#374151;font-size:10px;border-radius:999px;padding:2px 5px;margin-left:3px;"
-                        title="{{ row['test_sent_count'] }} test sends total">×{{ row['test_sent_count'] }}</span>
-                {% endif %}
-              {% elif st == 'live_sent' %}
-                <span class="badge badge-sent"
-                      style="background:#13713a;color:#fff;font-weight:700;border-radius:999px;padding:2px 8px;font-size:10px;"
-                      title="LIVE sent to {{ row.get('live_sent_to') }} on {{ (row.get('live_sent_at') or '')[:10] }}">
-                  LIVE · {{ (row.get('live_sent_at') or '')[:10] }} → {{ row.get('live_sent_to') }}
-                </span>
-              {% elif st == 'sent' %}
-                {# legacy status  /  disambiguate by sent_to_address #}
-                {% if row.get('test_sent_count') and row['test_sent_count'] > 0 %}
-                  <span class="badge badge-test-sent"
-                        style="background:#6b7280;color:#fff;font-size:10px;border-radius:999px;padding:2px 7px;"
-                        title="Test-sent {{ row['test_sent_count'] }} time(s) to {{ sent_to_map.get(row['id']) }}">
-                    test sent ({{ row['test_sent_count'] }})
-                  </span>
-                {% else %}
-                  {% set sent_to = sent_to_map.get(row['id']) %}
-                  {% if sent_to and sent_to == g_test_recipient %}
-                    <span class="badge badge-test-sent"
-                          style="background:#6b7280;color:#fff;font-size:10px;border-radius:999px;padding:2px 7px;"
-                          title="Sent to {{ sent_to }}">test-sent</span>
-                  {% else %}
-                    <span class="badge badge-sent">sent</span>
-                  {% endif %}
-                {% endif %}
-              {% else %}
-                <span class="badge badge-default">{{ st }}</span>
-              {% endif %}
-            {% endif %}
-          </td>
-          <td>
-            <a href="/partners/{{ row['partner_id'] }}" class="btn btn-ghost btn-sm">View</a>
-          </td>
+          <td data-label="Firm" class="text-muted">{{ row['firm'] or '' }}{% if not row['firm'] %}{{ empty_value() }}{% endif %}</td>
+          <td data-label="Verified">{{ verification_badge(row.get('email_verification_status'), row.get('verification_status')) }}</td>
+          <td data-label="Tier">{{ tier_badge(row['tier']) }}</td>
+          <td data-label="Responsive">{{ responsive_badge(row['responsiveness'] or '') }}</td>
+          <td data-label="Channel">{% if row['channel'] == 'twitter' %}<span class="badge badge-twitter">Twitter</span>{% else %}<span class="text-faint">Email</span>{% endif %}</td>
+          <td data-label="Status">{{ status_badge(row, (sent_to_map|default({})).get(row['id']), g_test_recipient) }}<span class="crm-table-subline">{{ hook_grounding_state(row) }}</span></td>
+          <td class="col-action"><a href="/partners/{{ row['partner_id'] }}" class="btn btn-ghost btn-sm">View</a></td>
         </tr>
         {% else %}
         <tr>
-          <td colspan="10" class="empty-state">No partners match the current filter. <a href="/crm/new">Add your first contact</a>.</td>
+          <td colspan="9" class="empty-state">
+            {% if any_filter %}
+              <p>No partners match the current filter.</p>
+              <p class="text-faint">Clear a filter or change the search to see more.</p>
+            {% else %}
+              <p>No partners yet.</p>
+              <p><a class="btn btn-primary btn-sm" href="/crm/new">Add your first contact</a></p>
+            {% endif %}
+          </td>
         </tr>
         {% endfor %}
       </tbody>
@@ -289,63 +130,42 @@
   </div>
 </form>
 
-{% for row in rows %}
-<form id="manual-verify-{{ row.partner_id }}" method="post" action="{{ url_for('partner_verify_email_manually', partner_id=row.partner_id) }}">
-  <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="return_to" value="partners">
-</form>
-{% endfor %}
-
-<!-- Schedule modal panel (fixed overlay, CSS-only, no JS libs) -->
-<div role="dialog" aria-modal="true" aria-labelledby="scheduleDialogTitle" id="bulkScheduleOverlay" style="
-    display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1100;
-    align-items:center;justify-content:center;">
-  <div style="background:var(--surface,#fff);border-radius:12px;padding:28px 32px;
-              max-width:420px;width:100%;box-shadow:0 8px 40px rgba(0,0,0,.25);">
-    <h3 id="scheduleDialogTitle" style="margin:0 0 16px;font-size:16px;">Schedule Send</h3>
+{# Schedule drawer: same control as the bulk bar, anchored directly above it. Ids are read by app.js. #}
+<div role="dialog" aria-labelledby="scheduleDialogTitle" id="bulkScheduleOverlay" class="bulk-drawer">
+  <div class="bulk-drawer-panel">
+    <h2 id="scheduleDialogTitle" class="bulk-drawer-title">Schedule send</h2>
     <form id="bulkScheduleForm" method="POST" action="/schedule-send">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <!-- draft_ids injected by JS -->
       <div id="bulkSchedIdsContainer"></div>
-
-      <div class="form-group">
-        <label class="form-label" for="bsd">Date</label>
-        <input type="date" name="sched_date" id="bsd" class="form-control" required style="font-family:inherit;">
+      <div class="bulk-drawer-fields">
+        <div class="form-group">
+          <label class="form-label" for="bsd">Date</label>
+          <input type="date" name="sched_date" id="bsd" class="form-control" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="bst">Time</label>
+          <input type="time" name="sched_time" id="bst" class="form-control" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="bsm">Mode</label>
+          <select name="sched_mode" id="bsm" class="form-control">
+            <option value="test" {% if g_send_mode == 'test' %}selected{% endif %}>Test (safe)</option>
+            <option value="live" {% if g_send_mode == 'live' %}selected{% endif %}>Live (real emails)</option>
+          </select>
+        </div>
       </div>
-      <div class="form-group">
-        <label class="form-label" for="bst">Time</label>
-        <input type="time" name="sched_time" id="bst" class="form-control" required style="font-family:inherit;">
-      </div>
-      <div class="form-group">
-        <label class="form-label" for="bsm">Mode</label>
-        <select name="sched_mode" id="bsm" class="form-control" style="font-family:inherit;">
-          <option value="test" {% if g_send_mode == 'test' %}selected{% endif %}>Test (safe)</option>
-          <option value="live" {% if g_send_mode == 'live' %}selected{% endif %}>Live (real emails)</option>
-        </select>
-      </div>
-      <div id="bulkSchedEta" class="inset" style="font-size:12px;background:var(--surface-alt,#f8f8f8);margin-bottom:8px;display:none;"></div>
-      <div id="bulkSchedLiveConfirm" style="display:none;" class="form-group">
-        <label class="form-label" style="color:#dc2626;" for="bulkSchedConfirmInput">
+      <div id="bulkSchedEta" class="inset bulk-eta"></div>
+      <div id="bulkSchedLiveConfirm" class="form-group bulk-live-schedule"{% if g_send_mode == 'test' %} hidden{% endif %}>
+        <label class="form-label text-danger" for="bulkSchedConfirmInput">
           Type exactly: <code id="bulkSchedPhrase">SCHEDULE LIVE FOR N</code>
         </label>
-        <input type="text" name="confirm_text" id="bulkSchedConfirmInput" class="form-control"
-               placeholder="SCHEDULE LIVE FOR N" autocomplete="off" style="font-family:monospace;">
+        <input type="text" name="confirm_text" id="bulkSchedConfirmInput" class="form-control mono-input" placeholder="SCHEDULE LIVE FOR N" autocomplete="off">
       </div>
-      <div style="display:flex;gap:10px;margin-top:16px;">
-        <button type="submit" id="bulkSchedSubmitBtn" class="btn btn-sm"
-                style="background:#7c3aed;color:#fff;border:none;flex:1;">
-          Schedule N sends
-        </button>
-        <button type="button" class="btn btn-ghost btn-sm"
-                data-action="partners_list-12" >
-          Cancel
-        </button>
+      <div class="bulk-drawer-actions">
+        <button type="submit" id="bulkSchedSubmitBtn" class="btn btn-primary btn-sm">Schedule N sends</button>
+        <button type="button" class="btn btn-ghost btn-sm" data-action="partners_list-12">Cancel</button>
       </div>
     </form>
   </div>
 </div>
-
-{% endblock %}
-
-{% block scripts %}
-
 {% endblock %}

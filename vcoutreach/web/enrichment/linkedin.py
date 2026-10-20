@@ -678,6 +678,7 @@ def scrape_partner(partner: dict) -> dict:
             'about_excerpt': '',
             'education': [],
             'recent_posts': [],
+            'html_excerpt': '',
         }
 
     try:
@@ -695,6 +696,7 @@ def scrape_partner(partner: dict) -> dict:
                         'about_excerpt': '',
                         'education': [],
                         'recent_posts': [],
+                        'html_excerpt': '',
                     }
 
             data = sess.scrape_profile(known_url)
@@ -707,6 +709,7 @@ def scrape_partner(partner: dict) -> dict:
                     'about_excerpt': '',
                     'education': [],
                     'recent_posts': [],
+                    'html_excerpt': '',
                 }
 
             # Add partner name for fact extractor context
@@ -723,6 +726,7 @@ def scrape_partner(partner: dict) -> dict:
             'about_excerpt': '',
             'education': [],
             'recent_posts': [],
+            'html_excerpt': '',
         }
     except RateLimitHit as exc:
         logger.warning('LinkedIn rate limit for %s: %s', name, exc)
@@ -734,6 +738,7 @@ def scrape_partner(partner: dict) -> dict:
             'about_excerpt': '',
             'education': [],
             'recent_posts': [],
+            'html_excerpt': '',
         }
     except Exception as exc:
         logger.exception('Unexpected LinkedIn error for %s', name)
@@ -745,4 +750,5 @@ def scrape_partner(partner: dict) -> dict:
             'about_excerpt': '',
             'education': [],
             'recent_posts': [],
+            'html_excerpt': '',
         }

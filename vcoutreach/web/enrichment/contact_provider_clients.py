@@ -393,6 +393,7 @@ def _email_domain(value: str) -> str:
 
 
 def _domain(value: Any) -> str:
+    from vcoutreach.web.enrichment.email_guess import is_free_email_domain
     if not isinstance(value, str):
         return ""
     normalized = value.strip().casefold()
@@ -400,7 +401,7 @@ def _domain(value: Any) -> str:
         if normalized.startswith(prefix):
             normalized = normalized[len(prefix):]
     normalized = normalized.split("/", 1)[0].removeprefix("www.")
-    if "@" in normalized or "." not in normalized or len(normalized) > 253:
+    if "@" in normalized or "." not in normalized or len(normalized) > 253 or is_free_email_domain(normalized):
         return ""
     return normalized
 

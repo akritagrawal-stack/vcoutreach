@@ -1,98 +1,76 @@
 {% extends 'base.html' %}
+{% from '_partner_macros.html' import verification_badge, tier_badge, empty_value %}
 {% block page_id %}enrichment_status{% endblock %}
-{% block title %}Research status / {{ g_workspace.workspace_name }}{% endblock %}
+{% block title %}Enrichment{% endblock %}
 
 {% block content %}
-
 <div class="section-header page-title">
-  <h1>Enrichment Status <span class="text-faint" style="font-size:18px;font-weight:400;">{{ rows|length }}</span></h1>
+  <h1>Enrichment status <span class="page-count">{{ rows|length }}</span></h1>
 </div>
 
-<!-- Quick stats -->
-<div class="stats-grid section" style="margin-bottom:24px;">
-  <div class="stat-item">
-    <div class="stat-number">{{ stats.total }}</div>
-    <div class="stat-label">Partners</div>
-  </div>
-  <div class="stat-item">
-    <div class="stat-number" style="color:var(--success);">{{ stats.fully_enriched }}</div>
-    <div class="stat-label">Fully enriched</div>
-  </div>
-  <div class="stat-item">
-    <div class="stat-number" style="color:var(--warning, #f59e0b);">{{ stats.needs_pb }}</div>
-    <div class="stat-label">Needs PB enrichment</div>
-  </div>
-  <div class="stat-item">
-    <div class="stat-number" style="color:var(--warning, #f59e0b);">{{ stats.needs_linkedin }}</div>
-    <div class="stat-label">Needs LinkedIn</div>
-  </div>
-  <div class="stat-item">
-    <div class="stat-number" style="color:var(--danger, #ef4444);">{{ stats.needs_hook_regen }}</div>
-    <div class="stat-label">Needs hook regen</div>
-  </div>
+<div class="stats-grid section en-stats">
+  <div class="stat-item"><div class="stat-number">{{ stats.total }}</div><div class="stat-label">Partners</div></div>
+  <div class="stat-item"><div class="stat-number text-ok">{{ stats.fully_enriched }}</div><div class="stat-label">Fully enriched</div></div>
+  <div class="stat-item"><div class="stat-number text-warn">{{ stats.needs_pb }}</div><div class="stat-label">Needs PB enrichment</div></div>
+  <div class="stat-item"><div class="stat-number text-warn">{{ stats.needs_linkedin }}</div><div class="stat-label">Needs LinkedIn</div></div>
+  <div class="stat-item"><div class="stat-number text-danger">{{ stats.needs_hook_regen }}</div><div class="stat-label">Needs hook regen</div></div>
 </div>
 
-<hr class="divider">
-
-<!-- Filter chips -->
+{% if rows %}
 <div class="filter-bar mb-6" id="filterBar">
   <span class="filter-label">Source</span>
-  <button type="button" class="chip active" id="chip-has-pb-api"
-          data-action="enrichment_status-0" >Has PB API</button>
-  <button type="button" class="chip" id="chip-miss-pb-api"
-          data-action="enrichment_status-1" >Missing PB API</button>
-  <button type="button" class="chip" id="chip-miss-linkedin"
-          data-action="enrichment_status-2" >Missing LinkedIn</button>
-  <button type="button" class="chip" id="chip-miss-web"
-          data-action="enrichment_status-3" >Missing Web Search</button>
+  <button type="button" class="chip" id="chip-has-pb-api" data-action="enrichment_status-0">Has PB API</button>
+  <button type="button" class="chip" id="chip-miss-pb-api" data-action="enrichment_status-1">Missing PB API</button>
+  <button type="button" class="chip" id="chip-miss-linkedin" data-action="enrichment_status-2">Missing LinkedIn</button>
+  <button type="button" class="chip" id="chip-miss-web" data-action="enrichment_status-3">Missing Web Search</button>
 
-  <span class="chip-sep">·</span>
+  <span class="chip-sep">&middot;</span>
   <span class="filter-label">Hook</span>
-  <button type="button" class="chip" id="chip-hq-cite"
-          data-action="enrichment_status-4" >Cite-specific</button>
-  <button type="button" class="chip" id="chip-hq-generic"
-          data-action="enrichment_status-5" >Generic</button>
-  <button type="button" class="chip" id="chip-hq-none"
-          data-action="enrichment_status-6" >No hook</button>
+  <button type="button" class="chip" id="chip-hq-cite" data-action="enrichment_status-4">Cite-specific</button>
+  <button type="button" class="chip" id="chip-hq-generic" data-action="enrichment_status-5">Generic</button>
+  <button type="button" class="chip" id="chip-hq-none" data-action="enrichment_status-6">No hook</button>
 
-  <span class="chip-sep">·</span>
+  <span class="chip-sep">&middot;</span>
   <span class="filter-label">Tier</span>
   {% for tv in ['1','2','3','4'] %}
-  <button type="button" class="chip" id="chip-tier-{{tv}}"
-          data-action="enrichment_status-7" data-arg0="{{tv}}">T{{ tv }}</button>
+  <button type="button" class="chip" id="chip-tier-{{ tv }}" data-action="enrichment_status-7" data-arg0="{{ tv }}">T{{ tv }}</button>
   {% endfor %}
 
-  <button type="button" class="chip" id="chip-clear"
-          style="color:var(--danger);border-color:var(--danger-dim);display:none;margin-left:8px;"
-          data-action="enrichment_status-8" >&#x2715; Clear filters</button>
+  <button type="button" class="chip chip-clear" id="chip-clear" data-action="enrichment_status-8">&#x2715; Clear filters</button>
 </div>
 
-<!-- Table -->
+<p class="en-legend text-muted">
+  <span class="en-ok" aria-hidden="true">&#x2713;</span> source present (fact count beside it)
+  <span class="chip-sep">&middot;</span> <span class="text-faint">none</span> source missing
+  <span class="chip-sep">&middot;</span> Hook: <span class="en-ok" aria-hidden="true">&#x2713;</span> cites a specific company,
+  <span class="en-bad" aria-hidden="true">&#x2717;</span> generic, <span class="text-faint">Not checked</span> hook not yet verified, <span class="en-bad">Ungrounded</span> hook claims not in the research, <span class="text-faint">?</span> cannot tell
+</p>
+
 <div class="data-table-wrap">
-  <table class="data-table" id="enrichTable"><caption class="sr-only">Enrichment Status records</caption>
+  <table class="data-table pl-table en-table" id="enrichTable"><caption class="sr-only">Enrichment Status records</caption>
     <thead>
       <tr>
-        <th   style="cursor:pointer;" title="Sort by name"><button class="table-sort" type="button" data-action="enrichment_status-9">Partner &#x2195;</button></th>
-        <th   style="cursor:pointer;" title="Sort by tier"><button class="table-sort" type="button" data-action="enrichment_status-10">Tier &#x2195;</button></th>
+        <th aria-sort="none" data-sort="partner"><button class="table-sort" type="button">Partner &#x2195;</button></th>
+        <th aria-sort="none" data-sort="tier"><button class="table-sort" type="button">Tier &#x2195;</button></th>
         <th>Verified</th>
-        <th   style="cursor:pointer;white-space:nowrap;" title="Sort"><button class="table-sort" type="button" data-action="enrichment_status-11">PB API &#x2195;</button></th>
-        <th   style="cursor:pointer;white-space:nowrap;" title="Sort"><button class="table-sort" type="button" data-action="enrichment_status-12">PB Scrape &#x2195;</button></th>
-        <th   style="cursor:pointer;white-space:nowrap;" title="Sort"><button class="table-sort" type="button" data-action="enrichment_status-13">LinkedIn &#x2195;</button></th>
-        <th   style="cursor:pointer;white-space:nowrap;" title="Sort"><button class="table-sort" type="button" data-action="enrichment_status-14">Web &#x2195;</button></th>
-        <th   style="cursor:pointer;white-space:nowrap;" title="Sort"><button class="table-sort" type="button" data-action="enrichment_status-15">Web v2 &#x2195;</button></th>
-        <th   style="cursor:pointer;white-space:nowrap;" title="Sort"><button class="table-sort" type="button" data-action="enrichment_status-16">Firm Site &#x2195;</button></th>
-        <th   style="cursor:pointer;white-space:nowrap;" title="Sort"><button class="table-sort" type="button" data-action="enrichment_status-17">Email &#x2195;</button></th>
-        <th   style="cursor:pointer;" title="Sort by total facts"><button class="table-sort" type="button" data-action="enrichment_status-18">Facts &#x2195;</button></th>
-        <th   style="cursor:pointer;" title="Sort by hook quality"><button class="table-sort" type="button" data-action="enrichment_status-19">Hook &#x2195;</button></th>
+        <th aria-sort="none" data-sort="pb_api"><button class="table-sort" type="button">PB API &#x2195;</button></th>
+        <th aria-sort="none" data-sort="pb"><button class="table-sort" type="button">PB Scrape &#x2195;</button></th>
+        <th aria-sort="none" data-sort="linkedin"><button class="table-sort" type="button">LinkedIn &#x2195;</button></th>
+        <th aria-sort="none" data-sort="web"><button class="table-sort" type="button">Web &#x2195;</button></th>
+        <th aria-sort="none" data-sort="web2"><button class="table-sort" type="button">Web v2 &#x2195;</button></th>
+        <th aria-sort="none" data-sort="fw"><button class="table-sort" type="button">Firm Site &#x2195;</button></th>
+        <th aria-sort="none" data-sort="eg"><button class="table-sort" type="button">Email &#x2195;</button></th>
+        <th aria-sort="none" data-sort="facts"><button class="table-sort" type="button">Facts &#x2195;</button></th>
+        <th aria-sort="none" data-sort="hook"><button class="table-sort" type="button">Hook &#x2195;</button></th>
         <th>Last enriched</th>
       </tr>
     </thead>
     <tbody>
+      {% set src_order = ['pitchbook_api','pitchbook','linkedin','web_search','web_search_v2','firm_website','email_guess'] %}
       {% for row in rows %}
-      {% set vs = row.verification_status %}
       <tr
         data-partner="{{ row.partner_name|lower }}"
-        data-firm="{{ row.firm|lower }}"
+        data-firm="{{ (row.firm or '')|lower }}"
         data-tier="{{ row.tier }}"
         data-pb-api="{{ '1' if row.source_data['pitchbook_api']['present'] else '0' }}"
         data-pb="{{ '1' if row.source_data['pitchbook']['present'] else '0' }}"
@@ -104,85 +82,40 @@
         data-hook-quality="{{ row.hook_quality }}"
         data-total="{{ row.total_facts }}"
       >
-        <td>
-          <a href="/partners/{{ row.partner_id }}" style="color:var(--text);text-decoration:none;font-weight:600;">
-            {{ row.partner_name }}
-          </a>
-          {% if row.firm and row.firm != ' / ' %}
-          <span class="text-faint" style="font-size:12px;display:block;">{{ row.firm }}</span>
-          {% endif %}
+        <td data-label="Partner">
+          <a href="/partners/{{ row.partner_id }}" class="fw-600 row-link">{{ row.partner_name }}</a>
+          {% if row.firm %}<span class="cell-sub text-faint">{{ row.firm }}</span>{% endif %}
         </td>
-        <td>
-          {% if row.tier == 1 %}
-            <span class="badge badge-tier1">T1</span>
-          {% elif row.tier == 2 %}
-            <span class="badge badge-tier2">T2</span>
-          {% elif row.tier == 3 %}
-            <span class="badge" style="background:var(--surface-2,#f3f4f6);color:var(--text-muted);">T3</span>
-          {% elif row.tier == 4 %}
-            <span class="badge" style="background:var(--surface-2,#f3f4f6);color:var(--text-faint);">T4</span>
-          {% else %}
-            <span class="text-faint"> / </span>
-          {% endif %}
-        </td>
-        <td>
-          {% if vs == 'verified_strong' %}
-            <span class="badge badge-verif-strong">strong</span>
-          {% elif vs == 'verified' %}
-            <span class="badge badge-verif">verified</span>
-          {% elif vs == 'weak' %}
-            <span class="badge badge-verif-weak">weak</span>
-          {% else %}
-            <span class="badge badge-verif-none">unverif</span>
-          {% endif %}
-        </td>
-
-        {% set src_order = ['pitchbook_api','pitchbook','linkedin','web_search','web_search_v2','firm_website','email_guess'] %}
+        <td data-label="Tier">{{ tier_badge(row.tier) }}</td>
+        <td data-label="Verified">{{ verification_badge(none, row.verification_status) }}</td>
         {% for src in src_order %}
         {% set sd = row.source_data[src] %}
-        <td style="text-align:center;">
-          {% if sd.present %}
-            <span title="{{ sd.count }} facts" style="color:var(--success,#22c55e);font-size:16px;">&#x2713;</span>
-            <span class="text-faint" style="font-size:11px;"> {{ sd.count }}</span>
-          {% else %}
-            <span style="color:var(--text-faint);font-size:13px;"> / </span>
-          {% endif %}
+        <td data-label="{{ src|replace('_', ' ') }}" class="cell-center">
+          {% if sd.present %}<span class="en-ok" title="{{ sd.count }} facts">&#x2713;</span> <span class="text-faint cell-small">{{ sd.count }}</span>{% else %}{{ empty_value() }}{% endif %}
         </td>
         {% endfor %}
-
-        <td style="text-align:right;font-weight:600;font-size:14px;">
-          {% if row.total_facts == 0 %}
-            <span class="text-faint">0</span>
-          {% else %}
-            {{ row.total_facts }}
-          {% endif %}
+        <td data-label="Facts" class="cell-num">{% if row.total_facts == 0 %}<span class="text-faint">0</span>{% else %}{{ row.total_facts }}{% endif %}</td>
+        <td data-label="Hook" class="cell-center">
+          {% if row.hook_quality == 'cite_specific' %}<span class="en-ok" title="Hook cites a specific company from PB data">&#x2713;</span>
+          {% elif row.hook_quality == 'generic' %}<span class="en-bad" title="Hook exists but does not cite a specific PB company">&#x2717;</span>
+          {% elif row.hook_quality == 'ungrounded' %}<span class="en-bad cell-small" title="Hook has claims that are not in the saved research. Regenerate it before approving.">Ungrounded</span>
+          {% elif row.hook_quality == 'grounded' %}<span class="en-ok" title="Every claim in the hook matches the saved research">&#x2713;</span>
+          {% elif row.hook_quality == 'not_checked' %}<span class="text-faint cell-small" title="Hook exists but has not been checked against enrichment facts">Not checked</span>
+          {% elif row.hook_quality == 'no_enrichment' %}<span class="text-faint" title="No enrichment, hook quality unknown">?</span>
+          {% elif row.hook_quality == 'unknown' %}<span class="text-faint" title="No PB data to check against">?</span>
+          {% else %}<span class="text-faint" title="No hook generated">none</span>{% endif %}
         </td>
-        <td style="text-align:center;">
-          {% if row.hook_quality == 'cite_specific' %}
-            <span title="Hook cites a specific company from PB data" style="color:var(--success,#22c55e);font-size:16px;">&#x2713;</span>
-          {% elif row.hook_quality == 'generic' %}
-            <span title="Hook exists but doesn't cite a specific PB company" style="color:var(--danger,#ef4444);font-size:15px;">&#x2717;</span>
-          {% elif row.hook_quality == 'no_enrichment' %}
-            <span title="No enrichment  /  hook quality unknown" class="text-faint">?</span>
-          {% elif row.hook_quality == 'unknown' %}
-            <span title="No PB data to check against" class="text-faint">?</span>
-          {% else %}
-            <span title="No hook generated" class="text-faint"> / </span>
-          {% endif %}
-        </td>
-        <td class="text-muted" style="font-size:12px;white-space:nowrap;">{{ row.last_enriched }}</td>
-      </tr>
-      {% else %}
-      <tr>
-        <td colspan="13" class="empty-state">No active partners found. <a href="/crm/new">Add your first contact</a>.</td>
+        <td data-label="Last enriched" class="text-muted cell-small cell-nowrap">{{ row.last_enriched or '' }}{% if not row.last_enriched %}{{ empty_value() }}{% endif %}</td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
 </div>
-
-{% endblock %}
-
-{% block scripts %}
-
+{% else %}
+<div class="empty-state">
+  <p>No active partners to enrich yet.</p>
+  <p class="text-faint">Enrichment status appears here once partners exist.</p>
+  <p><a class="btn btn-primary btn-sm" href="/crm/new">Add a contact</a></p>
+</div>
+{% endif %}
 {% endblock %}

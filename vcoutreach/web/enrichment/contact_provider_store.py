@@ -545,6 +545,7 @@ def _bounded_float_nonnegative(value: Any) -> float | None:
 
 
 def _usable_domain(value: Any) -> str:
+    from vcoutreach.web.enrichment.email_guess import is_free_email_domain
     if not isinstance(value, str):
         return ""
     normalized = value.strip().casefold()
@@ -558,6 +559,7 @@ def _usable_domain(value: Any) -> str:
         or "." not in normalized
         or normalized.endswith(".invalid")
         or len(normalized) > 253
+        or is_free_email_domain(normalized)
     ):
         return ""
     return normalized

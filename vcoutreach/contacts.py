@@ -4,11 +4,37 @@ from __future__ import annotations
 import csv
 import io
 import re
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
+from urllib.parse import urlsplit
 
 from .types import Contact, ContactsError, Lane
+
+
+def sanitize_text(value, max_len, *, allow_newlines=False) -> str:
+    """Remove control and bidi override characters before truncating text."""
+    text = "" if value is None else str(value)
+    cleaned = "".join(
+        ch for ch in text
+        if not ("\u202a" <= ch <= "\u202e" or "\u2066" <= ch <= "\u2069")
+        and (unicodedata.category(ch) != "Cc" or (allow_newlines and ch in "\n\t"))
+    )
+    return cleaned[:max(0, int(max_len))]
+
+
+def is_http_url(value) -> bool:
+    """Accept only absolute HTTP or HTTPS URLs with a host."""
+    if not isinstance(value, str) or not value or any(ch.isspace() or ord(ch) < 32 for ch in value):
+        return False
+    try:
+        parsed = urlsplit(value)
+        parsed.port  # Also reject malformed ports.
+        return (parsed.scheme.lower() in {"http", "https"} and bool(parsed.hostname)
+                and not any(ch in value for ch in '\\<>"'))
+    except ValueError:
+        return False
 
 
 @dataclass(frozen=True)
@@ -57,10 +83,12 @@ def _slug(email: str) -> str:
 
 
 def _header_name(raw: str) -> str:
-    return re.sub(r"[\s-]+", "_", raw.strip().lower())
+    name = re.sub(r"[\s-]+", "_", raw.lstrip('\ufeff').strip().lower())
+    return {'partner_name': 'name', 'full_name': 'name', 'firm': 'org', 'company': 'org',
+            'organization': 'org', 'mail': 'email', 'e_mail': 'email', 'title': 'role'}.get(name, name)
 
 
-def load_contacts(path: Path) -> List[Contact]:
+def load_contacts(path: Path, *, report: dict | None = None) -> List[Contact]:
     """Parse a contacts CSV into Contact objects, validating every row.
 
     All row problems are collected in one pass (at most MAX_PROBLEMS) and raised as a
@@ -102,6 +130,14 @@ def load_contacts(path: Path) -> List[Contact]:
     if header_index is None:
         raise ContactsError("%s is empty: expected a header row" % name)
 
+    if len(set(header)) != len(header):
+        raise ContactsError('%s has duplicate columns after resolving header aliases' % name)
+    if report is not None:
+        supported = {'id', 'name', 'email', 'org', 'role', 'facts', 'source_urls', 'lane',
+                     'thread_subject', 'in_reply_to', 'references', 'subject', 'first_name'}
+        report['dropped_columns'] = [cells.strip() or '(unnamed)' for cells, col in zip(records[header_index], header) if col not in supported]
+        report['skipped_blank_rows'] = header_index
+
     missing = [col for col in _REQUIRED_COLUMNS if col not in header]
     if missing:
         raise ContactsError(
@@ -117,6 +153,8 @@ def load_contacts(path: Path) -> List[Contact]:
     for index in range(header_index + 1, len(records)):
         cells = records[index]
         if not any(cell.strip() for cell in cells):
+            if report is not None:
+                report['skipped_blank_rows'] += 1
             continue
         row = index + 1
         if len(cells) != len(header):

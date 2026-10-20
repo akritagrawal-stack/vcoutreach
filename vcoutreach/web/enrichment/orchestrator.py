@@ -65,7 +65,12 @@ def _upsert_enrichment_row(
     facts_json: Optional[list],
     confidence: Optional[float],
 ) -> None:
-    """Insert or replace an enrichment row."""
+    """Update evidence without erasing saved facts on an empty provider result."""
+    if not facts_json:
+        existing = conn.execute('SELECT facts_json FROM enrichment WHERE partner_id=? AND source=? AND url=?',
+                                (partner_id, source, url or '')).fetchone()
+        if existing and existing[0] and existing[0] != '[]':
+            return
     facts_str = json.dumps(facts_json) if facts_json is not None else None
     raw_str = raw_text[:8000] if raw_text else None
 
@@ -89,8 +94,10 @@ def _upsert_enrichment_row(
 
 
 def _extract_domain_from_email(email: str) -> str | None:
+    from vcoutreach.web.enrichment.email_guess import is_free_email_domain
     if '@' in email:
-        return email.split('@', 1)[1]
+        domain = email.split('@', 1)[1].strip().lower()
+        return None if is_free_email_domain(domain) else domain
     return None
 
 
@@ -118,13 +125,15 @@ def _run_web_search(partner: dict, partner_id: int, conn: sqlite3.Connection) ->
                 'rows_written': 0,
                 'total_results': 0,
                 'quotable_results': 0,
-                'errors': ['No results  -  SearXNG likely down'],
+                'errors': ['SearXNG returned no results; search may be throttled or unavailable'],
             }
 
         # Group results into one enrichment row (with all results bundled)
         # and also save individual high-value rows per URL
         raw_data = {'results': results, 'partner_name': name, 'name': name}
         facts = extract_facts('web_search', raw_data)
+        if not facts:
+            errors.append('Search returned results but no usable fact snippets; saved facts were kept')
         logger.info('Web search: extracted %d facts from %d results', len(facts), total_results)
 
         # Determine overall confidence
@@ -210,6 +219,8 @@ def _run_linkedin(partner: dict, partner_id: int, conn: sqlite3.Connection) -> d
         # Extract facts
         data['partner_name'] = name
         facts = extract_facts('linkedin', data)
+        if not facts:
+            errors.append('No usable profile facts returned; saved facts were kept')
         logger.info('LinkedIn: extracted %d facts for %s (headline=%r)',
                     len(facts), name, headline[:60] if headline else '')
 
@@ -257,9 +268,13 @@ def _run_email_guess(partner: dict, partner_id: int, conn: sqlite3.Connection) -
     last = parts[-1] if len(parts) > 1 else parts[0] if parts else ''
 
     # Derive domain from existing email or firm_domain
-    domain = partner.get('firm_domain', '')
+    from vcoutreach.web.enrichment.email_guess import is_free_email_domain
+    domain = (partner.get('firm_domain') or '').strip().lower()
     if not domain and email and '@' in email:
-        domain = email.split('@', 1)[1]
+        domain = email.split('@', 1)[1].strip().lower()
+
+    if is_free_email_domain(domain or ''):
+        return {'candidates': [], 'domain': domain, 'skipped': 'free-mail domain', 'errors': []}
 
     if not domain:
         logger.warning('No domain found for %s  -  skipping email guess', name)
@@ -342,6 +357,12 @@ def _run_firm_website(partner: dict, partner_id: int, conn: sqlite3.Connection) 
 
         logger.info('Firm website: scraping %s for %s %s', firm_name, first, last)
         result = firm_website.enrich_firm(firm_name, partner_first=first, partner_last=last)
+        if result and result.get('firm_url') and not firm_website.firm_site_matches(firm_name, result['firm_url']):
+            result = {'verification_status': 'unverified', 'reason': 'Resolved website does not plausibly belong to ' + firm_name}
+        if result and result.get('verification_status') == 'unverified':
+            result_summary['verification_status'] = 'unverified'
+            result_summary['errors'].append('Unverified firm website: ' + (result.get('reason') or 'No plausible official website found'))
+            return result_summary
         if not result or not result.get('firm_url'):
             logger.info('Firm website: no URL found for %s', firm_name)
             return result_summary
@@ -874,7 +895,7 @@ def pb_backfill_email(partner_id: int, db_path: Path | None = None) -> dict:
         conn.close()
 
 
-def get_enrichment_facts(partner_id: int, db_path: Path | None = None) -> list[dict]:
+def get_enrichment_facts(partner_id: int, db_path: Path | None = None, *, limit: int | None = 10) -> list[dict]:
     """
     Retrieve all facts for a partner from the enrichment table.
 
@@ -905,12 +926,13 @@ def get_enrichment_facts(partner_id: int, db_path: Path | None = None) -> list[d
             try:
                 facts = json.loads(facts_json)
                 if isinstance(facts, list):
-                    all_facts.extend(facts)
+                    all_facts.extend({**f, 'provider': row['source'], 'source_url': f.get('source_url') or row['url']}
+                                     for f in facts if isinstance(f, dict))
             except Exception:
                 pass
 
         from vcoutreach.web.enrichment.fact_extractor import facts_to_llm_format
-        return facts_to_llm_format(all_facts)
+        return facts_to_llm_format(all_facts, limit=limit)
 
     finally:
         conn.close()
@@ -951,6 +973,8 @@ def enrich_partner(
             return {'error': f'Partner {partner_id} not found'}
 
         name = partner.get('partner_name', 'Unknown')
+        before = {(row['source'], row['url']): row['facts_json'] for row in conn.execute(
+            'SELECT source,url,facts_json FROM enrichment WHERE partner_id=? AND facts_json IS NOT NULL', (partner_id,))}
         logger.info('=== Enriching partner %d: %s ===', partner_id, name)
 
         summary: dict = {
@@ -1002,15 +1026,19 @@ def enrich_partner(
             summary['per_source']['firm_website'] = fw_result
             summary['errors'].extend(fw_result.get('errors', []))
 
-        # Count total facts
-        rows = conn.execute(
-            """
-            SELECT COUNT(*) FROM enrichment
-            WHERE partner_id = ? AND facts_json IS NOT NULL
-            """,
-            (partner_id,),
-        ).fetchone()
-        summary['facts_count'] = rows[0] if rows else 0
+        # Report provider names and actual usable facts, without the prompt's ten-fact cap.
+        summary['errors'] = [f'{source}: {error}' for source, result in summary['per_source'].items()
+                             for error in result.get('errors', [])]
+        summary['preserved_sources'] = []
+        for source in summary['sources_run']:
+            if not summary['per_source'][source].get('errors'):
+                continue
+            after = {row['url']: row['facts_json'] for row in conn.execute(
+                'SELECT url,facts_json FROM enrichment WHERE partner_id=? AND source=?', (partner_id, source))}
+            if any(saved and saved != '[]' and after.get(url) == saved
+                   for (provider, url), saved in before.items() if provider == source):
+                summary['preserved_sources'].append(source)
+        summary['facts_count'] = len(get_enrichment_facts(partner_id, db_path=db_path, limit=None))
 
         # Mark partner as enriched
         try:

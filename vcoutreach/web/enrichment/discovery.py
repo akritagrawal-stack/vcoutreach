@@ -645,6 +645,9 @@ def discover_by_comparable_companies(
 
     def spend(n: int):
         summary["credits_spent"] += n
+        if summary["credits_spent"] >= credit_cap:
+            summary["stopped"] = True
+            summary["stop_reason"] = "credit cap reached"
 
     def cap_reached() -> bool:
         return summary["credits_spent"] >= credit_cap
@@ -691,7 +694,7 @@ def discover_by_comparable_companies(
         investor_agg: dict[str, dict] = {}  # investorId -> aggregated
         # Iterate a snapshot: a self-heal may rewrite resolved[comp_name].
         for comp_name, pbid in list(resolved.items()):
-            if cap_reached():
+            if summary["credits_spent"] + 2 > credit_cap:
                 summary["stopped"] = True
                 summary["stop_reason"] = "credit cap reached during harvest"
                 break

@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 {% block page_id %}crm_dashboard{% endblock %}
-{% block title %}Relationship CRM / {{ g_workspace.workspace_name }}{% endblock %}
+{% block title %}Relationship CRM{% endblock %}
 
 {% block content %}
 <div class="crm-shell crm-dashboard">
@@ -8,34 +8,35 @@
     <div>
       <div class="crm-eyebrow"><span class="crm-led"></span> RELATIONSHIP WORKSPACE</div>
       <h1>Outreach overview.</h1>
-      <p>Counts below are recalculated from the local CRM when this page loads. Inbox matches update after a Gmail mailbox refresh.</p>
+      <p>Counts are recalculated from the local CRM when this page loads.</p>
     </div>
-    <div class="crm-hero-meta">
-      <span class="crm-source-tag">SOURCE / LOCAL RECORDS</span>
-      <a class="crm-button crm-button-primary" href="{{ url_for('crm_drafts') }}">Review drafts</a>
-      <a class="crm-button crm-button-secondary" href="{{ url_for('crm_analytics') }}">Analytics</a>
-      <a class="crm-button crm-button-secondary" href="{{ url_for('crm_tracking') }}">Cloudflare tracking</a>
+    <div class="crm-toolbar">
+      <a class="crm-chip" href="/settings#svc-gmail" title="Gmail is managed in Settings"><svg class="crm-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18v12H3z"/><path d="M3 7l9 7 9-7"/></svg>Gmail inbox: {% if inbox_sync_status %}checked {{ inbox_sync_status.checked_at }} UTC ({{ inbox_sync_status.scanned_messages }} messages{% if not inbox_sync_status.scan_complete %}, cap reached{% endif %}){% else %}no saved refresh yet{% endif %}</a>
+      <a class="crm-button crm-button-small crm-button-primary" href="{{ url_for('crm_drafts') }}">Review drafts</a>
+      <a class="crm-button crm-button-small crm-button-secondary" href="{{ url_for('crm_analytics') }}">Analytics</a>
+      <a class="crm-button crm-button-small crm-button-secondary" href="{{ url_for('crm_tracking') }}">Cloudflare tracking</a>
       <form method="post" action="{{ url_for('crm_refresh_inbox_route') }}" data-busy="Checking Gmail, this can take a minute...">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <button class="crm-button crm-button-secondary" type="submit">Refresh Gmail inbox</button>
+        <button class="crm-button crm-button-small crm-button-secondary" type="submit">Refresh Gmail inbox</button>
       </form>
     </div>
   </header>
 
-
   <section class="crm-panel" aria-label="Manage contacts">
-    <div class="crm-panel-heading"><h2>Your contacts</h2><div class="form-actions"><a class="crm-button crm-button-primary" href="/crm/new">Add contact</a><a class="crm-button crm-button-secondary" href="/crm/export.csv">Export CSV</a></div></div>
+    <div class="crm-panel-heading"><h2>Your contacts</h2><div class="form-actions"><a class="crm-button crm-button-small crm-button-primary" href="/crm/new">Add contact</a><a class="crm-button crm-button-small crm-button-secondary" href="/crm/export.csv">Export CSV</a></div></div>
     {% if not rows and not filters.q and not filters.stage %}
     <div class="crm-empty-state"><p>Add contacts to begin researching and drafting.</p><form method="post" action="/sample/load"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit" class="crm-button crm-button-primary">Load the sample</button></form></div>
     {% endif %}
-    <details><summary>Import contacts from CSV</summary>
+    <details class="crm-collapse"><summary>Import contacts from CSV</summary>
       <form method="post" action="/crm/import" enctype="multipart/form-data" class="settings-fields import-form">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <label for="contactCsv">Choose a CSV file<input id="contactCsv" type="file" name="file" accept=".csv,text/csv"></label>
         <label for="contactCsvText">Or paste CSV<textarea id="contactCsvText" name="csv_text" rows="6" placeholder="id,name,email,org"></textarea></label>
         <p class="crm-source-note">Every row is validated before any contacts are saved.</p>
-        <button type="submit" class="crm-button crm-button-primary">Import contacts</button>
+        <button type="submit" class="crm-button crm-button-small crm-button-primary">Import contacts</button>
       </form>
+      <h3>Import batches</h3>
+      <ul>{% for batch in batches %}<li>{{ batch.name }} / {{ batch.created_at }}</li>{% else %}<li>No import batches yet.</li>{% endfor %}</ul>
     </details>
   </section>
 
@@ -45,8 +46,6 @@
     <div class="crm-metric"><span>INBOUND MATCHES</span><strong>{{ inbound_match_count }}</strong><small>Exact sender-address matches, including automated mail</small></div>
     <div class="crm-metric"><span>UPDATE LIST</span><strong>{{ counts.investor_list or 0 }}</strong><small>Contacts marked for updates</small></div>
   </section>
-
-  <p class="crm-source-note">Gmail inbox: {% if inbox_sync_status %}checked {{ inbox_sync_status.checked_at }} ({{ inbox_sync_status.scanned_messages }} messages, {% if inbox_sync_status.scan_complete %}complete{% else %}message cap reached{% endif %}){% else %}no saved refresh yet{% endif %}. Other mailboxes are not included in this inbox count. <a href="{{ url_for('crm_tracking') }}">View live Cloudflare request tracking</a>.</p>
 
   <section class="crm-panel crm-hot-leads-panel">
     <div class="crm-panel-heading">
@@ -72,12 +71,6 @@
     <p class="crm-source-note">{{ replied_count or 0 }} contacts have an incoming message after their latest send. Those are conversations to answer, not leads to score; see them on the Analytics page.</p>
   </section>
 
-  <nav class="crm-segments" aria-label="Contact segments">
-    {% for view_key, view_label in [('current', 'Current'), ('followup_next', 'Prepared review queue'), ('followup_watchlist', 'Follow-up watchlist'), ('new_research', 'New investor research'), ('hot', 'Hot'), ('warm', 'Warm'), ('due', 'Due'), ('follow_up_candidates', 'Follow-up candidates'), ('investor_list', 'Contact updates'), ('best_fit', 'Best fit'), ('best_fit_awaiting', 'Best fit awaiting reply'), ('reviewed_fit', 'Reviewed fit'), ('new_outreach', 'New outreach'), ('sent', 'Sent email history'), ('unreplied', 'No reply recorded'), ('all', 'All contacts')] %}
-    <a class="crm-segment {% if filters.view == view_key or (not filters.view and view_key == 'current') %}active{% endif %}"
-       href="{{ url_for('crm_dashboard', view=view_key, q=filters.q, stage=filters.stage) }}">{{ view_label }}</a>
-    {% endfor %}
-  </nav>
   {% if filters.view == 'best_fit_awaiting' %}<p class="crm-source-note">Ranked, confirmed sends with no reply or incoming-address match recorded. Recent sends are not follow-up candidates until enough time has passed.</p>{% endif %}
   {% if filters.view == 'followup_watchlist' %}<p class="crm-source-note">Contacts across warm relationships and confirmed sends. Review the list before following up. Recent sends wait for the normal follow-up interval.</p>{% endif %}
   {% if filters.view == 'followup_next' %}<p class="crm-source-note">This is a historical review roster, not a live send queue. Check <a href="{{ url_for('crm_drafts', type='follow_up') }}">current local follow-up copies</a> and each contact's latest send evidence before a reply.</p>{% endif %}
@@ -85,7 +78,13 @@
   {% if filters.view in ['sent', 'sent_emails'] %}<p class="crm-source-note">Includes provider-confirmed evidence and older local records marked sent. The date column shows the recorded last-sent date when available.</p>{% endif %}
 
   <form class="crm-filters" method="get" action="{{ url_for('crm_dashboard') }}">
-    <input type="hidden" name="view" value="{{ filters.view or 'current' }}">
+    <label for="crmSegment"><span>SEGMENT</span>
+      <select id="crmSegment" name="view" data-crm-autosubmit>
+        {% for view_key, view_label in [('current', 'Current'), ('followup_next', 'Prepared review queue'), ('followup_watchlist', 'Follow-up watchlist'), ('new_research', 'New investor research'), ('hot', 'Hot'), ('warm', 'Warm'), ('due', 'Due'), ('follow_up_candidates', 'Follow-up candidates'), ('investor_list', 'Contact updates'), ('best_fit', 'Best fit'), ('best_fit_awaiting', 'Best fit awaiting reply'), ('reviewed_fit', 'Reviewed fit'), ('new_outreach', 'New outreach'), ('sent', 'Sent email history'), ('unreplied', 'No reply recorded'), ('all', 'All contacts')] %}
+        <option value="{{ view_key }}" {% if filters.view == view_key or (not filters.view and view_key == 'current') %}selected{% endif %}>{{ view_label }}</option>
+        {% endfor %}
+      </select>
+    </label>
     <label class="crm-search-field" for="crm_dashboard-field-1">
       <span>SEARCH CONTACTS</span>
       <input id="crm_dashboard-field-1" type="search" name="q" value="{{ filters.q or '' }}" placeholder="Name, organization, or email">
@@ -101,14 +100,13 @@
     </label>
     <label for="contactTag"><span>TAG</span><input id="contactTag" name="tag" value="{{ filters.tag }}"></label>
     <label for="draftStatus"><span>DRAFT STATUS</span><select id="draftStatus" name="draft"><option value="">All drafts</option>{% for value in ['ok','blocked','none'] %}<option value="{{ value }}" {% if filters.draft == value %}selected{% endif %}>{{ value|title }}</option>{% endfor %}</select></label>
-    <button class="crm-button crm-button-primary" type="submit">Apply filters</button>
-    {% if filters.q or filters.stage %}<a class="crm-clear-filter" href="{{ url_for('crm_dashboard', view=filters.view or 'current') }}">Clear</a>{% endif %}
+    <button class="crm-button crm-button-small crm-button-primary" type="submit">Apply filters</button>
+    {% if filters.q or filters.stage or filters.tag or filters.draft %}<a class="crm-clear-filter" href="{{ url_for('crm_dashboard', view=filters.view or 'current') }}">Clear</a>{% endif %}
   </form>
 
-  <section class="crm-panel"><h2>Import batches</h2><ul>{% for batch in batches %}<li>{{ batch.name }} / {{ batch.created_at }}</li>{% else %}<li>No import batches yet.</li>{% endfor %}</ul></section>
   <section class="crm-panel crm-contact-table-panel">
     <div class="crm-panel-heading">
-      <div><span class="crm-eyebrow">CONTACTS / {{ rows|length }} OF {{ counts.matching }} MATCHES</span><h2>Relationship records</h2></div>
+      <div><span class="crm-eyebrow">CONTACTS / Showing {{ (counts.page - 1) * 100 + 1 if counts.matching else 0 }} to {{ (counts.page - 1) * 100 + rows|length }} of {{ counts.matching }}</span><h2>Relationship records</h2></div>
       <span class="crm-muted">Local records only</span>
     </div>
     <div class="crm-table-wrap">
@@ -133,12 +131,12 @@
               {% else %}<span class="crm-table-subline">Campaign gate: Not reviewed</span>{% endif %}
             </td>
             <td>
-              {% if row.next_follow_up_at %}<time>{{ row.next_follow_up_at[:16]|replace('T', ' ') }}</time>{% else %}<span class="crm-unknown">Not scheduled</span>{% endif %}
+              {% if row.next_follow_up_at %}<time>{{ row.next_follow_up_at[:16]|replace('T', ' ') }} UTC</time>{% else %}<span class="crm-unknown">Not scheduled</span>{% endif %}
             </td>
             <td>
               {% if filters.view in ['sent', 'sent_emails'] %}
-                {% if row.last_sent_at %}<time>{{ row.last_sent_at[:16]|replace('T', ' ') }}</time>{% else %}<span class="crm-unknown">No confirmed send date recorded</span>{% endif %}
-              {% elif row.last_activity_at %}<time>{{ row.last_activity_at[:16]|replace('T', ' ') }}</time>{% else %}<span class="crm-unknown">No activity recorded</span>{% endif %}
+                {% if row.last_sent_at %}<time>{{ row.last_sent_at[:16]|replace('T', ' ') }} UTC</time>{% else %}<span class="crm-unknown">No confirmed send date recorded</span>{% endif %}
+              {% elif row.last_activity_at %}<time>{{ row.last_activity_at[:16]|replace('T', ' ') }} UTC</time>{% else %}<span class="crm-unknown">No activity recorded</span>{% endif %}
             </td>
             <td>
               <span class="crm-signal-label">{{ 'Reply / ' ~ (row.latest_reply_label|replace('_', ' ')|title) if row.latest_reply_label else 'No reply recorded' }}</span>
@@ -158,35 +156,12 @@
       </table>
     </div>
     {% if counts.pages > 1 %}
-    <nav class="crm-segments" aria-label="Contact pages">
+    <nav class="crm-segments crm-pager" aria-label="Contact pages">
       {% if counts.page > 1 %}<a class="crm-segment" href="{{ url_for('crm_dashboard', view=filters.view, q=filters.q, stage=filters.stage, tag=filters.tag, draft=filters.draft, page=counts.page - 1) }}">Previous</a>{% endif %}
       <span class="crm-segment active">Page {{ counts.page }} of {{ counts.pages }}</span>
       {% if counts.page < counts.pages %}<a class="crm-segment" href="{{ url_for('crm_dashboard', view=filters.view, q=filters.q, stage=filters.stage, tag=filters.tag, draft=filters.draft, page=counts.page + 1) }}">Next</a>{% endif %}
     </nav>
     {% endif %}
   </section>
-
-  <section class="crm-panel crm-followup-panel">
-    <div class="crm-panel-heading">
-      <div><span class="crm-eyebrow">NEXT STEPS / SAVED DATES</span><h2>Follow-ups in this view</h2></div>
-      <span class="crm-count-pill">{{ counts.due or 0 }} due</span>
-    </div>
-    <div class="crm-followup-list">
-      {% for row in rows if row.next_follow_up_at %}
-      <article class="crm-followup-row">
-        <div class="crm-followup-date"><span>FOLLOW UP</span><time>{{ row.next_follow_up_at[:16]|replace('T', ' ') }}</time></div>
-        <div class="crm-followup-person">
-          <a href="{{ url_for('crm_contact', partner_id=row.partner_id) }}">{{ row.name or 'Unknown contact' }}</a>
-          <span>{{ row.firm or 'Organization unknown' }}</span>
-        </div>
-        <span class="crm-stage-tag">{{ row.stage|replace('_', ' ')|title if row.stage else 'Stage unknown' }}</span>
-      </article>
-      {% else %}
-      <p class="crm-empty-state">No follow-up dates are recorded in the current view.</p>
-      {% endfor %}
-    </div>
-  </section>
-
-  <footer class="crm-footer"><span>UNKNOWN MEANS NOT RECORDED</span><span>REVIEW THE SEND GATES BEFORE DELIVERY</span></footer>
 </div>
 {% endblock %}

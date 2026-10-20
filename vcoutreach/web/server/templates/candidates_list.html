@@ -1,52 +1,37 @@
 {% extends 'base.html' %}
+{% from '_partner_macros.html' import tier_badge, empty_value %}
 {% block page_id %}candidates_list{% endblock %}
-{% block title %}Candidate intake / {{ g_workspace.workspace_name }}{% endblock %}
+{% block title %}Candidates{% endblock %}
 
 {% block content %}
-
 <div class="section-header page-title">
-  <h1>Co-investor Candidates <span class="text-faint" style="font-size:18px;font-weight:400;">{{ candidates|length }}</span></h1>
+  <h1>Co-investor candidates <span class="page-count">{{ candidates|length }}</span></h1>
+  <p class="text-muted pl-counters">
+    From the PitchBook co-investor backtrace. Rows with no email or confidence under 0.5 start unchecked.
+    <strong class="text-ok">{{ already_imported_count }}</strong> already imported or skipped.
+  </p>
 </div>
 
-<p class="text-muted" style="font-size:13px;margin-bottom:16px;">
-  Discovered via PitchBook co-investor backtrace. Review each candidate, tick the ones to import, then click <strong>Import selected</strong>.
-  Rows with empty email or confidence &lt; 0.5 are unchecked by default  /  opt in explicitly.
-  <strong style="color:var(--success);">{{ already_imported_count }}</strong> row(s) already imported/skipped.
-</p>
-
-<!-- Bulk import form wraps the table -->
 <form id="candidatesForm" method="POST" action="/candidates/import">
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 
-  <!-- Floating action bar  /  always present so grep -c "Import" works -->
-  <div id="bulkBar" style="
-       display:none;
-       position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
-       background:var(--surface,#fff);border:1.5px solid var(--border,#e0e0e0);
-       border-radius:10px;padding:12px 20px;
-       box-shadow:0 4px 24px rgba(0,0,0,.18);
-       z-index:999;align-items:center;gap:12px;font-size:14px;">
-    <span id="bulkCount" style="font-weight:600;"></span>
-    <button type="submit" class="btn" style="background:#2563eb;color:#fff;border:none;">
-      Import selected
-    </button>
-    <button type="button" class="btn btn-ghost btn-sm" data-action="candidates_list-0" >Cancel</button>
+  <div id="bulkBar" class="bulk-bar" role="region" aria-label="Import actions">
+    <span id="bulkCount" class="bulk-count"></span>
+    <button type="submit" class="btn btn-primary btn-sm">Import selected</button>
+    <button type="button" class="btn btn-ghost btn-sm" data-action="candidates_list-0">Cancel</button>
   </div>
 
-  <!-- Candidates table -->
+  {% if candidates %}
   <div class="data-table-wrap">
-    <table class="data-table" id="candidatesTable"><caption class="sr-only">Candidates List records</caption>
+    <table class="data-table pl-table" id="candidatesTable"><caption class="sr-only">Candidates List records</caption>
       <thead>
         <tr>
-          <th style="width:32px;">
-            <input aria-label="Select contact" type="checkbox" id="selectAll" title="Select all visible" data-action="candidates_list-1" >
-          </th>
-          <th style="width:36px;">#</th>
+          <th class="col-check"><input aria-label="Select all candidates" type="checkbox" id="selectAll" title="Select all" data-action="candidates_list-1"></th>
           <th>Name / Firm</th>
           <th>Email</th>
           <th>Tier</th>
           <th>Source</th>
-          <th>Why Fit</th>
+          <th>Why fit</th>
           <th>Confidence</th>
           <th>LinkedIn</th>
           <th>Status</th>
@@ -55,101 +40,67 @@
       <tbody>
         {% for c in candidates %}
         <tr data-name="{{ c.partner_name|lower }}" data-firm="{{ (c.firm or '')|lower }}">
-          <td>
-            {# Default unchecked if email empty OR confidence < 0.5 OR already_in_db #}
-            <input aria-label="Select contact" type="checkbox" name="row_indices" value="{{ c.row_index }}"
-                   class="row-check" data-action="candidates_list-2" 
+          <td class="col-check">
+            <input aria-label="Select {{ c.partner_name }}" type="checkbox" name="row_indices" value="{{ c.row_index }}"
+                   class="row-check" data-action="candidates_list-2"
                    {% if not c.email or c.confidence < 0.5 or c.already_in_db %}{% else %}checked{% endif %}
-                   {% if c.already_in_db %}disabled title="Already in DB"{% endif %}>
+                   {% if c.already_in_db %}disabled{% endif %}>
           </td>
-          <td class="text-faint" style="font-size:11px;">{{ c.row_index }}</td>
-          <td>
+          <td data-label="Name">
             <span class="fw-600">{{ c.partner_name }}</span>
-            {% if c.first_name and c.first_name != c.partner_name %}
-              <span class="text-faint" style="font-size:12px;"> ({{ c.first_name }})</span>
-            {% endif %}
-            {% if c.firm %}
-              <br><span class="text-muted" style="font-size:12px;">{{ c.firm }}</span>
-            {% endif %}
+            {% if c.first_name and c.first_name != c.partner_name %}<span class="text-faint">({{ c.first_name }})</span>{% endif %}
+            {% if c.firm %}<span class="cell-sub text-muted">{{ c.firm }}</span>{% endif %}
           </td>
-          <td>
+          <td data-label="Email">
             {% if c.email %}
-              <span style="font-size:12px;">{{ c.email }}</span>
-              {% if c.email_uncertain %}
-                <span class="badge badge-email-unverified" style="margin-left:4px;" title="Email uncertain">?</span>
-              {% endif %}
-            {% else %}
-              <span class="text-faint" style="font-size:12px;"> / </span>
-            {% endif %}
+              <span class="cell-small">{{ c.email }}</span>
+              {% if c.email_uncertain %}<span class="badge badge-email-unverified" title="Email uncertain">?</span>{% endif %}
+            {% else %}{{ empty_value() }}{% endif %}
           </td>
-          <td>
-            {% if c.tier == 1 or c.tier_raw == 'A' %}
-              <span class="badge badge-tier1">T1</span>
-            {% elif c.tier == 2 or c.tier_raw in ('B', 'C') %}
-              <span class="badge badge-tier2">T{{ c.tier }}</span>
-            {% else %}
-              <span class="text-faint"> / </span>
-            {% endif %}
+          <td data-label="Tier">
+            {% if c.tier == 1 or c.tier_raw == 'A' %}<span class="badge badge-tier1">T1</span>
+            {% elif c.tier == 2 or c.tier_raw in ('B', 'C') %}<span class="badge badge-tier2">T{{ c.tier }}</span>
+            {% else %}{{ empty_value() }}{% endif %}
           </td>
-          <td>
-            <span class="badge badge-pitchbook" style="font-size:11px;">
-              {{ c.source or ' / ' }}
-            </span>
-          </td>
-          <td style="max-width:220px;">
+          <td data-label="Source">{% if c.source %}<span class="badge badge-pitchbook">{{ c.source }}</span>{% else %}{{ empty_value() }}{% endif %}</td>
+          <td data-label="Why fit" class="cell-wide">
             {% if c.why_fit %}
-              <span class="why-fit-text" title="{{ c.why_fit }}" style="font-size:12px;cursor:help;">
-                {{ c.why_fit[:120] }}{% if c.why_fit|length > 120 %}…{% endif %}
-              </span>
-            {% else %}
-              <span class="text-faint"> / </span>
-            {% endif %}
+              <span class="cell-small" title="{{ c.why_fit }}">{{ c.why_fit[:120] }}{% if c.why_fit|length > 120 %}&hellip;{% endif %}</span>
+            {% else %}{{ empty_value() }}{% endif %}
           </td>
-          <td>
+          <td data-label="Confidence">
             {% set conf = c.confidence %}
-            {% if conf >= 0.8 %}
-              <span class="badge badge-approved" style="font-size:11px;">{{ "%.2f"|format(conf) }}</span>
-            {% elif conf >= 0.5 %}
-              <span class="badge badge-pending" style="font-size:11px;">{{ "%.2f"|format(conf) }}</span>
-            {% else %}
-              <span class="badge badge-rejected" style="font-size:11px;">{{ "%.2f"|format(conf) }}</span>
-            {% endif %}
+            {% if conf >= 0.8 %}<span class="badge badge-approved">{{ "%.2f"|format(conf) }}</span>
+            {% elif conf >= 0.5 %}<span class="badge badge-pending">{{ "%.2f"|format(conf) }}</span>
+            {% else %}<span class="badge badge-rejected">{{ "%.2f"|format(conf) }}</span>{% endif %}
           </td>
-          <td>
+          <td data-label="LinkedIn">
             {% if c.linkedin_url %}
-              <span class="source-reference">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/>
-                  <rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/>
-                </svg>
-                LI
-               <span class="text-muted">({{ c.linkedin_url }})</span> <button type="button" class="copy-source" data-copy-text="{{ c.linkedin_url }}">Copy URL</button></span>
-            {% else %}
-              <span class="text-faint"> / </span>
-            {% endif %}
-          </td>
-          <td>
-            {% if c.already_in_db %}
-              <span class="badge badge-drafted" title="Partner with matching email or name+firm already exists in DB">
-                Already in DB
+              <span class="source-reference" title="{{ c.linkedin_url }}">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>
+                LinkedIn
+                <button type="button" class="copy-source" data-copy-text="{{ c.linkedin_url }}">Copy URL</button>
               </span>
+            {% else %}{{ empty_value() }}{% endif %}
+          </td>
+          <td data-label="Status">
+            {% if c.already_in_db %}
+              <span class="badge badge-drafted" title="A partner with a matching email or name and firm already exists">Already in DB</span>
             {% else %}
-              <span class="badge badge-default" style="font-size:11px;">New</span>
+              <span class="badge badge-default">New</span>
             {% endif %}
           </td>
-        </tr>
-        {% else %}
-        <tr>
-          <td colspan="10" class="empty-state">No unreviewed candidates. All rows have been imported or skipped. <a href="/crm">Import more contacts</a>.</td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
+  {% else %}
+  <div class="empty-state">
+    <p>No unreviewed candidates.</p>
+    <p class="text-faint">Every row has been imported or skipped. New candidates appear here after the next PitchBook co-investor run.</p>
+    <p><a class="btn btn-secondary btn-sm" href="/partners">Back to partners</a></p>
+  </div>
+  {% endif %}
 </form>
-
-{% endblock %}
-
-{% block scripts %}
-
 {% endblock %}

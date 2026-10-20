@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 {% block page_id %}crm_analytics{% endblock %}
-{% block title %}Outreach analytics / Relationship CRM{% endblock %}
+{% block title %}Outreach analytics{% endblock %}
 
 {% block content %}
 <div class="crm-shell crm-dashboard">
@@ -9,21 +9,20 @@
     <div>
       <div class="crm-eyebrow"><span class="crm-led"></span> WHAT IS WORKING / WHAT TO IMPROVE / WHO IS HOT</div>
       <h1>Outreach analytics.</h1>
-      <p>Built from confirmed sends, exact-address incoming mail, and classified tracking requests. "Likely person" is a probability judgment from the Cloudflare Worker's classifier, never a confirmed read. Untracked contacts are unknown, not zero.</p>
+      <p>Built from confirmed sends, exact-address incoming mail, and classified tracking requests. "Likely person" is a classifier estimate, never a confirmed read.</p>
     </div>
-    <div class="crm-hero-meta">
-      <span class="crm-source-tag">SOURCE / LOCAL RECORDS + WORKER EVENTS</span>
+    <div class="crm-toolbar">
       <form method="post" action="{{ url_for('crm_analytics_sync_tracking') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <button class="crm-button crm-button-primary" type="submit">Sync tracking events</button>
+        <button class="crm-button crm-button-small crm-button-primary" type="submit">Sync tracking events</button>
       </form>
-      <a class="crm-button crm-button-secondary" href="{{ url_for('crm_tracking') }}">Cloudflare tracking</a>
+      <a class="crm-button crm-button-small crm-button-secondary" href="{{ url_for('crm_tracking') }}">Cloudflare tracking</a>
     </div>
   </header>
 
   <section class="crm-metrics" aria-label="Tracking coverage">
     <div class="crm-metric"><span>SENT LAST 14 DAYS</span><strong>{{ coverage.recent_sent_count or 0 }}</strong><small>Distinct contacts with a confirmed send in the last 14 days</small></div>
-    <div class="crm-metric"><span>UNTRACKED, LAST 14 DAYS</span><strong>{{ coverage.recent_untracked_count or 0 }}</strong><small>{% if coverage.recent_untracked_share is not none %}{{ (coverage.recent_untracked_share * 100)|round|int }}% of recent sends{% else %}No recent sends recorded{% endif %} have no tracking pixel or link at all</small></div>
+    <div class="crm-metric"><span>UNTRACKED, LAST 14 DAYS</span><strong>{{ coverage.recent_untracked_count or 0 }}</strong><small>{% if coverage.recent_untracked_share is not none %}{{ (coverage.recent_untracked_share * 100)|round|int }}% of recent sends{% else %}No recent sends recorded{% endif %} have no tracking pixel or link. Untracked means unknown, not zero.</small></div>
     <div class="crm-metric"><span>HOT LEADS</span><strong>{{ hot|length }}</strong><small>Likely-person signal in the last 7 days, score 35+</small></div>
     <div class="crm-metric"><span>ENGAGED, NO REPLY</span><strong>{{ engaged|length }}</strong><small>Likely-person open or click in the last 30 days</small></div>
     <div class="crm-metric"><span>REPLIED</span><strong>{{ replied|length }}</strong><small>Incoming mail after the latest send; conversations, not leads to chase</small></div>
@@ -48,9 +47,14 @@
     </div>
   </section>
 
-  <section class="crm-panel"><h2>Contacts by stage</h2><dl>{% for stage, count in stage_counts.items() %}<dt>{{ stage|replace('_', ' ')|title }}</dt><dd>{{ count }}</dd>{% endfor %}</dl></section>
-  <section class="crm-panel"><h2>Contacts by tag</h2><dl>{% for tag, count in tag_counts.items() %}<dt>{{ tag }}</dt><dd>{{ count }}</dd>{% else %}<dt>No tags recorded.</dt>{% endfor %}</dl></section>
-  <section class="crm-panel"><h2>Draft quality</h2><dl><dt>OK</dt><dd>{{ quality.get('ok', 0) }}</dd><dt>Blocked</dt><dd>{{ quality.get('blocked', 0) }}</dd></dl><h3>Lint issues, most common first</h3><ul>{% for code, count in lint_codes %}<li>{{ code }}: {{ count }}</li>{% else %}<li>No lint issues recorded.</li>{% endfor %}</ul></section>
+  <details class="crm-panel crm-collapse crm-counts-panel">
+    <summary>Workspace counts: stage, tag, draft quality</summary>
+    <div class="crm-counts-grid">
+      <div><h3>Contacts by stage</h3><dl>{% for stage, count in stage_counts.items() %}<dt>{{ stage|replace('_', ' ')|title }}</dt><dd>{{ count }}</dd>{% endfor %}</dl></div>
+      <div><h3>Contacts by tag</h3><dl>{% for tag, count in tag_counts.items() %}<dt>{{ tag }}</dt><dd>{{ count }}</dd>{% else %}<dt>No tags recorded.</dt>{% endfor %}</dl></div>
+      <div><h3>Draft quality</h3><dl><dt>OK</dt><dd>{{ quality.get('ok', 0) }}</dd><dt>Blocked</dt><dd>{{ quality.get('blocked', 0) }}</dd></dl><ul>{% for code, count in lint_codes %}<li>{{ code }}: {{ count }}</li>{% else %}<li>No lint issues recorded.</li>{% endfor %}</ul></div>
+    </div>
+  </details>
   <section class="crm-panel">
     <div class="crm-panel-heading"><div><span class="crm-eyebrow">PER COHORT</span><h2>Campaign funnel</h2></div></div>
     <div class="crm-table-wrap"><table class="crm-table"><caption class="sr-only">Crm Analytics records</caption>
@@ -79,70 +83,78 @@
     <p class="crm-source-note">Person signal counts are contacts with at least one likely-person event of that kind after their send in this cohort, not a raw event count. Tracking coverage can differ by cohort; compare only compatible tracked samples.</p>
   </section>
 
-  <section class="crm-panel">
-    <div class="crm-panel-heading"><div><span class="crm-eyebrow">REPLY RATE / WILSON 95% INTERVAL</span><h2>Segment performance</h2></div></div>
-    {% for dimension, label in [('lane', 'Outreach lane'), ('fit_grade', 'Fit grade'), ('firm_type', 'Firm type'), ('send_weekday', 'Send weekday'), ('send_hour_bucket', 'Send hour (UTC)'), ('cohort_era', 'Cohort era')] %}
-    <div class="crm-segment-block">
-      <h3>{{ label }}</h3>
-      <div class="crm-table-wrap"><table class="crm-table"><caption class="sr-only">Crm Analytics records</caption>
-        <thead><tr><th>{{ label }}</th><th>N</th><th>Replies</th><th>Rate</th><th>95% interval</th></tr></thead>
-        <tbody>
-          {% for row in segments[dimension] %}
-          <tr>
-            <td>{{ row.value|replace('_', ' ') }}</td>
-            <td>{{ row.n }}</td>
-            <td>{{ row.replies }}</td>
-            <td>{{ (row.rate * 100)|round(1) }}%</td>
-            <td>{{ (row.wilson_low * 100)|round(1) }}% to {{ (row.wilson_high * 100)|round(1) }}%{% if row.n < 20 %} <span class="crm-unknown">(n&lt;20)</span>{% endif %}</td>
-          </tr>
-          {% else %}
-          <tr><td colspan="5" class="crm-empty-row">No sends recorded for this dimension.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table></div>
+  {% set segment_dims = [('lane', 'Outreach lane'), ('fit_grade', 'Fit grade'), ('firm_type', 'Firm type'), ('send_weekday', 'Send weekday'), ('send_hour_bucket', 'Send hour (UTC)'), ('cohort_era', 'Cohort era')] %}
+  <section class="crm-panel" data-crm-switch-scope>
+    <div class="crm-panel-heading">
+      <div><span class="crm-eyebrow">REPLY RATE / WILSON 95% INTERVAL</span><h2>Segment performance</h2></div>
+      <label class="crm-switch" for="crmSegmentDim"><span>SHOW</span>
+        <select id="crmSegmentDim" data-crm-switch="dim">
+          <option value="">All dimensions</option>
+          {% for dimension, label in segment_dims %}<option value="{{ dimension }}">{{ label }}</option>{% endfor %}
+        </select>
+      </label>
     </div>
-    {% endfor %}
+    <div class="crm-table-wrap"><table class="crm-table"><caption class="sr-only">Segment performance records</caption>
+      <thead><tr><th>Dimension</th><th>Segment</th><th>N</th><th>Replies</th><th>Rate</th><th>95% interval</th></tr></thead>
+      <tbody>
+        {% for dimension, label in segment_dims %}{% for row in segments[dimension] %}
+        <tr data-dim="{{ dimension }}">
+          <td>{{ label }}</td>
+          <td>{{ row.value|replace('_', ' ') }}</td>
+          <td>{{ row.n }}</td>
+          <td>{{ row.replies }}</td>
+          <td>{{ (row.rate * 100)|round(1) }}%</td>
+          <td>{{ (row.wilson_low * 100)|round(1) }}% to {{ (row.wilson_high * 100)|round(1) }}%{% if row.n < 20 %} <span class="crm-unknown">(n&lt;20)</span>{% endif %}</td>
+        </tr>
+        {% endfor %}{% endfor %}
+        {% if not segments.values()|map('length')|select|list %}<tr><td colspan="6" class="crm-empty-row">No sends recorded for any segment dimension.</td></tr>{% endif %}
+      </tbody>
+    </table></div>
   </section>
 
-  {% for bucket_key, bucket_label, bucket_rows, bucket_note in [
-    ('hot', 'Hot leads', hot, 'Likely-person signal in the last 7 days with a score of 35 or higher.'),
+  {% set buckets = [
+    ('hot', 'Hot leads', hot, 'Likely-person signal in the last 7 days, score 35 or higher.'),
     ('warm', 'Warm leads', warm, 'Some likely-person signal, score 12 to 34, or older than 7 days.'),
-    ('engaged', 'Engaged, no reply', engaged, 'Likely-person open or click in the last 30 days that has faded below warm. Strong candidates for the next follow-up.'),
-    ('replied', 'Replied', replied, 'Incoming mail after the latest send. Answer these in the thread, they are not scored as leads.')
+    ('engaged', 'Engaged, no reply', engaged, 'Likely-person open or click in the last 30 days, faded below warm. Next follow-up candidates.'),
+    ('replied', 'Replied', replied, 'Incoming mail after the latest send. Answer in the thread, not scored as leads.')
   ] %}
-  <section class="crm-panel crm-contact-table-panel">
+  <section class="crm-panel crm-contact-table-panel" data-crm-switch-scope>
     <div class="crm-panel-heading">
-      <div><span class="crm-eyebrow">{{ bucket_rows|length }} CONTACTS</span><h2>{{ bucket_label }}</h2></div>
+      <div><span class="crm-eyebrow">{% for key, label, rows_, note in buckets %}{{ rows_|length }} {{ key|upper }}{% if not loop.last %} / {% endif %}{% endfor %}</span><h2>Contacts by signal</h2></div>
+      <label class="crm-switch" for="crmBucketSel"><span>BUCKET</span>
+        <select id="crmBucketSel" data-crm-switch="bucket">
+          <option value="">All buckets</option>
+          {% for key, label, rows_, note in buckets %}<option value="{{ key }}">{{ label }} ({{ rows_|length }})</option>{% endfor %}
+        </select>
+      </label>
     </div>
-    <p class="crm-source-note">{{ bucket_note }}</p>
-    <div class="crm-table-wrap"><table class="crm-table"><caption class="sr-only">Crm Analytics records</caption>
-      <thead><tr><th>Contact / organization</th><th>Score</th><th>Signal reasons</th><th>Last signal</th><th>Latest send</th><th>Next step</th></tr></thead>
+    <ul class="crm-bucket-notes">{% for key, label, rows_, note in buckets %}<li data-bucket-note="{{ key }}"><strong>{{ label }}:</strong> {{ note }}</li>{% endfor %}</ul>
+    <div class="crm-table-wrap"><table class="crm-table"><caption class="sr-only">Contacts by signal bucket</caption>
+      <thead><tr><th>Bucket</th><th>Contact / organization</th><th>Score</th><th>Signal reasons</th><th>Last signal</th><th>Latest send</th><th>Next step</th></tr></thead>
       <tbody>
-        {% for lead in bucket_rows %}
-        <tr>
+        {% for key, label, rows_, note in buckets %}{% for lead in rows_ %}
+        <tr data-bucket="{{ key }}">
+          <td><span class="crm-status-tag">{{ label }}</span></td>
           <td>
             <a class="crm-contact-link" href="{{ url_for('crm_contact', partner_id=lead.partner_id) }}">{{ lead.name or 'Unknown contact' }}</a>
             <span class="crm-table-subline">{{ lead.firm or 'Organization not recorded' }}</span>
           </td>
           <td>{{ lead.score }}</td>
           <td>{% for reason in lead.reasons %}<span class="crm-table-subline">{{ reason }}</span>{% endfor %}</td>
-          <td>{% if lead.last_signal_at %}<time>{{ lead.last_signal_at[:16]|replace('T', ' ') }}</time>{% else %}<span class="crm-unknown">None recorded</span>{% endif %}</td>
+          <td>{% if lead.last_signal_at %}<time>{{ lead.last_signal_at[:16]|replace('T', ' ') }} UTC</time>{% else %}<span class="crm-unknown">None recorded</span>{% endif %}</td>
           <td>
-            {% if lead.latest_send_at %}<time>{{ lead.latest_send_at[:16]|replace('T', ' ') }}</time>{% else %}<span class="crm-unknown">Unknown</span>{% endif %}
+            {% if lead.latest_send_at %}<time>{{ lead.latest_send_at[:16]|replace('T', ' ') }} UTC</time>{% else %}<span class="crm-unknown">Unknown</span>{% endif %}
             {% if lead.latest_send_batch %}<span class="crm-table-subline">{{ lead.latest_send_batch }}</span>{% endif %}
           </td>
           <td>{{ lead.next_step }}</td>
         </tr>
-        {% else %}
-        <tr><td colspan="6" class="crm-empty-row">No contacts in this bucket.</td></tr>
-        {% endfor %}
+        {% endfor %}{% endfor %}
+        {% if not (hot or warm or engaged or replied) %}<tr><td colspan="7" class="crm-empty-row">No contacts in any bucket.</td></tr>{% endif %}
       </tbody>
     </table></div>
   </section>
-  {% endfor %}
 
-  <p class="crm-source-note">{{ cold|length }} cold and {{ untracked|length }} untracked contacts are not shown in full here. Untracked means no tracking pixel or link was ever attached to their send, not that they showed zero interest.</p>
+  <p class="crm-source-note">{{ cold|length }} cold and {{ untracked|length }} untracked contacts are not listed here.</p>
 
-  <footer class="crm-footer"><span>LIKELY PERSON MEANS PROBABLE, NOT CONFIRMED</span><span>UNTRACKED MEANS UNKNOWN, NOT ZERO</span></footer>
 </div>
 {% endblock %}

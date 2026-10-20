@@ -7,10 +7,10 @@ root = source.parents[2]
 datas = collect_data_files('vcoutreach') + collect_data_files('webview')
 datas += collect_data_files('vcoutreach', includes=['web/scripts/*.py'], include_py_files=True)
 datas += collect_data_files('googleapiclient')
-for distribution in ('pywebview', 'google-auth', 'google-auth-oauthlib', 'google-api-python-client'):
+for distribution in ('pywebview', 'google-auth', 'google-auth-oauthlib', 'google-api-python-client', 'requests', 'certifi'):
     datas += copy_metadata(distribution)
 hidden = collect_submodules('vcoutreach')
-for module in ('google.auth', 'google.oauth2', 'google_auth_oauthlib', 'googleapiclient'):
+for module in ('google.auth', 'google.oauth2', 'google_auth_oauthlib', 'googleapiclient', 'requests', 'bs4', 'anthropic'):
     hidden += collect_submodules(module)
 hidden += ['webview.platforms.cocoa', 'AppKit', 'Foundation', 'WebKit', 'PyObjCTools.AppHelper']
 

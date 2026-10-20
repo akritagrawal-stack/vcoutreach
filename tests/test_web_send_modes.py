@@ -304,13 +304,23 @@ def test_contacts_marked_passed_or_hold_are_never_sent_to(send_web):
         assert no_calls(w), stage
 
 
-def test_contacts_in_active_stages_can_still_be_sent_to(send_web):
-    for stage in ("warm", "meeting", "contacted"):
-        w = send_web()
-        set_stage(w, "ada@example.com", stage)
-        live(w)
-        send_live(w, "ada", "SEND TO ada@example.com")
-        assert len(w.transport.calls) == 1, stage
+@pytest.mark.parametrize("stage", ["warm", "meeting"])
+def test_contacts_in_active_stages_can_still_be_sent_to(send_web, stage):
+    w = send_web()
+    set_stage(w, "ada@example.com", stage)
+    live(w)
+    send_live(w, "ada", "SEND TO ada@example.com")
+    assert len(w.transport.calls) == 1, stage
+
+
+def test_contacted_contacts_are_held(send_web):
+    w = send_web()
+    set_stage(w, "ada@example.com", "contacted")
+    live(w)
+    response = send_live(w, "ada", "SEND TO ada@example.com")
+    assert response.status_code == 200
+    assert no_calls(w)
+    assert "already contacted" in page_text(response).lower()
 
 
 def test_a_failed_live_send_leaves_the_draft_unsent_and_a_retry_works(send_web):

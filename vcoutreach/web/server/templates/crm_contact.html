@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 {% block page_id %}crm_contact{% endblock %}
-{% block title %}{{ partner.partner_name or partner.name or 'Contact' }} / Relationship CRM{% endblock %}
+{% block title %}Relationship CRM: {{ partner.partner_name or partner.name or 'Contact' }}{% endblock %}
 
 {% block content %}
 <div class="crm-shell crm-contact-page">
@@ -16,7 +16,7 @@
       <span class="crm-stage-tag">{{ profile.get('stage')|replace('_', ' ')|title if profile.get('stage') else 'Stage unknown' }}</span>
       <span class="crm-fit-tag">FIT / {{ profile.get('fit_grade') or 'Unknown' }}</span>
       {% if profile.get('fit_rank') %}<span class="crm-fit-tag">REVIEW #{{ profile.get('fit_rank') }}</span>{% endif %}
-      {% if partner.firm %}<a class="crm-button crm-button-primary" href="{{ url_for('crm_alternate_investors', partner_id=partner.id) }}">Find more investors</a>{% endif %}
+      {% if partner.firm %}<a class="crm-button crm-button-small crm-button-primary" href="{{ url_for('crm_alternate_investors', partner_id=partner.id) }}">Find more investors</a>{% endif %}
     </div>
   </header>
 
@@ -68,17 +68,17 @@
     <p>Email verification: {{ partner.email_verification_status or 'unverified' }}{% if partner.email_verification_method %} ({{ partner.email_verification_method }}){% endif %}. LIVE sends require a verified address.</p>
     {% for attempt in uncertain_sends %}
     <div class="crm-panel">
-      <p>Uncertain {{ attempt.mode|upper }} attempt from {{ attempt.created_at }} to {{ attempt.target_email }} ({{ attempt.lane|replace('_',' ') }}). Check Gmail Sent for this message before allowing a retry.</p>
+      <p>Uncertain {{ attempt.mode|upper }} attempt from {{ attempt.created_at }} UTC to {{ attempt.target_email }} ({{ attempt.lane|replace('_',' ') }}). Check Gmail Sent for this message before allowing a retry.</p>
       <form method="post" action="{{ url_for('crm_resolve_uncertain_send', partner_id=partner.id) }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <input type="hidden" name="attempt_id" value="{{ attempt.id }}">
-        <button type="submit" name="action" value="allow_retry" class="crm-button crm-button-secondary">I checked Sent, it did not go out, allow retry</button>
+        <button type="submit" name="action" value="allow_retry" class="crm-button crm-button-small crm-button-secondary">I checked Sent, it did not go out, allow retry</button>
       </form>
     </div>
     {% endfor %}
     <form method="post" action="{{ url_for('partner_verify_email_manually', partner_id=partner.id) }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <button type="submit" class="crm-button crm-button-secondary">Mark email verified (I checked it myself)</button>
+      <button type="submit" class="crm-button crm-button-small crm-button-secondary">Mark email verified (I checked it myself)</button>
     </form>
     <div class="form-actions">
       <form method="post" action="/partners/{{ partner.id }}/send-test"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit" class="crm-button crm-button-secondary">Send test</button></form>
@@ -126,6 +126,10 @@
         </div>
         <form class="crm-form" method="post" action="{{ url_for('crm_profile_update', partner_id=partner.id) }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <label for="contactName"><span>Name</span><input id="contactName" name="name" maxlength="200" required value="{{ partner.partner_name }}"></label>
+          <label for="contactOrg"><span>Organization</span><input id="contactOrg" name="org" maxlength="200" value="{{ partner.company or partner.firm or '' }}"></label>
+          <label for="contactRole"><span>Role</span><input id="contactRole" name="role" maxlength="200" value="{{ partner.role or '' }}"></label>
+          <label for="contactEmail"><span>Email</span><input id="contactEmail" name="email" type="email" required value="{{ partner.email }}"></label>
           {% if stages is defined and stages %}
           <label for="crm_contact-field-1"><span>RELATIONSHIP STAGE</span><select id="crm_contact-field-1" name="stage"><option value="">Keep current stage</option>{% for stage_name in stages %}<option value="{{ stage_name }}" {% if profile.get('stage') == stage_name %}selected{% endif %}>{{ stage_name|replace('_', ' ')|title }}</option>{% endfor %}</select></label>
           {% else %}
@@ -140,9 +144,18 @@
           <label for="crm_contact-field-8"><span>NEXT FOLLOW-UP</span><input id="crm_contact-field-8" type="datetime-local" name="next_follow_up_at" value="{{ profile.get('next_follow_up_at')[:16] if profile.get('next_follow_up_at') else '' }}"></label>
           <label class="crm-field-wide" for="crm_contact-field-9"><span>FOLLOW-UP REASON</span><textarea id="crm_contact-field-9" name="follow_up_reason" rows="2" placeholder="Why is this follow-up due?">{{ profile.get('follow_up_reason') or '' }}</textarea></label>
           <label for="contactTags"><span>Tags, comma separated</span><input id="contactTags" name="tags" maxlength="1000" value="{{ partner.tags or '' }}"></label>
-          <label for="contactNotes"><span>Notes</span><textarea id="contactNotes" name="notes" maxlength="10000">{{ partner.notes or '' }}</textarea></label>
+          <label for="contactNotes"><span>Notes</span><textarea id="contactNotes" name="notes" maxlength="5000">{{ partner.notes or '' }}</textarea></label>
           <label for="contactNextAction"><span>Next action</span><input id="contactNextAction" name="next_action" maxlength="1000" value="{{ partner.next_action or '' }}"></label>
           <div class="crm-form-footer"><span>Saving updates local relationship data only.</span><button class="crm-button crm-button-primary" type="submit">Save profile</button></div>
+        </form>
+      </section>
+
+      <section class="crm-panel">
+        <h2>Delete contact</h2>
+        <form method="post" action="{{ url_for('crm_contact_delete',partner_id=partner.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <label><input type="checkbox" name="confirm" value="yes" required> Delete this contact, its drafts, and CRM records</label>
+          <button type="submit" class="crm-button crm-button-secondary">Delete contact</button>
         </form>
       </section>
 
@@ -165,7 +178,7 @@
         <ol class="crm-timeline">
           {% for item in timeline %}
           <li class="crm-timeline-item">
-            <div class="crm-timeline-meta"><time>{{ item.date[:16]|replace('T', ' ') if item.date else 'Date unknown' }}</time><span>{{ item.type|replace('_', ' ')|title if item.type else 'Type unknown' }}</span><span class="crm-status-tag">{{ item.status|replace('_', ' ')|title if item.status else 'Status unknown' }}</span></div>
+            <div class="crm-timeline-meta"><time>{{ item.date[:16]|replace('T', ' ') if item.date else 'Date unknown' }}{% if item.date %} UTC{% endif %}</time><span>{{ item.type|replace('_', ' ')|title if item.type else 'Type unknown' }}</span><span class="crm-status-tag">{{ item.status|replace('_', ' ')|title if item.status else 'Status unknown' }}</span></div>
             <h3>{{ item.subject or 'Activity subject unknown' }}</h3>
             <p>{{ item.snippet or 'No short summary recorded.' }}</p>
           </li>
@@ -199,28 +212,22 @@
       </section>
 
       <section class="crm-panel">
-        <div class="crm-panel-heading"><div><span class="crm-eyebrow">PUBLIC REFERENCE LINKS</span><h2>Research sources</h2></div></div>
+        <p class="crm-source-note"><strong>Cloudflare signal:</strong>
+        {% if tracking.status == 'tracked' %}{{ tracking.action_count }} verified, activated send action{{ '' if tracking.action_count == 1 else 's' }} in the last 30 days. Opens: {{ tracking.event_type_counts.open.automation_likely }} automation likely, {{ tracking.event_type_counts.open.unknown }} unknown, {{ tracking.event_type_counts.open.human_likely }} human likely. Clicks: {{ tracking.event_type_counts.click.automation_likely }} automation likely, {{ tracking.event_type_counts.click.unknown }} unknown, {{ tracking.event_type_counts.click.human_likely }} human likely. These are requests, not confirmed human reads, and provider acceptance is not proof of inbox delivery.
+        {% elif tracking.status == 'not_instrumented' %}no verified, activated tracking action is linked in the last 30 days. This is not a zero-open result.
+        {% else %}unavailable. {{ tracking.get('reason') or 'A local action or Worker response could not be verified.' }} No zero counts are inferred.{% endif %}
+        <a href="{{ url_for('crm_tracking') }}">Aggregate tracking</a></p>
+      </section>
+
+      <details class="crm-panel crm-collapse"><summary>Research sources</summary>
         <div class="crm-source-list">
           <div><span>PITCHBOOK</span>{% if pitchbook_url and pitchbook_url.startswith('https://') %}<span class="source-reference">Open profile ↗ <span class="text-muted">({{ pitchbook_url }})</span> <button type="button" class="copy-source" data-copy-text="{{ pitchbook_url }}">Copy URL</button></span>{% else %}<strong>Unavailable</strong>{% endif %}</div>
           <div><span>ENROW</span>{% if enrow_url and (enrow_url.startswith('https://') or enrow_url.startswith('/')) %}<span class="source-reference">Open verification workspace ↗ <span class="text-muted">({{ enrow_url }})</span> <button type="button" class="copy-source" data-copy-text="{{ enrow_url }}">Copy URL</button></span>{% else %}<strong>Unavailable</strong>{% endif %}</div>
         </div>
-        <p class="crm-source-note">Copy a source URL to inspect its existing record. This page does not start a paid lookup.</p>
-        {% if tracking.status == 'tracked' %}
-        <div class="crm-source-note"><strong>Cloudflare signal for this contact:</strong> {{ tracking.action_count }} verified, activated local send action{{ '' if tracking.action_count == 1 else 's' }} in the last 30 days.</div>
-        <div class="crm-source-note">Open requests: {{ tracking.event_type_counts.open.automation_likely }} automation likely, {{ tracking.event_type_counts.open.unknown }} unknown, {{ tracking.event_type_counts.open.human_likely }} human likely. Click requests: {{ tracking.event_type_counts.click.automation_likely }} automation likely, {{ tracking.event_type_counts.click.unknown }} unknown, {{ tracking.event_type_counts.click.human_likely }} human likely. These are requests, not confirmed human reads or clicks.</div>
-        {% elif tracking.status == 'not_instrumented' %}
-        <div class="crm-source-note"><strong>Cloudflare signal for this contact:</strong> no verified, activated tracking action is linked in the last 30 days. This is not a zero-open result.</div>
-        {% else %}
-        <div class="crm-source-note"><strong>Cloudflare signal for this contact:</strong> unavailable. {{ tracking.get('reason') or 'A local action or Worker response could not be verified.' }} No zero counts are inferred.</div>
-        {% endif %}
-        <div class="crm-source-note">Provider acceptance is not proof of inbox delivery.</div>
-        <p class="crm-source-note"><a href="{{ url_for('crm_tracking') }}">View Cloudflare aggregate tracking</a>. The aggregate also covers other tracked campaigns.</p>
-      </section>
+      </details>
 
-      <section class="crm-panel">
-        <div class="crm-panel-heading"><div><span class="crm-eyebrow">ORGANIZATION / CONTACTS</span><h2>Related people</h2></div><span class="crm-muted">{{ related_contacts|length }} records</span></div>
-        <p class="crm-source-note">Search local relationship history, saved research, and the pinned official team page for another investor, principal, or general partner. Results are leads for review, not cleared sends.</p>
-        <a class="crm-button crm-button-secondary" href="{{ url_for('crm_alternate_investors', partner_id=partner.id) }}">Find more investors at this firm</a>
+      <details class="crm-panel crm-collapse"><summary>Related people ({{ related_contacts|length }})</summary>
+        <a class="crm-button crm-button-small crm-button-secondary" href="{{ url_for('crm_alternate_investors', partner_id=partner.id) }}">Find more investors at this firm</a>
         {% if partner.firm %}<p class="crm-source-note"><a href="{{ url_for('crm_dashboard', view='all', q=partner.firm) }}">Search all local contacts at {{ partner.firm }}</a> · <a href="{{ url_for('partners_list', q=partner.firm) }}">Search campaign research</a></p>{% endif %}
         <div class="crm-related-list">
           {% for contact in related_contacts %}
@@ -233,10 +240,9 @@
           <p class="crm-empty-state">No related contacts are recorded.</p>
           {% endfor %}
         </div>
-      </section>
+      </details>
 
-      <section class="crm-panel">
-        <div class="crm-panel-heading"><div><span class="crm-eyebrow">ENRICHMENT / SOURCED FACTS</span><h2>Available context</h2></div><span class="crm-muted">{{ enrichment_facts|length }} facts</span></div>
+      <details class="crm-panel crm-collapse"><summary>Available context ({{ engine_contact.facts|length + enrichment_facts|length }} facts)</summary>
         <div class="crm-fact-list">
           {% for fact in engine_contact.facts %}<article class="crm-fact-card"><p>{{ fact }}</p></article>{% endfor %}
           {% for fact in enrichment_facts %}
@@ -249,9 +255,8 @@
           <p class="crm-empty-state">{% if not engine_contact.facts %}No enrichment facts are recorded. Source context is unknown.{% else %}Contact facts are recorded above.{% endif %}</p>
           {% endfor %}
         </div>
-      </section>
+      </details>
     </aside>
   </div>
-  <footer class="crm-footer"><span>CONTACT {{ partner.id }}</span><span>LOCAL CRM DATA / INVESTOR SEND REQUIRES SEPARATE APPROVAL</span></footer>
 </div>
 {% endblock %}
