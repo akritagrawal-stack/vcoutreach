@@ -13,7 +13,8 @@
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <label for="draftProvider">Provider</label>
       <select id="draftProvider" name="provider">{% for provider in providers %}<option value="{{ provider }}">{{ provider|title }}</option>{% endfor %}</select>
-      <button class="crm-button crm-button-small crm-button-primary" type="submit">Write drafts for everyone without one</button>
+      <label><input type="checkbox" name="overwrite" value="1"> Replace existing drafts</label>
+      <button class="crm-button crm-button-small crm-button-primary" type="submit">Write drafts</button>
     </form>
     <p class="crm-source-note">{{ provider_status }} Without a configured key, Auto uses a placeholder template.</p>
   </details>

@@ -523,8 +523,13 @@ def register_routes(app):
         selected=request.form.getlist('slugs') or request.form.getlist('slug')
         selected=[slug.strip() for raw in selected for slug in raw.split(',') if slug.strip()]
         try:
-            result=write_drafts(selected,request.form.get('provider','auto'),request.form.get('overwrite')=='1')
-            flash(f'Wrote {len(result)} drafts.','success')
+            overwrite=request.form.get('overwrite')=='1'
+            skipped=sum(1 for row in list_drafts() if not selected or row['slug'] in selected) if not overwrite else 0
+            result=write_drafts(selected,request.form.get('provider','auto'),overwrite)
+            message=f'Wrote {len(result)} drafts.'
+            if skipped:
+                message+=f" {skipped} partners already have a draft. Tick 'Replace existing drafts' to rewrite them with the model. Replacing discards the saved hook."
+            flash(message,'warning' if skipped else 'success')
         except OutreachError as exc:
             flash(str(exc).splitlines()[0], 'error')
         except ValueError:

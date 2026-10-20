@@ -120,6 +120,23 @@ def _cap(text: str) -> str:
     return text[:_MAX_FACT_CHARS - 3] + '...'
 
 
+def is_company_name(text: str) -> bool:
+    """Reject obvious navigation labels, widget text and sentence fragments."""
+    text = _clean(text)
+    words = text.split()
+    if not words or len(words) > 5 or ',' in text:
+        return False
+    if any(sum(c.isalpha() for c in word) < 2 for word in words):
+        return False
+    return not re.search(
+        r'\b(?:privacy|terms|log\s*in|contact|careers?|jobs?|subscribe|newsletter|'
+        r'stay connected|cookies?|menu|home|about|team|blog|news|press|back|portfolio|companies|'
+        r'investments?|learn more|read more|view more|see all|sign up|sign in|'
+        r'get started|our work|apply|faq|search|next|prev|angel|investors?|'
+        r'seed round|series|backed|is|are|was|were|has|have|we|you|your|our|'
+        r'their|its|he|she|they)\b|[!?;:]|\.\s|\.$', text, re.IGNORECASE)
+
+
 def _domain_from_url(url: str) -> str:
     m = re.match(r'https?://([^/]+)', url or '')
     return m.group(1).lower().replace('www.', '') if m else ''
@@ -234,6 +251,8 @@ def _extract_from_web_results(results: list[dict], partner_name: str) -> list[di
                 companies = [c for c in caps if c not in generic and c not in partner_parts]
                 if companies:
                     company_str = ', '.join(companies[:2])
+                    if not is_company_name(company_str):
+                        break
                     facts.append({
                         'type': 'portfolio_company',
                         'text': _cap(f'{company_str} (via {domain})'),
@@ -670,6 +689,11 @@ def facts_to_llm_format(facts: list[dict], *, limit: int | None = 10) -> list[di
             text_val = (f.get('text') or f.get('value') or '').strip()
             # Extract the leading token (company name before " is in your portfolio..." etc.)
             _first_token = text_val.split(' is ')[0].split(' (')[0].strip()
+            company_name = re.sub(r'^Portfolio company\s+', '', _first_token, flags=re.IGNORECASE)
+            if company_name != _first_token:
+                company_name = company_name.split(',', 1)[0].strip()
+            if f.get('type') == 'portfolio_company' and not is_company_name(company_name):
+                continue
             if _is_yc_batch_label(_first_token):
                 _dropped_batch.append(text_val)
                 continue

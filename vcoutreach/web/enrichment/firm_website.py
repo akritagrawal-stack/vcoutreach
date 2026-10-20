@@ -21,6 +21,7 @@ from pathlib import Path
 from vcoutreach.web.vendor import validated_url, public_requests_get, require_dependency
 from typing import Optional
 from urllib.parse import urljoin, urlparse
+from vcoutreach.web.enrichment.fact_extractor import is_company_name
 
 logger = logging.getLogger(__name__)
 
@@ -204,21 +205,24 @@ def _normalize_url(href: str, base_url: str) -> str:
 
 def _same_domain(url: str, homepage: str) -> bool:
     """Return True if url is on the same domain as homepage."""
-    hp_netloc = urlparse(homepage).netloc.lower().replace('www.', '')
-    u_netloc = urlparse(url).netloc.lower().replace('www.', '')
-    return hp_netloc == u_netloc or u_netloc.endswith('.' + hp_netloc)
+    hp_netloc = (urlparse(homepage).hostname or '').lower().removeprefix('www.').rstrip('.')
+    u_netloc = (urlparse(url).hostname or '').lower().removeprefix('www.').rstrip('.')
+    return bool(hp_netloc) and (hp_netloc == u_netloc or u_netloc.endswith('.' + hp_netloc))
 
 
 def _find_nav_link(soup, keywords: list[str], homepage_url: str) -> Optional[str]:
     """
     Scan all <a> tags for a text/href match against keywords.
-    Prefers same-domain links. Returns absolute URL or None.
+    Only accepts same-domain links. Returns absolute URL or None.
     """
     candidates: list[tuple[int, str]] = []  # (priority, url)
 
     for anchor in soup.find_all('a', href=True):
         href = anchor['href'].strip()
         if not href or href.startswith('#') or href.startswith('mailto:'):
+            continue
+        abs_url = _normalize_url(href, homepage_url)
+        if urlparse(abs_url).scheme not in ('http', 'https') or not _same_domain(abs_url, homepage_url):
             continue
 
         text = anchor.get_text(separator=' ', strip=True).lower()
@@ -759,7 +763,7 @@ def _extract_portfolio_companies(soup, base_url: str) -> list[dict]:
             continue
         # Looks like a company link: external link, text is short proper name
         if href.startswith('http') and _same_domain(href, base_url) is False:
-            if text not in seen and not _is_nav_text(text):
+            if text not in seen and is_company_name(text):
                 seen.add(text)
                 companies.append({
                     'name': text,
@@ -783,7 +787,7 @@ def _parse_company_card(card, base_url: str) -> Optional[dict]:
                     candidate = el.get('alt', '') or el.get('title', '')
                 else:
                     candidate = el.get_text(strip=True)
-                if candidate and 1 < len(candidate) < 80 and not _is_nav_text(candidate):
+                if candidate and 1 < len(candidate) < 80 and is_company_name(candidate):
                     name = candidate
                     break
 
@@ -793,7 +797,7 @@ def _parse_company_card(card, base_url: str) -> Optional[dict]:
             if img:
                 name = img.get('alt', '') or img.get('title', '')
 
-        if not name or _is_nav_text(name):
+        if not name or not is_company_name(name):
             return None
 
         # URL: find first external link
@@ -1176,10 +1180,10 @@ def to_enrichment_facts(enrich_result: dict, source_url: str) -> list[dict]:
     for co in companies[:10]:
         name = co.get('name', '') if isinstance(co, dict) else str(co)
         sector = co.get('sector', '') if isinstance(co, dict) else ''
-        if not name or _is_nav_text(name):
+        if not name or not is_company_name(name):
             continue
         sector_note = f'  -  relevant sector: {sector}' if sector else ''
-        text = f'{name} is in your portfolio{sector_note}'
+        text = f"{name} is in the firm's portfolio{sector_note}"
         facts.append({
             'type': 'portfolio_company',
             'text': text[:240],
