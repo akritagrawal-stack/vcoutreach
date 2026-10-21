@@ -896,7 +896,7 @@ textarea.form-control { min-height: 80px; }
 .verification-guardrail > span, .verification-workspace-head span, .verification-provider-title span, .verification-provider-metrics span, .verification-attempt-grid span, .verification-attempt footer span, .verification-review-actions label span { color: var(--text-faint); font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: .09em; }
 .verification-guardrail strong { font-family: 'Space Grotesk', sans-serif; font-size: 24px; }
 .verification-guardrail p { color: var(--text-muted); font-size: 11px; line-height: 1.6; }
-.verification-guardrail a { display: flex; align-items: center; justify-content: center; min-height: 39px; border: 1px solid var(--text); background: var(--text); color: var(--bg); font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: .08em; }
+.verification-guardrail a { align-self: flex-start; }
 .verification-provider-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border: 1px solid var(--border); }
 .verification-provider-card { min-width: 0; padding: 22px; background: var(--surface); }
 .verification-provider-card:first-child { border-right: 1px solid var(--border); }
@@ -1108,6 +1108,13 @@ input, textarea, select { max-width: 100%; }
 .crm-table { table-layout: fixed; }
 .data-table th, .data-table td, .crm-table th, .crm-table td, .verification-table th, .verification-table td { overflow-wrap: anywhere; white-space: normal; }
 .data-table td > *, .crm-table td > *, .verification-table td > * { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+/* Data tables: break only at spaces (never mid-word), keep headers and badges whole; the wrapper scrolls instead. */
+.data-table th, .data-table td, .data-table td > * { overflow-wrap: break-word; }
+.data-table td, .data-table .col-action { min-width: 0; }
+.pl-table .col-action, .pl-table .cell-center { white-space: nowrap; }
+.data-table th { white-space: nowrap; }
+.data-table td > .badge, .data-table td > a.badge { white-space: nowrap; overflow-wrap: normal; max-width: none; }
+@media (min-width: 801px) { .pl-table { min-width: 780px; } }
 .form-shell { width: 100%; max-width: 850px; margin-inline: auto; }
 .draft-editor-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(240px, 300px); align-items: start; gap: 20px; }
 .draft-editor-main { min-width: 0; }
@@ -1154,12 +1161,28 @@ button:disabled { cursor: default; }
 .crm-collapse[open] > summary { margin-bottom: 8px; }
 .crm-collapse > form { padding: 0 18px 18px; }
 
-/* ── Responsive: three breakpoints (1100, 760, 520) ───────── */
+/* ── Responsive: breakpoints (1560 nav, 1240 nav, 1100, 760, 520) ───────── */
+/* The nav needs about 1500px for one row. Below that the links get their own full-width
+   row (never wrapping into uneven stacked rows) and scroll sideways if they still do not fit. */
+@media (max-width: 1559px) {
+  .nav-brand { margin-right: auto; }
+  .nav-links { order: 3; flex: 0 0 100%; width: 100%; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; }
+  .nav-group { flex: none; }
+  .nav-right { margin-left: 0; }
+  .nav-link:focus-visible { outline-offset: -3px; }
+}
+/* The overview hero toolbar is ~765px wide, so below ~1440px it squeezes the title into wrapping. Stack it instead. */
+@media (max-width: 1439px) {
+  .crm-hero { grid-template-columns: minmax(0, 1fr); align-items: start; }
+  .crm-hero-meta { justify-items: start; }
+  .crm-hero .crm-toolbar { justify-content: flex-start; }
+}
+@media (max-width: 1239px) {
+  .nav-group { padding: 0 8px; }
+  .nav-link { padding-left: 7px; padding-right: 7px; }
+}
 @media (max-width: 1100px) {
   .nav-inner, .main { padding-left: 20px; padding-right: 20px; }
-  .nav-brand { margin-right: auto; }
-  .nav-links { order: 3; flex-basis: 100%; width: 100%; }
-  .nav-right { margin-left: 0; }
   .crm-detail-grid { grid-template-columns: 1fr; }
   .crm-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .crm-filters { grid-template-columns: minmax(0, 1fr) minmax(160px, .8fr) auto; }
@@ -1174,8 +1197,6 @@ button:disabled { cursor: default; }
 
 @media (max-width: 760px) {
   .main { padding-top: 18px; }
-  .nav-links { flex-wrap: nowrap; overflow-x: auto; }
-  .nav-group { flex: none; }
   .send-banner { padding: 10px 12px; font-size: 11px; }
   .crm-metrics { grid-template-columns: minmax(0, 1fr); }
   .crm-filters { grid-template-columns: minmax(0, 1fr); }
@@ -1308,3 +1329,5 @@ button:disabled { cursor: default; }
   .reset-settings .svc-btn, .save-bar .svc-btn { width: 100%; }
 }
 @media (prefers-reduced-motion: reduce) { .svc-card:target, .svc-card.svc-hl, .acc:target, .svc-spin { animation: none; } }
+/* Checkboxes and radios must not inherit the full-width text input rules (.crm-filters, .crm-form, .fld, .settings-fields). */
+input[type="checkbox"], input[type="radio"] { width: auto; height: auto; min-height: 0; display: inline-block; }

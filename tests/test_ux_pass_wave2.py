@@ -297,7 +297,9 @@ def test_4_gmail_status_chip_appears_once(send_web):
 def test_4_gmail_status_chip_links_to_settings_gmail_card(send_web):
     w = seeded(send_web)
     root = dom(w, "/crm")
-    links = [a for a in root.find_all("a") if a.attrs.get("href") == "/settings#svc-gmail"]
+    chips = [n for n in root.walk() if "crm-chip" in n.classes and "gmail" in n.all_text().lower()]
+    links = [a for chip in chips for a in [chip, *chip.walk()]
+             if a.tag == "a" and a.attrs.get("href") == "/settings#svc-gmail"]
     assert len(links) == 1
 
 

@@ -53,14 +53,52 @@
 </div>
 {% endif %}
 
-{# ── One action row: approve, reject, send, schedule, tools ── #}
+{# One primary action chosen by state: enrich, then hook, then approve, then send. #}
+{% set sent_state = draft and (draft.get('live_sent_at') or draft['status'] in ('sent', 'test_sent', 'live_sent')) %}
+{% if sent_state %}{% set primary = '' %}
+{% elif not enrichment_facts %}{% set primary = 'enrich' %}
+{% elif not locked and (not draft or not draft.get('hook') or draft.blocked_reason) %}{% set primary = 'hook' %}
+{% elif not locked and draft['status'] != 'approved' %}{% set primary = 'approve' %}
+{% elif not draft %}{% set primary = '' %}
+{% else %}{% set primary = 'send' %}{% endif %}
+{# ── Action rows: Prepare first, then Review and send ── #}
 <div class="section pd-actions-wrap">
-  <div class="pd-actions">
+  <div class="pd-actions pd-actions-prepare" role="group" aria-label="Prepare">
+    <span class="pd-actions-label">Prepare</span>
+    <form method="POST" action="/partners/{{ partner['id'] }}/enrich" data-busy="Enriching, this takes about 30 seconds...">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button type="submit" class="btn {{ 'crm-button-primary' if primary == 'enrich' else 'btn-secondary' }} btn-sm" title="Run web search, LinkedIn and email guess enrichment">Enrich</button>
+    </form>
+    {% if not locked %}
+    <form method="POST" action="/partners/{{ partner['id'] }}/generate-hook" data-busy="Generating hook...">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button type="submit" class="btn {{ 'crm-button-primary' if primary == 'hook' else 'btn-secondary' }} btn-sm" title="Generate an opener from saved research; creates a base draft if needed">{{ 'Regenerate hook' if draft else 'Generate hook' }}</button>
+      <span class="crm-table-subline">Creates a template draft first if none exists.</span>
+    </form>
+    {% endif %}
+    {% if pitchbook_enabled %}
+    <form method="POST" action="/partners/{{ partner['id'] }}/pitchbook-enrich">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button type="submit" class="btn btn-secondary btn-sm" title="Run PitchBook enrichment ({{ pitchbook_lookups_used }}/{{ pitchbook_lookups_cap }} used today)">
+        PitchBook <span class="badge badge-pitchbook">{{ pitchbook_lookups_used }}/{{ pitchbook_lookups_cap }}</span>
+      </button>
+    </form>
+    {% endif %}
+    {% if not email_verified %}
+    <form method="post" action="{{ url_for('partner_verify_email_manually', partner_id=partner.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button type="submit" class="btn btn-secondary btn-sm" title="Use only after you checked the address yourself">Mark email verified</button>
+    </form>
+    {% endif %}
+  </div>
+
+  <div class="pd-actions pd-actions-send" role="group" aria-label="Review and send">
+    <span class="pd-actions-label">Review and send</span>
     {% if draft and not locked %}
       {% if draft['status'] != 'approved' %}
       <form method="POST" action="/partners/{{ partner['id'] }}/approve">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <button type="submit" class="btn btn-success btn-sm"{% if draft.blocked_reason %} disabled title="blocked: {{ draft.blocked_reason }}"{% endif %}>Approve draft</button>
+        <button type="submit" class="btn {{ 'crm-button-primary' if primary == 'approve' else 'btn-success' }} btn-sm"{% if draft.blocked_reason %} disabled title="blocked: {{ draft.blocked_reason }}"{% endif %}>Approve draft</button>
         {% if draft.blocked_reason %}<span class="crm-source-note">blocked: {{ draft.blocked_reason }}</span>{% endif %}
       </form>
       {% else %}
@@ -76,9 +114,9 @@
     {% elif draft and draft['status'] in ('sent', 'test_sent') %}
       <span class="text-muted pd-note">Test sent{% if sent_to %} to <strong>{{ sent_to }}</strong>{% endif %}{% if draft.get('last_test_sent_at') %} on {{ draft['last_test_sent_at'][:10] }}{% elif draft['sent_at'] %} on {{ draft['sent_at'][:10] }}{% endif %}</span>
     {% elif g_send_mode == 'test' %}
-      <form method="POST" action="/partners/{{ partner['id'] }}/send">
+      <form method="POST" action="/partners/{{ partner['id'] }}/send" data-busy="Sending test...">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <button type="submit" class="btn btn-primary btn-sm" title="Sends to {{ g_test_recipient }} (test mode)">Send test email</button>
+        <button type="submit" class="btn {{ 'crm-button-primary' if primary == 'send' else 'btn-secondary' }} btn-sm" title="Sends to {{ g_test_recipient }} (test mode)">Send test email</button>
       </form>
     {% else %}
       <button type="button" class="btn btn-danger btn-sm" data-action="partner_detail-1">Send to {{ partner['email'] }}</button>
@@ -88,36 +126,10 @@
     <button type="button" class="btn btn-secondary btn-sm" id="scheduleToggle1" data-action="partner_detail-2">Schedule for later</button>
     {% endif %}
 
-    <span class="pd-actions-sep" aria-hidden="true"></span>
-
     {% if g_send_mode != 'test' %}
-    <form method="POST" action="/partners/{{ partner['id'] }}/send-test">
+    <form method="POST" action="/partners/{{ partner['id'] }}/send-test" data-busy="Sending test...">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <button type="submit" class="btn btn-ghost btn-sm" title="Sends to {{ g_test_recipient }} regardless of approval">Send test to {{ g_test_recipient }}</button>
-    </form>
-    {% endif %}
-    {% if not locked %}
-    <form method="POST" action="/partners/{{ partner['id'] }}/generate-hook">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <button type="submit" class="btn btn-ghost btn-sm" title="Generate an opener from saved research; creates a base draft if needed">{{ 'Regenerate hook' if draft else 'Generate hook' }}</button>
-    </form>
-    {% endif %}
-    <form method="POST" action="/partners/{{ partner['id'] }}/enrich">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <button type="submit" class="btn btn-ghost btn-sm" title="Run web search, LinkedIn and email guess enrichment">Enrich</button>
-    </form>
-    {% if pitchbook_enabled %}
-    <form method="POST" action="/partners/{{ partner['id'] }}/pitchbook-enrich">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <button type="submit" class="btn btn-ghost btn-sm" title="Run PitchBook enrichment ({{ pitchbook_lookups_used }}/{{ pitchbook_lookups_cap }} used today)">
-        PitchBook <span class="badge badge-pitchbook">{{ pitchbook_lookups_used }}/{{ pitchbook_lookups_cap }}</span>
-      </button>
-    </form>
-    {% endif %}
-    {% if not email_verified %}
-    <form method="post" action="{{ url_for('partner_verify_email_manually', partner_id=partner.id) }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <button type="submit" class="btn btn-ghost btn-sm" title="Use only after you checked the address yourself">Mark email verified</button>
     </form>
     {% endif %}
   </div>
@@ -284,7 +296,7 @@
       {% elif partner.get('enriched_at') %}
       <div class="inset pd-banner pd-banner-warn">Partner was enriched but no usable facts were extracted. Try re-enriching.</div>
       {% else %}
-      <div class="empty-state pd-empty"><p>No enrichment data yet.</p><p class="text-faint">Use Enrich in the action row above.</p></div>
+      <div class="empty-state pd-empty"><p>No enrichment data yet.</p><p class="text-faint">Use Enrich under Prepare above.</p></div>
       {% endif %}
     </div>
   </aside>

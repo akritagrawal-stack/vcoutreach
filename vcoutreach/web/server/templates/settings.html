@@ -55,7 +55,17 @@
         </div>
       </form>
       </details>
-      <p class="svc-hint" data-gmail-message data-svc-note role="status">{{ 'Gmail connected.' if gmail.view == 'connected' else 'Gmail is not connected. Enter your address and app password, then choose Connect Gmail.' }} TEST mode and send confirmations still apply.</p>
+      <p class="svc-hint" data-gmail-message data-svc-note role="status">{{ 'Gmail connected.' if gmail.view == 'connected' else 'Gmail is not connected. Enter your address and app password, then choose Connect Gmail. Then set your test recipient below.' }} TEST mode and send confirmations still apply.</p>
+    </article>
+
+    <article class="svc-card" id="svc-test-recipient" tabindex="-1" data-service="test-recipient" data-state="{{ 'ok' if g_test_recipient else 'unset' }}">
+      <header class="svc-head">{{ mark('test-recipient', 'Tr') }}<h2>Test recipient</h2><span class="svc-status" role="status"><i class="svc-dot"></i><b data-svc-label>{{ 'Set' if g_test_recipient else 'Not set' }}</b></span></header>
+      <form class="svc-form" method="post" action="/settings/keys">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <label class="fld" for="testRecipient"><span>Test recipient email</span><input id="testRecipient" name="TEST_RECIPIENT_EMAIL" type="email" autocomplete="off" value="{{ g_test_recipient }}" placeholder="you@example.com"></label>
+        <div class="svc-actions"><button type="submit" class="svc-btn primary">Save test recipient</button></div>
+        <p class="svc-hint">In TEST mode every send goes to this address instead of the contact. Clear it and save to hold test sends.</p>
+      </form>
     </article>
 
     {% for s in services %}

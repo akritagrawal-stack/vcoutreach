@@ -20,8 +20,19 @@
 .crm-counts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; padding-top: 8px; }
 .crm-counts-grid dl { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; margin: 0; }
 .crm-counts-grid dd { margin: 0; font-family: 'IBM Plex Mono', monospace; text-align: right; }
+#writeDrafts label:has(> input[type="checkbox"]) { display: flex; align-items: center; gap: .5rem; }
+#writeDrafts input[type="checkbox"] { width: auto; height: auto; display: inline-block; margin: 0; }
 @media (max-width: 800px) {
   .crm-toolbar { justify-content: flex-start; }
   .crm-dashboard .crm-filters .crm-search-field { grid-column: auto; }
   .crm-switch { grid-template-columns: minmax(0, 1fr); }
 }
+.deck-panel-blurb-text { white-space: pre-wrap; margin-top: 6px; max-height: 150px; overflow: auto; }
+.deck-panel-hint { margin-top: 6px; }
+.deck-panel-deck { margin-top: 12px; }
+.deck-panel-actions { margin-top: 8px; }
+.deck-panel-body { margin-top: 10px; }
+.crm-empty-steps { display: grid; gap: 6px; max-width: 420px; margin: 0 auto 12px; padding-left: 20px; text-align: left; }
+.pd-actions-send { margin-top: 10px; }
+.pd-actions-label { color: var(--text-muted); font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.pd-actions-prepare .crm-table-subline { margin-top: 2px; }

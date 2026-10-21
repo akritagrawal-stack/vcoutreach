@@ -408,7 +408,7 @@ def send_plan():
     from vcoutreach.web.gmail.push_worker import gmail_connection_reason
     readiness=[]
     if mode=='test' and not _EMAIL_RE.fullmatch(settings.test_recipient_email or ''):
-        readiness.append('Set TEST_RECIPIENT_EMAIL to a valid email in Settings, under Keys and connection settings.')
+        readiness.append('Set a test recipient email in Settings, in the Test recipient card.')
     connection_reason=gmail_connection_reason()
     if connection_reason:
         readiness.append(friendly_message(connection_reason))
@@ -513,8 +513,46 @@ def send_reviewed_batch(ids):
     return result
 
 
+def attachment_deck_file():
+    """Return the configured pitch deck file only when it is a real file inside <workspace>/attachments, else None."""
+    from vcoutreach.web.server.workspace_settings import load_settings
+    configured = str(load_settings().get('pitch_deck_path') or '').strip()
+    if not configured:
+        return None
+    try:
+        root = get_workspace().path('attachments').resolve()
+        candidate = Path(configured).expanduser().resolve()
+    except (OSError, ValueError, RuntimeError):
+        return None
+    if candidate.is_file() and candidate.is_relative_to(root):
+        return candidate
+    return None
+
+def template_deck_panel():
+    """Read-only view model for the Template and deck panel (blurb plus deck link)."""
+    from vcoutreach.web.server.workspace_settings import load_settings
+    settings = load_settings()
+    blurb = str(settings.get('outreach_blurb_template') or '').strip()
+    url = str(settings.get('pitch_deck_url') or '').strip()
+    configured_path = str(settings.get('pitch_deck_path') or '').strip()
+    deck_file = attachment_deck_file()
+    label = str(settings.get('pitch_deck_label') or '').strip()
+    return {'blurb': blurb, 'deck_url': url, 'deck_path_set': bool(configured_path),
+            'deck_file_name': deck_file.name if deck_file else '',
+            'deck_label': label or (deck_file.name if deck_file else 'Pitch deck'),
+            'has_deck': bool(url or deck_file)}
+
 def register_routes(app):
-    from flask import request,render_template,redirect,url_for,flash,abort,Response
+    from flask import request,render_template,redirect,url_for,flash,abort,Response,send_file
+
+    @app.get('/crm/deck')
+    def crm_deck_file():
+        # Serves only the configured pitch_deck_path, and only when it resolves inside <workspace>/attachments.
+        deck = attachment_deck_file()
+        if deck is None:
+            abort(404)
+        return send_file(deck, as_attachment=False, download_name=deck.name, max_age=0)
+
     from vcoutreach.web.crm_store import STAGES,save_profile,add_activity
     from vcoutreach.web.keys import write_env,KEY_NAMES,key_status
 
@@ -565,7 +603,7 @@ def register_routes(app):
         if row is None:
             abort(404)
         lanes=[(lane.value,lane.value.replace('_',' ').title()) for lane in Lane]
-        return render_template('crm_draft.html',draft=row,drafts=rows,lanes=lanes,active_page='drafts')
+        return render_template('crm_draft.html',draft=row,drafts=rows,lanes=lanes,deck_panel=template_deck_panel(),active_page='drafts')
 
     @app.get('/crm/send-plan')
     def crm_send_plan():
