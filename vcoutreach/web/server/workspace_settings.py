@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 from copy import deepcopy
 from pathlib import Path
 from urllib.parse import urlparse
@@ -55,7 +56,17 @@ AUDIENCE_TYPES = {
 
 SAMPLE_BLURB = 'Describe your product using approved sender facts.'
 
-DEFAULT_SETTINGS = {'workspace_name': 'Publikreach', 'workspace_short_name': 'REACH', 'company_name': '', 'product_name': '', 'operator_name': '', 'operator_role': '', 'contact_label_singular': 'contact', 'contact_label_plural': 'contacts', 'campaign_goal': 'Build a grounded outreach pipeline', 'hero_primary': 'Your outreach workspace for', 'hero_emphasis': 'thoughtful conversations.', 'hero_support': 'Research, review, and send from one local workspace.', 'meeting_label': 'meetings', 'meeting_source': 'manual snapshot', 'email_subject_rule': 'A quick introduction', 'personalization_rule': 'Use one verified fact and explain its relevance.', 'one_liner': '', 'company_background': '', 'problem_statement': '', 'solution_statement': '', 'target_customer': '', 'business_model': '', 'competitive_advantage': '', 'founder_background': '', 'company_thesis': '', 'founder_line': '', 'traction_line': '', 'ask_line': '', 'call_to_action': 'Would you be open to a short conversation?', 'pitch_deck_path': '', 'pitch_deck_label': 'Pitch deck', 'outreach_blurb_template': '{First name},\n\n{One verified sentence}\n\n{Company description}\n\n{Ask}\n\n{Sender name}', 'proof_library': '', 'claim_guardrails': '', 'attachment_notes': '', 'schema_version': 2, 'initialized': False, 'website': '', 'audience_type': 'investors', 'discovery_source': 'manual_csv', 'meeting_count': 0, 'pitch_deck_url': ''}
+DEFAULT_OUTREACH_BLURB = (
+    'Hi {first_name},\n\n'
+    '{hook}\n\n'
+    '{founder_line} {traction_line}\n\n'
+    '{problem_statement} {solution_statement}\n\n'
+    '{ask_line}\n\n'
+    'Our deck is attached. {call_to_action}\n\n'
+    '{operator_name}, {operator_role}, {company_name}'
+)
+
+DEFAULT_SETTINGS = {'workspace_name': 'Publikreach', 'workspace_short_name': 'REACH', 'company_name': '', 'product_name': '', 'operator_name': '', 'operator_role': '', 'contact_label_singular': 'contact', 'contact_label_plural': 'contacts', 'campaign_goal': 'Build a grounded outreach pipeline', 'hero_primary': 'Your outreach workspace for', 'hero_emphasis': 'thoughtful conversations.', 'hero_support': 'Research, review, and send from one local workspace.', 'meeting_label': 'meetings', 'meeting_source': 'manual snapshot', 'email_subject_rule': 'A quick introduction', 'personalization_rule': 'Use one verified fact and explain its relevance.', 'one_liner': '', 'company_background': '', 'problem_statement': '', 'solution_statement': '', 'target_customer': '', 'business_model': '', 'competitive_advantage': '', 'founder_background': '', 'company_thesis': '', 'founder_line': '', 'traction_line': '', 'ask_line': '', 'call_to_action': 'Would you be open to a short conversation?', 'pitch_deck_path': '', 'pitch_deck_label': 'Pitch deck', 'outreach_blurb_template': DEFAULT_OUTREACH_BLURB, 'proof_library': '', 'claim_guardrails': '', 'attachment_notes': '', 'schema_version': 2, 'initialized': False, 'website': '', 'audience_type': 'investors', 'discovery_source': 'manual_csv', 'meeting_count': 0, 'pitch_deck_url': ''}
 
 _FIELD_LIMITS = {
     "workspace_name": 60,
@@ -196,6 +207,43 @@ def _persist_settings(normalized: dict) -> dict:
     temporary.replace(SETTINGS_PATH)
     SETTINGS_PATH.chmod(0o600)
     return normalized
+
+
+EXAMPLE_DECK_NAME = 'Example_Pitch_Deck.pdf'
+_EXAMPLE_DECK_MARKER = ('data', '.example_deck_seeded')
+
+
+def bundled_example_deck() -> Path:
+    from importlib.resources import files
+    return Path(str(files('vcoutreach').joinpath('data', 'examples', 'Publik_Pitch_Deck_Example.pdf')))
+
+
+def ensure_example_deck() -> bool:
+    """Seed the bundled example deck once per workspace. Never overwrites a user path.
+
+    Returns True only when the deck was copied and saved as pitch_deck_path.
+    A marker file stops re-seeding after the user clears or replaces the path.
+    """
+    workspace = get_workspace()
+    marker = workspace.path(*_EXAMPLE_DECK_MARKER)
+    if marker.exists():
+        return False
+    source = bundled_example_deck()
+    if not source.is_file():
+        return False
+    settings = load_settings()
+    if settings.get('pitch_deck_path'):
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        marker.write_text('user deck present\n', encoding='utf-8')
+        return False
+    target = workspace.path('attachments', EXAMPLE_DECK_NAME)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(source, target)
+    settings['pitch_deck_path'] = str(target)
+    _persist_settings(normalize_settings(settings))
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    marker.write_text('example deck seeded\n', encoding='utf-8')
+    return True
 
 
 def reset_settings() -> dict:

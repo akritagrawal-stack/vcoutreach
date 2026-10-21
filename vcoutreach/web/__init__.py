@@ -6,6 +6,15 @@ def create_app(workspace=None, testing=False, send_transport=None):
     from vcoutreach.web.server.app import create_app as factory
     return factory(workspace,testing=testing,send_transport=send_transport)
 
+def seed_example_deck(app):
+    """First run only: copy the bundled example deck into the workspace."""
+    try:
+        from vcoutreach.web.server.workspace_settings import ensure_example_deck
+        with app.app_context():
+            return ensure_example_deck()
+    except Exception:
+        return False
+
 def serve(workspace=None, *, port=None, no_browser=False):
     import contextlib
     import io
@@ -21,6 +30,7 @@ def serve(workspace=None, *, port=None, no_browser=False):
         print('Port must be an integer between 1024 and 65535.',file=sys.stderr)
         return 2
     app=create_app(workspace or Path.cwd())
+    seed_example_deck(app)
     server=None
     selected=None
     for candidate in ([port] if port is not None else range(8765,8786)):
@@ -49,4 +59,4 @@ def serve(workspace=None, *, port=None, no_browser=False):
         stop_scheduler()
     return 0
 
-__all__=['create_app','serve']
+__all__=['create_app','seed_example_deck','serve']
