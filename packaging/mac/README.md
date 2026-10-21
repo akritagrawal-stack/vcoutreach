@@ -16,6 +16,6 @@ dist/Publikreach.app/Contents/MacOS/Publikreach --self-test
 
 First launch: the app is ad-hoc signed, not notarized. Right-click the app and choose Open. Its workspace is `~/Documents/Publikreach` and it starts in TEST mode every launch.
 
-Gmail needs your own Google Cloud Desktop app OAuth client JSON (Settings > Choose OAuth client file > Connect Gmail).
+Gmail connects with your address and a Google app password (Settings > Connect Gmail). A Desktop OAuth client file is still available under Advanced.
 
 Full documentation: [docs/mac-app.md](../../docs/mac-app.md). The older `install-mac.sh` developer installer is documented there too.

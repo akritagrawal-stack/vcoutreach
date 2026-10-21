@@ -1285,6 +1285,9 @@ button:disabled { cursor: default; }
 .fld textarea { min-height: 72px; resize: vertical; line-height: 1.45; }
 .fld input:hover, .fld select:hover, .fld textarea:hover { border-color: var(--text-muted); }
 .fld input:focus, .fld select:focus, .fld textarea:focus { border-color: var(--accent); }
+.secret-wrap { display: flex; align-items: stretch; gap: 8px; min-width: 0; }
+.secret-wrap input { flex: 1 1 0; width: auto; }
+.secret-toggle { flex: none; min-width: 64px; height: 40px; padding: 0 12px; }
 .fields .wide, .fld.wide, .svc-hint.wide { grid-column: 1 / -1; }
 .svc-actions.wide { justify-content: flex-end; }
 .set-chip { margin-left: 6px; font-style: normal; font-weight: 600; color: var(--text-faint); }

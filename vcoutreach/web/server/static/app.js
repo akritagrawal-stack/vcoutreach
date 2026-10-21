@@ -379,6 +379,79 @@ if (page === 'settings') {
     return String(payload.error || payload.error_code || payload.status || fallback).replaceAll('_', ' ');
   }
 
+  // Secret fields: every password input gets a Show/Hide button. Values are never logged or stored by this code.
+  var secretShell = document.querySelector('.settings-shell');
+  var secretSeq = 0;
+  function secretInputsIn(root) {
+    var found = root.matches && root.matches('input[type="password"]') ? [root] : [];
+    return found.concat(Array.prototype.slice.call(root.querySelectorAll ? root.querySelectorAll('input[type="password"]') : []));
+  }
+  function setSecretShown(input, button, shown) {
+    input.type = shown ? 'text' : 'password';
+    button.textContent = shown ? 'Hide' : 'Show';
+    button.setAttribute('aria-pressed', String(shown));
+    button.setAttribute('aria-label', (shown ? 'Hide ' : 'Show ') + button.dataset.secretName);
+  }
+  function fieldNameOf(label) {
+    var span = label && label.querySelector(':scope > span');
+    if (!span) return '';
+    return Array.prototype.filter.call(span.childNodes, function (node) { return node.nodeType === 3; })
+      .map(function (node) { return node.textContent; }).join('').trim();
+  }
+  function augmentSecretInputs(root) {
+    secretInputsIn(root).forEach(function (input) {
+      if (input.dataset.secretReady) return;
+      input.dataset.secretReady = '1';
+      var label = input.closest('label');
+      var span = label && label.querySelector(':scope > span');
+      var name = fieldNameOf(label) || input.name || 'secret';
+      if (!input.id) input.id = 'secret-input-' + (++secretSeq);
+      if (span) {
+        if (!span.id) span.id = 'secret-label-' + (++secretSeq);
+        input.setAttribute('aria-labelledby', span.id);
+      } else {
+        input.setAttribute('aria-label', name);
+      }
+      var wrap = document.createElement('span');
+      wrap.className = 'secret-wrap';
+      input.parentNode.insertBefore(wrap, input);
+      wrap.appendChild(input);
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'svc-btn secret-toggle';
+      button.dataset.secretName = name;
+      button.setAttribute('aria-controls', input.id);
+      button.addEventListener('click', function () {
+        setSecretShown(input, button, input.type === 'password');
+      });
+      wrap.appendChild(button);
+      setSecretShown(input, button, false);
+    });
+  }
+  // Any submit inside Settings returns its secret fields to hidden; the existing handlers clear the values.
+  function hideSecrets(form) {
+    form.querySelectorAll('.secret-wrap').forEach(function (wrap) {
+      var input = wrap.querySelector('input');
+      var button = wrap.querySelector('.secret-toggle');
+      if (input && button && input.type !== 'password') setSecretShown(input, button, false);
+    });
+  }
+  augmentSecretInputs(secretShell || document.body);
+  if (secretShell) {
+    secretShell.addEventListener('submit', function (event) {
+      if (event.target && event.target.tagName === 'FORM') hideSecrets(event.target);
+    }, true);
+  }
+  if (secretShell && window.MutationObserver) {
+    new MutationObserver(function (records) {
+      records.forEach(function (record) {
+        Array.prototype.forEach.call(record.addedNodes, function (node) {
+          if (node.nodeType === 1) augmentSecretInputs(node);
+        });
+      });
+    }).observe(secretShell, {childList: true, subtree: true});
+  }
+
   // Key cards: Store and Test connection.
   document.querySelectorAll('.svc-card [data-svc-form]').forEach(function (form) {
     var card = form.closest('.svc-card');
