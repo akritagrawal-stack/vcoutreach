@@ -1,5 +1,7 @@
 # Example data
 
+This is the deck and blurb template the founder used to get 50+ meetings and raise $600K at 18 years old.
+
 `Publik_Pitch_Deck_Example.pdf` is the Publik pitch deck with the founder, round
 and audience-stat pages removed. It is image-only (no text layer, no links) and is
 shipped so a fresh workspace has a working attachment. On first run the app copies it to
