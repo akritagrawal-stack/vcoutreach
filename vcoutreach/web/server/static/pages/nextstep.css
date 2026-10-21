@@ -1,0 +1,13 @@
+/* Next step banner (global, state driven) and TEST banner recipient. */
+.next-step { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin: 0 0 16px; padding: 10px 14px; border: 1px solid var(--border-muted); border-left: 3px solid var(--accent); background: var(--surface); color: var(--text); font-size: 13px; }
+.next-step-count { color: var(--text-muted); font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+.next-step strong { font-weight: 600; }
+.next-step .crm-button { margin-left: auto; }
+.send-banner-recipient { color: var(--text); }
+.send-banner-link { color: var(--accent); font-weight: 600; text-decoration: underline; }
+/* Secondary links moved out of the nav (Candidates, Email verification). */
+.pl-more-links { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 0; }
+@media (max-width: 760px) {
+  .next-step { padding: 10px 12px; }
+  .next-step .crm-button { margin-left: 0; }
+}

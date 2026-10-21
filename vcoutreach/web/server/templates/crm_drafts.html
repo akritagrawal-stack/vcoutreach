@@ -8,17 +8,19 @@
     <div class="form-actions"><a class="crm-button crm-button-small crm-button-secondary" href="/crm/send-plan">View send plan</a><a class="crm-button crm-button-small crm-button-secondary" href="/partners">Review batch send</a></div>
   </header>
   <p class="svc-hint">This is our email template and pitch deck that has gotten 50+ meetings and $600K raised in funding.</p>
-  <details class="crm-panel crm-collapse">
-    <summary>Write drafts</summary>
-    <form method="post" action="/crm/drafts/write" class="crm-filters">
+  <section class="crm-panel" id="writeDrafts" aria-labelledby="writeDraftsHeading">
+    <div class="crm-panel-heading"><h2 id="writeDraftsHeading">Write drafts</h2></div>
+    <form method="post" action="/crm/drafts/write" class="crm-filters" data-busy="Writing drafts...">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <label for="draftProvider">Provider</label>
       <select id="draftProvider" name="provider">{% for provider in providers %}<option value="{{ provider }}">{{ provider|title }}</option>{% endfor %}</select>
       <label><input type="checkbox" name="overwrite" value="1"> Replace existing drafts</label>
       <button class="crm-button crm-button-small crm-button-primary" type="submit">Write drafts</button>
     </form>
+    <p class="crm-source-note" id="draftingHow">Write drafts builds each email from your template. Generate hook on a contact page adds a researched opening line from enrichment facts, and creates a template draft first if none exists. Approve needs a grounded hook.</p>
     <p class="crm-source-note">{{ provider_status }} Without a configured key, Auto uses a placeholder template.</p>
-  </details>
+  </section>
+  {% set deck_collapsed = (total_draft_count|default(draft_count)) > 0 %}{% include '_template_deck_panel.html' %}
   <form class="crm-filters" method="get" action="/crm/drafts">
     <label for="draftSearch">Search drafts<input id="draftSearch" type="search" name="q" value="{{ query }}"></label>
     <label for="draftStatus">Status<select id="draftStatus" name="status"><option value="">All statuses</option>{% for status in ['pending','approved','rejected','blocked'] %}<option value="{{ status }}" {% if status_filter == status %}selected{% endif %}>{{ status|title }}</option>{% endfor %}</select></label>
@@ -37,7 +39,7 @@
         <td>{{ item.word_count }}</td><td><a href="/crm/drafts/{{ item.slug|urlencode }}">Open draft</a>
           {% if item.partner_id %}<a class="crm-table-subline" href="/crm/{{ item.partner_id }}">Contact profile</a>{% endif %}
         </td>
-      </tr>{% else %}<tr><td colspan="7" class="crm-empty-row">No drafts in this view. <a href="/crm/new">Add your first contact</a>, then write a draft.</td></tr>{% endfor %}</tbody>
+      </tr>{% else %}<tr><td colspan="7" class="crm-empty-row">{% if (total_draft_count|default(0)) > 0 %}No drafts match these filters.{% else %}No drafts yet. <a href="/crm/new">Add a contact</a>, then use Write drafts above.{% endif %}</td></tr>{% endfor %}</tbody>
     </table></div>
   </section>
 </div>

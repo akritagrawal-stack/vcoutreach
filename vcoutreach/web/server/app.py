@@ -307,6 +307,43 @@ def _gmail_connection_state() -> str:
         return 'not connected'
     return 'OAuth required'
 
+_NEXT_STEPS = (('gmail', 'Connect Gmail', '/settings#svc-gmail'),
+               ('test_recipient', 'Set your test recipient', '/settings#svc-test-recipient'),
+               ('contact', 'Add your first contact', '/crm/new'),
+               ('draft', 'Write drafts', '/crm/drafts#writeDrafts'),
+               ('approve', 'Review and approve a draft', '/crm/drafts'),
+               ('send_test', 'Send a test email', '/partners'))
+
+def first_run_next_step(app) -> dict | None:
+    """First unmet setup step for the global Next step banner, or None when all six are done.
+    Reads local files and the workspace database only (no network); any failure hides the banner."""
+    try:
+        done = {'gmail': _gmail_connection_state() == 'connected', 'test_recipient': bool(_env('TEST_RECIPIENT_EMAIL'))}
+        partner_id = None
+        if all(done.values()):
+            conn = get_conn(app.config['CRM_DB_PATH'])
+            try:
+                done['contact'] = conn.execute('SELECT 1 FROM partners LIMIT 1').fetchone() is not None
+                drafts_dir = get_workspace().drafts_dir
+                files = drafts_dir.is_dir() and any(drafts_dir.glob('*.md'))
+                done['draft'] = bool(files) or conn.execute('SELECT 1 FROM drafts LIMIT 1').fetchone() is not None
+                approved = conn.execute("SELECT partner_id FROM drafts WHERE status='approved' ORDER BY id LIMIT 1").fetchone()
+                partner_id = approved['partner_id'] if approved else None
+                done['send_test'] = (conn.execute("SELECT 1 FROM web_send_journal WHERE state='sent' LIMIT 1").fetchone() is not None
+                                     or conn.execute('SELECT 1 FROM drafts WHERE sent_to_address IS NOT NULL LIMIT 1').fetchone() is not None)
+                # A sent draft leaves 'approved', so a completed send also settles the approve step.
+                done['approve'] = approved is not None or done['send_test']
+            finally:
+                conn.close()
+        for index, (key, label, href) in enumerate(_NEXT_STEPS, 1):
+            if not done.get(key, False):
+                if key == 'send_test' and partner_id:
+                    href = f'/partners/{partner_id}'
+                return {'key': key, 'index': index, 'total': len(_NEXT_STEPS), 'label': label, 'href': href}
+        return None
+    except Exception:
+        return None
+
 _SERVICE_MARKS = {'pitchbook': 'Pb', 'apollo': 'Ap', 'enrow': 'En', 'gemini': 'Ge', 'openai': 'Oa', 'anthropic': 'An', 'openrouter': 'Or', 'tracking': 'Tr'}
 
 _TRACKING_URL_NAMES = ('TRACKING_WORKER_URL', 'CLOUDFLARE_TRACKING_URL', 'TRACKER_PUBLIC_URL', 'TRACKING_ORIGIN')
@@ -352,7 +389,7 @@ def _more_settings(services: list) -> list:
     return [{'name': name, 'set': bool(status.get(name)),
              'type': 'email' if name in ('TEST_RECIPIENT_EMAIL', 'SENDER_EMAIL') else 'url' if name.endswith(('_URL', '_ORIGIN')) else 'password'
                      if name.endswith(('_KEY', '_TOKEN')) else 'text'}
-            for name in sorted(KEY_NAMES - used)]
+            for name in sorted(KEY_NAMES - used - {'TEST_RECIPIENT_EMAIL'})]
 
 def _gmail_view(app) -> dict:
     """Server-rendered first paint for the Gmail card; the status poll keeps it current."""
@@ -467,6 +504,10 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
             return 'blocked: '+reason if reason else grounding_state(row)
         return {'g_send_mode':send_mode(),'g_test_recipient':_env('TEST_RECIPIENT_EMAIL'),
                 'hook_grounding_state':display_grounding}
+
+    @app.context_processor
+    def inject_next_step():
+        return {'g_next_step': first_run_next_step(app)}
 
     @app.context_processor
     def inject_workspace():
@@ -620,8 +661,8 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
               and (not query or query.casefold() in (row['recipient_name']+' '+row['subject']+' '+row['firm']).casefold())]
         from vcoutreach.providers import configured_providers
         providers=configured_providers(drafts_service.engine_settings())
-        return render_template('crm_drafts.html',drafts=rows,draft_count=len(rows),
-            status_filter=status,query=query,providers=['auto','template','publik','openai','anthropic'],
+        return render_template('crm_drafts.html',drafts=rows,draft_count=len(rows),total_draft_count=len(drafts),
+            status_filter=status,query=query,deck_panel=drafts_service.template_deck_panel(),providers=['auto','template','publik','openai','anthropic'],
             provider_status=', '.join(providers) + ' configured; no key uses a placeholder template',active_page='drafts')
 
     @app.get('/crm/tracking')
@@ -862,8 +903,11 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
         gmail=_gmail_view(app)
         services=_settings_services(load_gemini_status(configured=bool(_env('GEMINI_API_KEY'))),connection_health())
         deck_ready=bool(settings.get('pitch_deck_path') and Path(settings['pitch_deck_path']).is_file())
-        tiles=[('Database','ok','Ready','sec-identity'),('Pitch deck','ok' if deck_ready else 'unset','Ready' if deck_ready else 'Missing','sec-package'),
-               ('PitchBook','unset','Not set','svc-pitchbook'),('Gmail',gmail['state'],{'ok':'Connected','fail':'Failed','unset':'Not set'}.get(gmail['state'],'Key saved'),'svc-gmail'),
+        recipient=bool(_env('TEST_RECIPIENT_EMAIL'))
+        tiles=[('Gmail',gmail['state'],{'ok':'Connected','fail':'Failed','unset':'Not set'}.get(gmail['state'],'Key saved'),'svc-gmail'),
+               ('Test recipient','ok' if recipient else 'unset','Set' if recipient else 'Not set','svc-test-recipient'),
+               ('Pitch deck','ok' if deck_ready else 'unset','Ready' if deck_ready else 'Missing','sec-package'),
+               ('Database','ok','Ready','sec-identity'),('PitchBook','unset','Not set','svc-pitchbook'),
                ('Calendar','unset','Manual','sec-snapshot')]
         return render_template('settings.html',settings=settings,audiences=AUDIENCE_TYPES,discovery_sources=DISCOVERY_SOURCES,
             sample_email=build_sample_email(settings),gmail=gmail,services=services,more_settings=_more_settings(services),tiles=tiles,

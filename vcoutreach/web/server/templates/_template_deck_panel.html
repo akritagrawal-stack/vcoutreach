@@ -1,0 +1,35 @@
+{# Read-only "Template and deck" panel. Needs deck_panel; set deck_collapsed to render it as a collapsed details block. #}
+{% set _p = deck_panel %}
+{% macro _body() %}
+  <div class="deck-panel-blurb">
+    <strong>Email template</strong>
+    {% if _p.blurb %}<p class="svc-hint deck-panel-blurb-text">{{ _p.blurb }}</p>
+    {% else %}<p class="svc-hint deck-panel-hint">No email template yet. <a href="/settings#sec-package">Add one in Settings</a>.</p>{% endif %}
+  </div>
+  <div class="deck-panel-deck">
+    <strong>Pitch deck</strong>
+    {% if _p.has_deck %}
+      <p class="svc-hint deck-panel-hint">{{ _p.deck_label }}
+        {% if _p.deck_file_name %}<span class="crm-table-subline">Attached file: {{ _p.deck_file_name }}</span>{% endif %}
+        {% if _p.deck_url %}<span class="crm-table-subline">Link: {{ _p.deck_url }}</span>{% endif %}</p>
+      <p class="deck-panel-actions">
+        {% if _p.deck_file_name %}<a class="crm-button crm-button-small crm-button-secondary" href="/crm/deck" target="_blank" rel="noopener">Open deck</a>{% endif %}
+        {% if _p.deck_url %}<a class="crm-button crm-button-small crm-button-secondary" href="{{ _p.deck_url }}" target="_blank" rel="noopener noreferrer">Open deck link</a>{% endif %}
+      </p>
+    {% else %}
+      <p class="svc-hint deck-panel-hint">{% if _p.deck_path_set %}The configured deck file is missing or not inside the workspace attachments folder.{% else %}No pitch deck attached yet.{% endif %} <a href="/settings#sec-package">Add one in Settings</a>.</p>
+    {% endif %}
+  </div>
+  <p class="crm-source-note"><a href="/settings#sec-package">Edit in Settings</a></p>
+{% endmacro %}
+{% if deck_collapsed %}
+<details class="crm-panel deck-panel" id="templateDeckPanel">
+  <summary><strong>Template and deck</strong></summary>
+  <div class="deck-panel-body">{{ _body() }}</div>
+</details>
+{% else %}
+<section class="crm-panel deck-panel" id="templateDeckPanel" aria-label="Template and deck">
+  <div class="crm-panel-heading"><h2>Template and deck</h2><span>{{ 'Deck attached' if _p.has_deck else 'No deck' }}</span></div>
+  {{ _body() }}
+</section>
+{% endif %}

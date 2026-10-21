@@ -3,6 +3,7 @@
 {% block title %}Relationship CRM{% endblock %}
 
 {% block content %}
+{% set no_contacts = not rows and not filters.q and not filters.stage and not (counts.current or 0) %}
 <div class="crm-shell crm-dashboard">
   <header class="crm-hero">
     <div>
@@ -12,7 +13,8 @@
     </div>
     <div class="crm-toolbar">
       <a class="crm-chip" href="/settings#svc-gmail" title="Gmail is managed in Settings"><svg class="crm-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18v12H3z"/><path d="M3 7l9 7 9-7"/></svg>Gmail inbox: {% if inbox_sync_status %}checked {{ inbox_sync_status.checked_at }} UTC ({{ inbox_sync_status.scanned_messages }} messages{% if not inbox_sync_status.scan_complete %}, cap reached{% endif %}){% else %}no saved refresh yet{% endif %}</a>
-      <a class="crm-button crm-button-small crm-button-primary" href="{{ url_for('crm_drafts') }}">Review drafts</a>
+      {% if no_contacts %}<a class="crm-button crm-button-small crm-button-primary" href="/crm/new">Add contact</a>{% endif %}
+      <a class="crm-button crm-button-small {{ 'crm-button-secondary' if no_contacts else 'crm-button-primary' }}" href="{{ url_for('crm_drafts') }}">Review drafts</a>
       <a class="crm-button crm-button-small crm-button-secondary" href="{{ url_for('crm_analytics') }}">Analytics</a>
       <a class="crm-button crm-button-small crm-button-secondary" href="{{ url_for('crm_tracking') }}">Cloudflare tracking</a>
       <form method="post" action="{{ url_for('crm_refresh_inbox_route') }}" data-busy="Checking Gmail, this can take a minute...">
@@ -24,8 +26,8 @@
 
   <section class="crm-panel" aria-label="Manage contacts">
     <div class="crm-panel-heading"><h2>Your contacts</h2><div class="form-actions"><a class="crm-button crm-button-small crm-button-primary" href="/crm/new">Add contact</a><a class="crm-button crm-button-small crm-button-secondary" href="/crm/export.csv">Export CSV</a></div></div>
-    {% if not rows and not filters.q and not filters.stage %}
-    <div class="crm-empty-state"><p>Add contacts to begin researching and drafting.</p><form method="post" action="/sample/load"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit" class="crm-button crm-button-primary">Load the sample</button></form></div>
+    {% if no_contacts %}
+    <div class="crm-empty-state"><ol class="crm-empty-steps"><li><a href="/settings#svc-gmail">Connect Gmail and set your test recipient</a></li><li><a href="/crm/new">Add a contact, import a CSV, or load the sample</a></li><li><a href="/crm/drafts#writeDrafts">Write drafts, then approve and send a test</a></li></ol><form method="post" action="/sample/load"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit" class="crm-button crm-button-primary">Load the sample</button></form></div>
     {% endif %}
     <details class="crm-collapse"><summary>Import contacts from CSV</summary>
       <form method="post" action="/crm/import" enctype="multipart/form-data" class="settings-fields import-form">
