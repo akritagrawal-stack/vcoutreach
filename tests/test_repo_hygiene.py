@@ -361,10 +361,14 @@ def test_web_app_and_tracking_worker_ship_no_session_cookie_database_or_env_file
 
 
 def test_no_deck_pdf_or_presentation_file_is_shipped_anywhere_in_the_repository(root):
+    # The bundled redacted example deck is intentional; it is the only deck file allowed.
+    allowed = {"vcoutreach/data/examples/Publik_Pitch_Deck_Example.pdf"}
     offenders = []
     for path in root.rglob("*"):
         rel = path.relative_to(root)
         if not path.is_file() or any(part in SKIP_DIRS or part.endswith(".egg-info") for part in rel.parts):
+            continue
+        if str(rel) in allowed:
             continue
         if path.suffix.lower() in DECK_SUFFIXES or "deck_assets" in rel.parts:
             offenders.append(str(rel))

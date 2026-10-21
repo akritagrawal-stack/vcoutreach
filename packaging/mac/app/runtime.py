@@ -136,6 +136,11 @@ def start_server(workspace, *, server_factory=None):
             pass
 
     app = create_app(workspace)
+    try:
+        from vcoutreach.web import seed_example_deck
+        seed_example_deck(app)
+    except Exception:
+        pass
     factory = server_factory or make_server
     server = factory('127.0.0.1', 0, app, threaded=True, request_handler=QuietHandler)
     port = server.server_port
