@@ -1,10 +1,10 @@
 """
-Gmail API integration - OAuth + draft creation.
+Gmail integration with app passwords or advanced OAuth authorization.
 
 Tracking pixel injection REMOVED - this project does not use open/click tracking.
 
 Scope: gmail.modify (read replies, create drafts and explicitly send).
-Credentials: data/.gmail_credentials.json + data/.gmail_token.json
+Credentials stay private in the active workspace data directory.
 """
 from __future__ import annotations
 
@@ -63,20 +63,20 @@ def _get_credentials():
         from google.auth.transport.requests import Request
     except ImportError as exc:
         raise GmailAuthNotReady(
-            'google-auth libs not installed. '
+            'Open Settings and choose Connect Gmail, or install the advanced OAuth libraries. '
             'Run: pip install google-auth google-auth-oauthlib google-api-python-client'
         ) from exc
 
     token_path = str(GMAIL_TOKEN_PATH)
     if not os.path.exists(token_path):
         raise GmailAuthNotReady(
-            'Gmail token is missing. Run `vcoutreach auth gmail-web --workspace DIR` for this workspace.'
+            'Gmail is not connected. Open Settings and choose Connect Gmail.'
         )
 
     try:
         creds = Credentials.from_authorized_user_file(token_path, SCOPES)
     except Exception:
-        raise GmailAuthNotReady('Gmail token is unreadable. Run `vcoutreach auth gmail-web --workspace DIR`.') from None
+        raise GmailAuthNotReady('Gmail connection needs attention. Open Settings and choose Connect Gmail.') from None
     if not creds.valid:
         if creds.expired and creds.refresh_token:
             logger.info('Refreshing expired Gmail token...')
@@ -85,11 +85,11 @@ def _get_credentials():
                 from vcoutreach.send.gmail import _write_token
                 _write_token(Path(token_path), creds.to_json())
             except Exception:
-                raise GmailAuthNotReady('Gmail token refresh failed. Run `vcoutreach auth gmail-web --workspace DIR`.') from None
+                raise GmailAuthNotReady('Gmail connection expired. Open Settings and choose Connect Gmail.') from None
         else:
             raise GmailAuthNotReady(
                 'Cached token is invalid or has no refresh token. '
-                'Re-run `vcoutreach auth gmail-web --workspace DIR`.'
+                'Open Settings and choose Connect Gmail.'
             )
     return creds
 
@@ -102,13 +102,16 @@ def _build_service(creds=None):
 
 
 def get_service():
-    """Return an authenticated Gmail API service client."""
+    """Prefer a workspace app password, retaining the OAuth service as fallback."""
+    from vcoutreach.web.gmail.app_password import AppPasswordService, configured
+    if configured():
+        return AppPasswordService(get_workspace())
     return _build_service()
 
 
 def get_profile() -> dict:
     """Return the authenticated user's Gmail profile."""
-    service = _build_service()
+    service = get_service()
     return service.users().getProfile(userId='me').execute()
 
 
@@ -126,7 +129,7 @@ def run_oauth_flow() -> str:
         raise GmailAuthNotReady(
             'Gmail OAuth client JSON is missing. Enable the Gmail API in Google Cloud Console, '
             'create a Desktop app OAuth client, save its JSON at data/.gmail_credentials.json '
-            'under the workspace, then run `vcoutreach auth gmail-web --workspace DIR`.'
+            'under the workspace. Open Settings and choose Connect Gmail.'
         )
     google = _require_google()
     try:
@@ -141,10 +144,12 @@ def run_oauth_flow() -> str:
                 success_message='Gmail authorization complete. Return to Publikreach.',
             )
             _write_token(token_path, creds.to_json())
+            from vcoutreach.web.gmail.app_password import secret_path
+            secret_path(workspace).unlink(missing_ok=True)
     except Exception:
         raise GmailAuthNotReady(
             'Gmail web authorization failed. Check the Desktop app client JSON at '
-            'data/.gmail_credentials.json and retry `vcoutreach auth gmail-web --workspace DIR`.'
+            'data/.gmail_credentials.json. Open Settings and choose Connect Gmail.'
         ) from None
     return 'Gmail web authorization complete.'
 
@@ -346,7 +351,7 @@ def list_threads_in_inbox(query: str, max_results: int = 50) -> list[dict]:
     Returns:
         List of {'id': thread_id, 'snippet': ...} dicts.
     """
-    service = _build_service()
+    service = get_service()
     response = service.users().threads().list(
         userId='me',
         q=query,
@@ -365,7 +370,7 @@ def get_thread(thread_id: str) -> dict:
     Returns:
         Gmail thread resource dict with 'messages' list.
     """
-    service = _build_service()
+    service = get_service()
     return service.users().threads().get(
         userId='me',
         id=thread_id,
@@ -384,7 +389,7 @@ def get_message(message_id: str, format: str = 'metadata') -> dict:
     Returns:
         Gmail message resource dict.
     """
-    service = _build_service()
+    service = get_service()
     return service.users().messages().get(
         userId='me',
         id=message_id,

@@ -20,6 +20,7 @@ drafts/
 token.json
 .gmail_credentials.json
 .gmail_token.json
+.gmail_app_password.json
 client_secret*.json
 *.eml
 dist/

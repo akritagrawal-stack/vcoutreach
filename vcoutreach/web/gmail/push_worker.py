@@ -12,7 +12,7 @@ from vcoutreach.web.db import get_conn, cursor_ctx
 class SendRefused(ValueError):
     pass
 
-GMAIL_NOT_CONNECTED = 'Gmail is not connected. Run vcoutreach auth gmail-web --workspace DIR, then try again.'
+GMAIL_NOT_CONNECTED = 'Gmail is not connected. Open Settings and choose Connect Gmail, then try again.'
 
 def _injected_transport():
     from flask import current_app, has_app_context
@@ -21,6 +21,13 @@ def _injected_transport():
 def gmail_connection_reason():
     """Check local authorization for a read-only plan without refreshing tokens."""
     if _injected_transport() is not None:
+        return ''
+    from vcoutreach.web.gmail.app_password import configured, load_credentials
+    if configured():
+        try:
+            load_credentials()
+        except Exception:
+            return GMAIL_NOT_CONNECTED
         return ''
     import json
     try:

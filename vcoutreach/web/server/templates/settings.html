@@ -22,6 +22,21 @@
   <section class="svc-grid" aria-label="Connections">
     <article class="svc-card" id="svc-gmail" tabindex="-1" data-service="gmail" data-state="{{ gmail.state }}" data-gmail-view="{{ gmail.view }}">
       <header class="svc-head">{{ mark('gmail', 'Gm') }}<h2>Gmail</h2>{{ chip(gmail.state) }}</header>
+      <form class="svc-form" action="/api/gmail/connect" method="post" data-gmail-app-password{% if gmail.view in ('connected', 'running') %} hidden{% endif %}>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="mode" value="app_password">
+        <label class="fld"><span>Gmail address</span><input name="address" type="email" autocomplete="username" required></label>
+        <label class="fld"><span>App password</span><input name="password" type="password" autocomplete="new-password" placeholder="16 characters, spaces allowed" required></label>
+        <div class="svc-actions"><button type="submit" class="svc-btn primary">Connect Gmail</button></div>
+        <p class="svc-hint">2-Step Verification must be on. <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer">Create an app password</a>. Your Workspace admin must allow app passwords.</p>
+      </form>
+      <div class="svc-actions" data-gmail-panel="connected"{% if gmail.view != 'connected' %} hidden{% endif %}>
+        <span data-gmail-address>{{ gmail.address }}</span>
+        <button type="button" class="svc-btn" data-gmail-switch{% if gmail.mode == 'app_password' %} hidden{% endif %}>Connect a different Gmail account</button>
+        <button type="button" class="svc-btn danger" data-gmail-remove>Disconnect</button>
+      </div>
+      <details data-gmail-advanced{% if gmail.view == 'connected' %} hidden{% endif %}>
+      <summary>Advanced: use a Google OAuth client instead</summary>
       <form data-gmail-upload enctype="multipart/form-data" action="/api/gmail/client" method="post">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <input type="file" name="oauth_client" accept=".json,application/json" aria-label="Choose OAuth client file" data-gmail-file hidden>
@@ -34,16 +49,13 @@
           <button type="button" class="svc-link" data-gmail-choose>Replace client file</button>
         </div>
         <p class="svc-busy" data-gmail-panel="running"{% if gmail.view != 'running' %} hidden{% endif %}><i class="svc-spin"></i> Finish consent in your system browser. This expires after three minutes.</p>
-        <div class="svc-actions" data-gmail-panel="connected"{% if gmail.view != 'connected' %} hidden{% endif %}>
-          <button type="button" class="svc-btn" data-gmail-switch>Connect a different Gmail account</button>
-          <button type="button" class="svc-btn danger" data-gmail-remove>Disconnect</button>
-        </div>
         <div class="svc-actions" data-gmail-panel="failed"{% if gmail.view != 'failed' %} hidden{% endif %}>
           <button type="button" class="svc-btn primary" data-gmail-connect>Retry</button>
           <button type="button" class="svc-link" data-gmail-choose>Replace client file</button>
         </div>
       </form>
-      <p class="svc-hint" data-gmail-message role="status">Choose an OAuth client file, then choose Connect Gmail. Files stay private in this workspace.</p>
+      </details>
+      <p class="svc-hint" data-gmail-message data-svc-note role="status">{{ 'Gmail connected.' if gmail.view == 'connected' else 'Gmail is not connected. Enter your address and app password, then choose Connect Gmail.' }} TEST mode and send confirmations still apply.</p>
     </article>
 
     {% for s in services %}

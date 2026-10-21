@@ -92,11 +92,21 @@ class GmailSetup:
         with Path(path).open('rb') as handle:
             self.import_client(handle.read(MAX_CLIENT_BYTES + 1))
 
+    def connect_app_password(self, address, password):
+        from vcoutreach.web.gmail.app_password import connect
+        with self.lock:
+            if self.running:
+                raise ValueError('Finish the Gmail consent flow before connecting another account.')
+            connect(address, password, self.app.extensions['workspace'])
+            self.error = False
+
     def remove_client(self):
         with self.lock:
             if self.running:
                 raise ValueError('Finish the Gmail consent flow before removing the client and token.')
             workspace = self.app.extensions['workspace']
+            from vcoutreach.web.gmail.app_password import secret_path
+            secret_path(workspace).unlink(missing_ok=True)
             workspace.path('data', '.gmail_token.json').unlink(missing_ok=True)
             workspace.path('data', '.gmail_credentials.json').unlink(missing_ok=True)
             self.error = False
@@ -154,6 +164,15 @@ def register_setup_routes(app, connection_state):
     @app.post('/api/gmail/connect')
     def gmail_connect():
         same_origin()
+        if request.form.get('mode') == 'app_password' or 'address' in request.form or 'password' in request.form:
+            from vcoutreach.web.gmail.api import GmailAuthNotReady
+            try:
+                setup.connect_app_password(request.form.get('address', ''), request.form.get('password', ''))
+            except (ValueError, GmailAuthNotReady) as exc:
+                return jsonify(ok=False, error=str(exc)), 400
+            except Exception:
+                return jsonify(ok=False, error='Could not save the Gmail connection. Try again.'), 500
+            return jsonify(ok=True, state=connection_state())
         try:
             setup.connect()
         except Exception:
@@ -168,10 +187,12 @@ def register_setup_routes(app, connection_state):
         except ValueError:
             return jsonify(ok=False, error='Finish the Gmail consent flow before removing the client and token.'), 409
         except OSError:
-            return jsonify(ok=False, error='Could not remove the Gmail client and token. Try again.'), 500
+            return jsonify(ok=False, error='Could not remove the Gmail connection. Try again.'), 500
         return jsonify(ok=True, state=connection_state())
 
     @app.get('/api/gmail/status')
     def gmail_status():
+        from vcoutreach.web.gmail.app_password import connection_info
         with setup.lock:
-            return jsonify(state=connection_state(), running=setup.running, failed=setup.error)
+            return jsonify(state=connection_state(), running=setup.running, failed=setup.error,
+                           **connection_info(app.extensions['workspace']))

@@ -464,10 +464,10 @@ if (page === 'settings') {
   var gmailSwitching = false;
   var VIEW_STATE = {'no-client': 'unset', ready: 'saved', running: 'saved', connected: 'ok', failed: 'fail'};
   var VIEW_TEXT = {
-    'no-client': 'Needs your own Desktop OAuth client. The file stays private in this workspace.',
+    'no-client': 'Enter your Gmail address and app password, then choose Connect Gmail.',
     ready: 'OAuth client saved privately. Connect Gmail to continue. TEST mode still applies.',
     running: 'Finish consent in your system browser. This expires after three minutes.',
-    connected: 'Gmail connected. A private refresh token is saved for this workspace. TEST mode still applies.',
+    connected: 'Gmail connected. The connection is saved privately in this workspace. TEST mode still applies.',
     failed: 'Gmail authorization did not finish. Check your Desktop client and try again.'
   };
   function gmailButtons(busy) {
@@ -476,6 +476,8 @@ if (page === 'settings') {
   function showGmail(view, text) {
     if (!gmailCard) return;
     gmailCard.dataset.gmailView = view;
+    gmailCard.querySelector('[data-gmail-app-password]').hidden = view === 'connected' || view === 'running';
+    gmailCard.querySelector('[data-gmail-advanced]').hidden = view === 'connected';
     gmailCard.querySelectorAll('[data-gmail-panel]').forEach(function (panel) { panel.hidden = panel.dataset.gmailPanel !== view; });
     gmailButtons(view === 'running');
     setServiceStatus('gmail', VIEW_STATE[view], text || VIEW_TEXT[view]);
@@ -484,7 +486,7 @@ if (page === 'settings') {
     if (payload.running) return 'running';
     if (payload.failed) return 'failed';
     if (payload.state === 'connected') return 'connected';
-    return payload.state === 'add OAuth client' ? 'no-client' : 'ready';
+    return payload.state === 'not connected' || payload.state === 'add OAuth client' ? 'no-client' : 'ready';
   }
   function gmailStatus() {
     clearTimeout(gmailPoll);
@@ -494,6 +496,8 @@ if (page === 'settings') {
       return response.json();
     }).then(function (payload) {
       if (typeof payload.state !== 'string') return;
+      gmailCard.querySelector('[data-gmail-address]').textContent = payload.address || '';
+      gmailCard.querySelector('[data-gmail-switch]').hidden = payload.mode === 'app_password';
       showGmail(gmailViewOf(payload));
       if (payload.running) gmailPoll = setTimeout(gmailStatus, 1500);
     }).catch(function () {
@@ -532,6 +536,14 @@ if (page === 'settings') {
     }
   }
   if (gmailCard && gmailFile) {
+    var gmailPasswordForm = gmailCard.querySelector('[data-gmail-app-password]');
+    gmailPasswordForm.addEventListener('submit', function (event) {
+      event.preventDefault();
+      var data = new FormData(gmailPasswordForm);
+      gmailPasswordForm.querySelector('[name="password"]').value = '';
+      say(gmailCard, 'Checking the secure Gmail connection...');
+      gmailPost('/api/gmail/connect', data).then(function () { data.delete('password'); });
+    });
     gmailCard.querySelectorAll('[data-gmail-choose]').forEach(function (button) { button.addEventListener('click', function () { gmailChoose(false); }); });
     gmailCard.querySelectorAll('[data-gmail-connect]').forEach(function (button) { button.addEventListener('click', gmailConnect); });
     gmailFile.addEventListener('change', function () {
@@ -546,7 +558,6 @@ if (page === 'settings') {
     var removeButton = gmailCard.querySelector('[data-gmail-remove]');
     var switchButton = gmailCard.querySelector('[data-gmail-switch]');
     if (removeButton) removeButton.addEventListener('click', function () {
-      if (!window.confirm('Remove the Gmail OAuth client and saved token from this workspace? You will need to import a client and connect again.')) return;
       gmailSwitching = false;
       gmailDisconnect();
     });

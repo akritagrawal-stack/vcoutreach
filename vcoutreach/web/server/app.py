@@ -284,6 +284,13 @@ def _show_send_result(result):
 
 def _gmail_connection_state() -> str:
     """Settings chip for Gmail. Reads local workspace files only (no network); never returns or logs token contents."""
+    from vcoutreach.web.gmail.app_password import configured, load_credentials
+    if configured():
+        try:
+            load_credentials()
+            return 'connected'
+        except Exception:
+            return 'not connected'
     data_dir = get_workspace().path('data')
     token_path = data_dir / '.gmail_token.json'
     credentials_path = data_dir / '.gmail_credentials.json'
@@ -297,7 +304,7 @@ def _gmail_connection_state() -> str:
         if isinstance(refresh_token, str) and refresh_token.strip():
             return 'connected'
     if not token_exists and not credentials_path.is_file():
-        return 'add OAuth client'
+        return 'not connected'
     return 'OAuth required'
 
 _SERVICE_MARKS = {'pitchbook': 'Pb', 'apollo': 'Ap', 'enrow': 'En', 'gemini': 'Ge', 'openai': 'Oa', 'anthropic': 'An', 'openrouter': 'Or', 'tracking': 'Tr'}
@@ -352,8 +359,10 @@ def _gmail_view(app) -> dict:
     state = _gmail_connection_state()
     setup = app.extensions.get('gmail_setup')
     running, failed = bool(setup and setup.running), bool(setup and setup.error)
-    view = 'running' if running else 'failed' if failed else 'connected' if state == 'connected' else 'no-client' if state == 'add OAuth client' else 'ready'
-    return {'view': view, 'state': {'running': 'saved', 'failed': 'fail', 'connected': 'ok', 'no-client': 'unset'}.get(view, 'saved')}
+    view = 'running' if running else 'failed' if failed else 'connected' if state == 'connected' else 'no-client' if state == 'not connected' else 'ready'
+    from vcoutreach.web.gmail.app_password import connection_info
+    return {'view': view, 'state': {'running': 'saved', 'failed': 'fail', 'connected': 'ok', 'no-client': 'unset'}.get(view, 'saved'),
+            **connection_info()}
 
 def _partner_table_counts(rows) -> dict[str, int]:
     """Verified and dropped counters for the partners list, taken from the same rows the table renders.

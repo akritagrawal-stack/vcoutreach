@@ -6,7 +6,9 @@ The app stores `.env`, `data/`, `drafts/` and `outputs/` in `~/Documents/Publikr
 
 The app is **ad-hoc signed**, without an Apple Developer ID, and **not notarized**. On first launch, right-click Publikreach.app and choose Open. If macOS still blocks it, try opening it once, then use System Settings > Privacy and Security > Open Anyway. Notarization needs a paid Apple Developer account and has not been done. On older macOS versions these controls may be in System Preferences > Security and Privacy.
 
-In Settings, choose your own Google Cloud **Desktop app** OAuth client JSON, then click **Connect Gmail**. Consent opens in your system browser and requests `gmail.modify`. The client and token are stored privately in the workspace with mode 0600. Each user needs their own client until a shared one is bundled. Follow Google's [Desktop OAuth client setup steps](https://developers.google.com/workspace/gmail/api/quickstart/python#authorize_credentials_for_a_desktop_application), enable the Gmail API, and configure the consent screen and test users. A saved connection does not bypass the app's send confirmations or TEST mode.
+In Settings, enter your **Gmail address** and **App password**, then click **Connect Gmail**. Turn on 2-Step Verification and [create a 16-character app password](https://myaccount.google.com/apppasswords) first. Spaces in the password are stripped. The app verifies IMAP and SMTP logins before saving `data/.gmail_app_password.json` privately in the workspace with mode 0600. No Google Cloud client file or optional Google libraries are needed for this mode. The connection persists until revoked; Google also revokes app passwords when you change your Google password. See [Google's app-password guide](https://support.google.com/accounts/answer/185833). Workspace admins may disable app passwords. Disconnect removes the saved secret. A saved connection does not bypass send confirmations or TEST mode.
+
+**Advanced: use a Google OAuth client instead** in the Gmail card retains the Desktop client flow. Follow Google's [Desktop OAuth client setup steps](https://developers.google.com/workspace/gmail/api/quickstart/python#authorize_credentials_for_a_desktop_application), enable the Gmail API, configure consent and test users, import the client JSON, then connect. Consent requests `gmail.modify` and saves the private client and refresh token with mode 0600. An existing OAuth connection continues to work.
 
 The existing `install-mac.sh` is the developer option for a Python installation and browser launcher. The CLI and browser documentation follows.
 
@@ -664,7 +666,12 @@ fact the sender actually supplied and reacts to it honestly.
 You do not need this to use the tool: copy the drafts into your own mail client
 and send them from there. Sending is off the quickstart path and guarded.
 
-Prerequisites, in one line: the optional Google libraries installed, a Google
+For the browser app, use Settings > Gmail > **Connect Gmail** with an app password,
+as described above. This is the primary connection path. IMAP/SMTP support uses
+only the Python standard library, including reply polling and CRM inbox refresh.
+The same TEST routing and LIVE confirmation gates apply with either auth mode.
+
+The standalone CLI retains its advanced OAuth setup. Its prerequisites are the optional Google libraries installed, a Google
 Cloud OAuth client file (desktop app) at `GMAIL_CLIENT_SECRETS_PATH`,
 `vcoutreach auth gmail` run once, `SENDER_EMAIL` set, and `TEST_RECIPIENT_EMAIL`
 set for test sends.
