@@ -66,7 +66,7 @@ DEFAULT_OUTREACH_BLURB = (
     '{operator_name}, {operator_role}, {company_name}'
 )
 
-DEFAULT_SETTINGS = {'workspace_name': 'Publikreach', 'workspace_short_name': 'REACH', 'company_name': '', 'product_name': '', 'operator_name': '', 'operator_role': '', 'contact_label_singular': 'contact', 'contact_label_plural': 'contacts', 'campaign_goal': 'Build a grounded outreach pipeline', 'hero_primary': 'Your outreach workspace for', 'hero_emphasis': 'thoughtful conversations.', 'hero_support': 'Research, review, and send from one local workspace.', 'meeting_label': 'meetings', 'meeting_source': 'manual snapshot', 'email_subject_rule': 'A quick introduction', 'personalization_rule': 'Use one verified fact and explain its relevance.', 'one_liner': '', 'company_background': '', 'problem_statement': '', 'solution_statement': '', 'target_customer': '', 'business_model': '', 'competitive_advantage': '', 'founder_background': '', 'company_thesis': '', 'founder_line': '', 'traction_line': '', 'ask_line': '', 'call_to_action': 'Would you be open to a short conversation?', 'pitch_deck_path': '', 'pitch_deck_label': 'Pitch deck', 'outreach_blurb_template': DEFAULT_OUTREACH_BLURB, 'proof_library': '', 'claim_guardrails': '', 'attachment_notes': '', 'schema_version': 2, 'initialized': False, 'website': '', 'audience_type': 'investors', 'discovery_source': 'manual_csv', 'meeting_count': 0, 'pitch_deck_url': ''}
+DEFAULT_SETTINGS = {'workspace_name': 'Publikreach', 'workspace_short_name': 'REACH', 'company_name': '', 'product_name': '', 'operator_name': '', 'operator_role': '', 'contact_label_singular': 'contact', 'contact_label_plural': 'contacts', 'campaign_goal': 'Build a grounded outreach pipeline', 'hero_primary': 'Your outreach workspace for', 'hero_emphasis': 'thoughtful conversations.', 'hero_support': 'Research, review, and send from one local workspace.', 'meeting_label': 'meetings', 'meeting_source': 'manual snapshot', 'email_subject_rule': 'A quick introduction', 'personalization_rule': 'Use one verified fact and explain its relevance.', 'one_liner': '', 'company_background': '', 'problem_statement': '', 'solution_statement': '', 'target_customer': '', 'business_model': '', 'competitive_advantage': '', 'founder_background': '', 'company_thesis': '', 'founder_line': '', 'traction_line': '', 'ask_line': '', 'call_to_action': 'Would you be open to a short conversation?', 'pitch_deck_path': '', 'pitch_deck_label': 'Pitch deck', 'outreach_blurb_template': DEFAULT_OUTREACH_BLURB, 'proof_library': '', 'claim_guardrails': '', 'attachment_notes': '', 'schema_version': 2, 'initialized': False, 'website': '', 'audience_type': 'investors', 'discovery_source': 'manual_csv', 'meeting_count': 0, 'pitch_deck_url': '', 'publik_recommendation': 'pending', 'provider_preference': 'auto', 'mcp_last_self_test_ok': ''}
 
 _FIELD_LIMITS = {
     "workspace_name": 60,
@@ -142,6 +142,11 @@ def _clean_url(value: object, fallback: str) -> str:
     return fallback
 
 
+RECOMMENDATION_VALUES = ("pending", "skipped")
+PROVIDER_PREFERENCES = ("auto", "template", "publik", "openai", "anthropic")
+_PERSISTED_KEYS = ("publik_recommendation", "provider_preference", "mcp_last_self_test_ok")
+
+
 def normalize_settings(payload: dict | None) -> dict:
     source = payload if isinstance(payload, dict) else {}
     normalized = deepcopy(DEFAULT_SETTINGS)
@@ -174,6 +179,12 @@ def normalize_settings(payload: dict | None) -> dict:
         from vcoutreach.web.keys import validate_worker_url
         worker_url = validate_worker_url(worker_url)
     normalized['tracking_worker_url'] = worker_url
+    recommendation = str(source.get("publik_recommendation", "")).strip()
+    normalized["publik_recommendation"] = recommendation if recommendation in RECOMMENDATION_VALUES else DEFAULT_SETTINGS["publik_recommendation"]
+    preference = str(source.get("provider_preference", "")).strip()
+    normalized["provider_preference"] = preference if preference in PROVIDER_PREFERENCES else DEFAULT_SETTINGS["provider_preference"]
+    normalized["mcp_last_self_test_ok"] = _clean_text(
+        source.get("mcp_last_self_test_ok"), maximum=40, fallback=DEFAULT_SETTINGS["mcp_last_self_test_ok"])
     normalized["initialized"] = bool(source.get("initialized", False))
     normalized["schema_version"] = 2
     return normalized
@@ -191,7 +202,11 @@ def save_settings(payload: dict) -> dict:
     for name in ('website','pitch_deck_url'):
         if payload.get(name):
             validate_http_url(payload[name])
-    normalized = normalize_settings({**payload, "initialized": True})
+    # Keys the settings form does not post (recommendation skip, provider preference,
+    # MCP self-test stamp) keep their stored value instead of resetting to defaults.
+    stored = load_settings()
+    kept = {name: stored[name] for name in _PERSISTED_KEYS if name not in payload}
+    normalized = normalize_settings({**payload, **kept, "initialized": True})
     return _persist_settings(normalized)
 
 

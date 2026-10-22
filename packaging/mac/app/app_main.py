@@ -127,11 +127,30 @@ def launch(workspace):
         runtime.stop()
 
 
+def run_mcp(workspace):
+    """Serve the stdio MCP server for an AI assistant. No window, no Flask, no app lock.
+
+    stdout carries JSON-RPC only, so nothing here may print to it.
+    """
+    from vcoutreach.mcp.server import serve
+    root = (workspace or Path.home() / 'Documents' / 'Publikreach').expanduser().resolve()
+    return serve(root)
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description='Publikreach native macOS application')
+    parser.add_argument('--mcp', action='store_true', help='Run the MCP server over stdio for an AI assistant.')
     parser.add_argument('--self-test', action='store_true', help='Check loopback health and pages without a window.')
     parser.add_argument('--workspace', type=Path, help='Override the workspace for local verification.')
     args = parser.parse_args(argv)
+    if args.mcp:
+        # Handled before any GUI, Flask or self-test path. Failures go to stderr only.
+        try:
+            return run_mcp(args.workspace)
+        except Exception:
+            if sys.stderr:
+                print('Publikreach MCP server could not start.', file=sys.stderr)
+            return 1
     try:
         if args.self_test:
             if args.workspace:

@@ -71,3 +71,21 @@ curl -fsSL https://raw.githubusercontent.com/akritagrawal-stack/vcoutreach/main/
 It installs `.[web,gmail]` in ~/vcoutreach using Python 3.10 or newer and creates Desktop/Outreach.command. The launcher opens the browser version in TEST mode. Its workspace remains ~/Documents/vcoutreach-workspace. Close its Terminal window to stop it. Re-running updates sources with .old backups. Options: --dry-run, --dir PATH, --workspace PATH, --ref REF, --no-launcher-on-desktop, --help. Optional integrations require a separate install of the integrations extra.
 
 Uninstall that developer installation using `bash "$HOME/vcoutreach/packaging/mac/uninstall-mac.sh"`. It keeps the workspace by default and asks before deleting it. This uninstaller does not remove the new standalone app or its separate workspace.
+
+## Run as an MCP server
+
+The same app bundle can run as a local MCP server, so an AI assistant can help you set up and run the safe parts of outreach. It opens no window. Your assistant starts it from its config.
+
+```sh
+/Applications/Publikreach.app/Contents/MacOS/Publikreach --mcp --workspace ~/Documents/Publikreach
+```
+
+- Without `--workspace`, it uses `~/Documents/Publikreach`, the same folder the window uses.
+- Standard output carries protocol messages only. The app's self-test message and window code do not run in this mode.
+- It does not take the single-instance lock, so the app window can stay open while the server runs.
+- Open the app once from Finder first (see [First launch and signing](#first-launch-and-signing)) so macOS accepts it.
+- Exit code 0 means the assistant closed the connection cleanly. Exit code 1 means the workspace could not be used, with a one-line message on stderr.
+- The Settings page at `/setup/ai` (under **Set up with AI**) shows the exact config snippets with this path filled in.
+- The developer install from `install-mac.sh` has its own command: `~/vcoutreach/.venv/bin/vcoutreach mcp --workspace ~/Documents/vcoutreach-workspace`.
+
+The tool list, the connect snippets for Claude Desktop, Claude Code and Codex, and the security model are in [mcp.md](mcp.md). The server never sends a real email and never accepts or returns a key.

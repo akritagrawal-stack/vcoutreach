@@ -62,7 +62,7 @@ refused so they cannot add extra lines to `.env`.
 2. Open Partners. Review, edit the hook, then approve or reject.
 3. Read the Send plan page. It shows who would be sent and who is held, and why.
 4. Connect Gmail with `vcoutreach auth gmail-web --workspace DIR` and set
-   `TEST_RECIPIENT_EMAIL` in Settings, under Keys and connection settings. Missing
+   `TEST_RECIPIENT_EMAIL` in Settings, on the Test recipient card. Missing
    authorization refuses the send before any journal row is reserved. In TEST
    mode, send a test to that inbox and read it.
 5. Only then switch to LIVE (`GO LIVE`) and send one contact (`SEND TO <email>`) or a

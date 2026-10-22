@@ -37,7 +37,7 @@ def write_env(values, workspace=None, *, internal=False):
         if key == 'TEST_RECIPIENT_EMAIL' and value:
             from vcoutreach.contacts import _EMAIL_RE
             if not isinstance(value, str) or not _EMAIL_RE.fullmatch(value):
-                raise ValueError('TEST_RECIPIENT_EMAIL must be a single valid email address.')
+                raise ValueError('Enter one valid email address.')
         if not isinstance(value, str) or _BAD.search(value):
             raise ValueError(f'{key} contains unsupported characters.')
         if key in {'TRACKING_WORKER_URL', 'TRACKER_PUBLIC_URL', 'CLOUDFLARE_TRACKING_URL', 'TRACKING_ORIGIN'} and value:

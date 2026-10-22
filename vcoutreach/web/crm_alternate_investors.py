@@ -109,7 +109,7 @@ def find_alternate_investors(
             }
 
         rows = conn.execute(
-            """SELECT p.id, p.partner_name, p.firm, p.email, p.source,
+            """SELECT p.id, p.partner_name, p.firm, p.email, p.source, p.role AS saved_role,
                       p.linkedin_url, p.pb_linkedin, p.email_verification_status,
                       cp.stage,
                       EXISTS(SELECT 1 FROM drafts d WHERE d.partner_id=p.id
@@ -133,7 +133,8 @@ def find_alternate_investors(
                 continue
             candidate = {
                 'partner_id': row['id'], 'name': row['partner_name'], 'firm': row['firm'],
-                'role': None, 'email': row['email'],
+                'role': (str(row['saved_role']).strip()[:100] or None) if row['saved_role'] else None,
+                'email': row['email'],
                 'email_verification_status': row['email_verification_status'] or 'unverified',
                 'person_contacted': person_contacted, 'firm_contacted': firm_contacted,
                 'relationship_stage': row['stage'] or 'unreviewed',

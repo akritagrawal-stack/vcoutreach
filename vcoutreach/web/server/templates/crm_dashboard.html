@@ -27,14 +27,14 @@
   <section class="crm-panel" aria-label="Manage contacts">
     <div class="crm-panel-heading"><h2>Your contacts</h2><div class="form-actions"><a class="crm-button crm-button-small crm-button-primary" href="/crm/new">Add contact</a><a class="crm-button crm-button-small crm-button-secondary" href="/crm/export.csv">Export CSV</a></div></div>
     {% if no_contacts %}
-    <div class="crm-empty-state"><ol class="crm-empty-steps"><li><a href="/settings#svc-gmail">Connect Gmail and set your test recipient</a></li><li><a href="/crm/new">Add a contact, import a CSV, or load the sample</a></li><li><a href="/crm/drafts#writeDrafts">Write drafts, then approve and send a test</a></li></ol><form method="post" action="/sample/load"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit" class="crm-button crm-button-primary">Load the sample</button></form></div>
+    <div class="crm-empty-state"><ol class="crm-empty-steps"><li><a href="/settings#svc-gmail">Connect Gmail and set your test recipient</a></li><li><a href="/crm/new">Add a contact</a>, <a href="#csv-import">import a CSV</a>, or load the sample</li><li><a href="/crm/drafts#writeDrafts">Write drafts, then approve and send a test</a></li></ol><form method="post" action="/sample/load"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit" class="crm-button crm-button-primary">Load the sample</button></form></div>
     {% endif %}
-    <details class="crm-collapse"><summary>Import contacts from CSV</summary>
+    <details class="crm-collapse" id="csv-import"{% if no_contacts %} open{% endif %}><summary>Import contacts from CSV</summary>
       <form method="post" action="/crm/import" enctype="multipart/form-data" class="settings-fields import-form">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <label for="contactCsv">Choose a CSV file<input id="contactCsv" type="file" name="file" accept=".csv,text/csv"></label>
-        <label for="contactCsvText">Or paste CSV<textarea id="contactCsvText" name="csv_text" rows="6" placeholder="id,name,email,org"></textarea></label>
-        <p class="crm-source-note">Every row is validated before any contacts are saved.</p>
+        <label for="contactCsvText">Or paste CSV<textarea id="contactCsvText" name="csv_text" rows="6" placeholder="name,email,org,role,facts&#10;Ada Lovelace,ada@example.com,Analytical Co,Founder,your essay on small teams | your talk on shipping weekly"></textarea></label>
+        <p class="crm-source-note">Columns: name and email are required; org, role and facts are optional. Put several facts in the facts column separated by " | " (each one a short phrase you can stand behind). Drafts need at least one fact per contact. Every row is validated before any contacts are saved.</p>
         <button type="submit" class="crm-button crm-button-small crm-button-primary">Import contacts</button>
       </form>
       <h3>Import batches</h3>

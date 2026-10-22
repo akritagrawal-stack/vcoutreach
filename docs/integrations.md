@@ -11,7 +11,7 @@ page before you run a batch.
 
 ## Where settings live
 
-- Keys and connection settings go in **Settings, Keys and connection settings**.
+- Keys and connection settings go in **Settings**, on each service card (Connections) or under **More settings**.
   That form writes to the `.env` file in your workspace folder (mode 0600), only
   for the allowlisted names below, and never shows a saved value again.
 - You can also edit `.env` in the workspace by hand (lines like `NAME=value`).

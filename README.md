@@ -293,7 +293,7 @@ The send flow has two modes, shown in the top bar.
 - **TEST** (the default). The app starts in TEST every run, even if you left it in
   LIVE last time. Every message goes to `TEST_RECIPIENT_EMAIL`, never to the real
   contact. There is no default for that address: set your own test inbox in
-  Settings, under "Keys and connection settings", first, otherwise a send is refused with a one-line message.
+  Settings, on the Test recipient card, first, otherwise a send is refused with a one-line message.
 - **LIVE** sends to real contacts. Switching to it means typing the phrase
   `GO LIVE`. After that, each action needs its own typed phrase, so a stray click
   cannot send anything:
@@ -319,6 +319,15 @@ Run a TEST send to your own inbox and read it before you ever type `GO LIVE`.
 **Only email people you are allowed to contact, and follow the anti-spam and privacy
 law that applies to you and to them** (CAN-SPAM, GDPR and ePrivacy rules, CASL).
 You are responsible for consent and an opt-out path. This is not legal advice.
+
+### Set up with AI
+
+Open Settings, then "Set up with AI" (or go to `/setup/ai`) to connect an AI
+assistant such as Claude Desktop, Claude Code or Codex to your workspace. The page
+shows a ready-to-copy config snippet for each and a test button. The assistant can
+check setup, import contacts, write and edit drafts and approve them, and send a
+test to your own inbox. It cannot see or set your keys, change TEST mode, or send
+to real contacts. See [docs/mcp.md](docs/mcp.md).
 
 ### Connecting services
 
@@ -490,8 +499,8 @@ comma, colon, parentheses or "to" instead.
 
 ## Personalize with the Publik API
 
-The Publik API is the built-in default provider. You do not need it: offline mode
-and bring-your-own-key work without it.
+The Publik API is the built-in default provider and the recommended one, but it is
+optional: offline mode and bring-your-own-key work without it.
 
 1. Open https://publikhq.com/dashboard/api and follow the page to get an API key.
    The Publik documentation does not describe the signup steps or whether a

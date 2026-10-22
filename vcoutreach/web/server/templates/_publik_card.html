@@ -1,0 +1,49 @@
+{#- Publik API recommendation card. Self-contained: needs only `csrf_token` and the `publik_card()` context function from mcp_routes.py.
+    Included first in Connections on /settings and at the top of /setup/ai. It links its own stylesheet and script (both idempotent). -#}
+{% set pk = publik_card() %}
+<link rel="stylesheet" href="{{ url_for('static', filename='pages/setup_ai.css') }}?v=20261021-ai1">
+<article class="svc-card pk-card" id="svc-publik" tabindex="-1" data-service="publik" data-state="{{ pk.chip_state }}" data-pk-card data-pk-state="{{ pk.state }}">
+  <header class="svc-head">
+    <svg class="svc-mark m-publik" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32"/><text x="16" y="21.5" text-anchor="middle">Pk</text></svg>
+    <h2>Publik API</h2>
+    <span class="svc-status" role="status"><i class="svc-dot"></i><b data-svc-label data-pk-chip>{{ pk.chip_word }}</b></span>
+    <form class="pk-inline" method="post" action="/settings/publik-recommendation" data-pk-reco data-pk-undo{% if pk.state != 'skipped' %} hidden{% endif %}>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="state" value="pending">
+      <button type="submit" class="svc-link">Undo</button>
+    </form>
+  </header>
+
+  <p class="svc-hint pk-lead">Recommended: connect the Publik API for better personalization. It is the built-in default. You can instead use your own OpenAI, Anthropic or OpenRouter key, or the free offline template.</p>
+
+  <form class="svc-form pk-form" method="post" action="/api/model-provider/key" data-pk-form>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="provider" value="publik">
+    <input type="hidden" name="return_to" value="settings">
+    <div class="fld">
+      <label for="pk-api-key">Publik API key</label>
+      <div class="pk-secret">
+        <input id="pk-api-key" name="api_key" type="password" autocomplete="new-password" autocapitalize="off" spellcheck="false" placeholder="Paste key, never shown again" data-pk-key>
+      </div>
+    </div>
+    <div class="svc-actions">
+      <button type="submit" class="svc-btn primary" data-pk-save>Save key</button>
+      <button type="button" class="svc-btn" data-pk-test>Test</button>
+      <a class="svc-btn" href="https://publikhq.com/dashboard/api" rel="noopener" target="_blank">Get key</a>
+      <button type="submit" class="svc-btn danger" name="action" value="remove" data-pk-remove{% if pk.state != 'connected' %} hidden{% endif %}>Remove key</button>
+    </div>
+  </form>
+
+  <p class="svc-busy" data-pk-busy hidden><i class="svc-spin" aria-hidden="true"></i><span data-pk-busy-text>Working...</span></p>
+  <p class="svc-hint pk-note" data-pk-note role="status" aria-live="polite"></p>
+
+  <form class="pk-skip" method="post" action="/settings/publik-recommendation" data-pk-reco data-pk-skip{% if pk.state != 'pending' %} hidden{% endif %}>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="state" value="skipped">
+    <button type="submit" class="svc-link">Skip, use my own key or the offline template</button>
+  </form>
+
+  <p class="svc-hint">Publik API calls cost real money. See the pricing information on <a href="https://publikhq.com" rel="noopener" target="_blank">https://publikhq.com</a> before you start. Offline mode is free. A contact with no facts never triggers a request.</p>
+  <p class="svc-hint"><strong>What leaves your machine.</strong> For each contact: the recipient's name, org, role and facts, and your name and org. Requests go only to the Publik host you configured.</p>
+</article>
+<script src="{{ url_for('static', filename='pages/setup_ai.js') }}?v=20261021-ai1" defer></script>

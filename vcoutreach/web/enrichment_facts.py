@@ -174,3 +174,45 @@ def with_enrichment(contact, limit=DEFAULT_LIMIT, db_path=None):
     facts = tuple(contact.facts) + tuple(f['text'] for f in extra if f['text'] not in contact.facts)
     urls = tuple(dict.fromkeys(tuple(contact.source_urls) + tuple(f['source_url'] for f in extra)))
     return replace(contact, facts=facts, source_urls=urls)
+
+
+def with_enrichment_many(contacts, limit=DEFAULT_LIMIT, db_path=None):
+    """Same result as ``[with_enrichment(c) for c in contacts]`` using two queries instead of two per contact."""
+    contacts = list(contacts)
+    if not contacts:
+        return contacts
+    from vcoutreach.web.db import get_conn
+    conn = get_conn(db_path)
+    try:
+        partners = {}
+        for row in conn.execute('SELECT id, slug, partner_name, firm FROM partners WHERE slug IS NOT NULL ORDER BY id'):
+            partners.setdefault(row['slug'], row)  # first row wins, like fetchone() on a slug lookup
+        grouped = {}
+        for row in conn.execute("SELECT partner_id, source, url, facts_json FROM enrichment WHERE source!='email_guess' "
+                                "AND facts_json IS NOT NULL ORDER BY id"):
+            grouped.setdefault(row['partner_id'], []).append(row)
+    finally:
+        conn.close()
+    result = []
+    for contact in contacts:
+        partner = partners.get(contact.id)
+        if partner is None:
+            result.append(contact)
+            continue
+        entries = []
+        for row in grouped.get(partner['id'], ()):
+            try:
+                facts = json.loads(row['facts_json'])
+            except (TypeError, ValueError):
+                continue
+            for fact in facts if isinstance(facts, list) else []:
+                if isinstance(fact, dict):
+                    entries.append({**fact, 'source': row['source'], 'source_url': fact.get('source_url') or row['url']})
+        extra = select_enrichment_facts(entries, partner['partner_name'] or '', partner['firm'] or '', limit)
+        if not extra:
+            result.append(contact)
+            continue
+        facts = tuple(contact.facts) + tuple(f['text'] for f in extra if f['text'] not in contact.facts)
+        urls = tuple(dict.fromkeys(tuple(contact.source_urls) + tuple(f['source_url'] for f in extra)))
+        result.append(replace(contact, facts=facts, source_urls=urls))
+    return result

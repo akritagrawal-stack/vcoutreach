@@ -520,9 +520,8 @@ def get_contact(partner_id: int, db_path: Path | None = None) -> dict | None:
                 'campaign_qualification_supporting_sources': [],
             })
         profile['is_synthetic'] = bool((partner.get('source') or '').startswith('synthetic'))
-        profile['integrity_note'] = ('Legacy contact. Current Publik fit and relationship status require review.'
-                                     if not profile_row and partner.get('source') != 'workspace_update_roster'
-                                     else '')
+        # No legacy note: a contact with no CRM profile yet is simply new (just imported or added by hand).
+        profile['integrity_note'] = ''
         activities = [dict(row) for row in conn.execute(
             "SELECT id, 'follow_up' AS type, title, due_at, status, note FROM crm_tasks "
             "WHERE partner_id=? AND status='open' ORDER BY due_at LIMIT 20", (partner_id,)

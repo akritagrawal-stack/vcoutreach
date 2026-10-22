@@ -23,7 +23,7 @@
     {% for label in labels|default(['interested','needs_more_info','pass','out_of_office','bounce','auto_reply','other','unclassified']) %}<a class="crm-segment {% if label_filter == label %}active{% endif %}" href="/replies?label={{ label|urlencode }}">{{ label|replace('_',' ')|title }}</a>{% endfor %}
   </nav>
   <section class="crm-panel">
-    <div class="crm-panel-heading"><h2>Reply inbox</h2><span>{{ rows|length }} replies</span></div>
+    <div class="crm-panel-heading"><h2>Reply inbox</h2><span>{{ rows|length }} {{ 'reply' if rows|length == 1 else 'replies' }}</span></div>
     <div class="crm-table-wrap"><table class="crm-table">
       <caption class="sr-only">Incoming replies, classification and review state</caption>
       <thead><tr><th>Contact</th><th>Subject and message</th><th>Received</th><th>Label</th><th>Review</th></tr></thead>

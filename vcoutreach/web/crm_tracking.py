@@ -60,6 +60,8 @@ def _tracking_settings() -> dict:
 def _tracking_origin() -> str:
     settings = _tracking_settings()
     value = (settings.get("tracking_worker_url") or settings.get("tracking_url") or setting_value("TRACKING_WORKER_URL") or setting_value("CLOUDFLARE_TRACKING_URL") or setting_value("TRACKER_PUBLIC_URL") or setting_value("TRACKING_ORIGIN") or TRACKING_ORIGIN)
+    if not str(value or "").strip():
+        raise TrackingUnavailable("Configure a tracking Worker URL in Settings")
     try:
         return validated_url(value, origin_only=True)
     except ValueError as exc:

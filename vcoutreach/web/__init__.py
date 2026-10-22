@@ -15,6 +15,31 @@ def seed_example_deck(app):
     except Exception:
         return False
 
+def write_ui_port(app, port):
+    """Record the bound loopback port in <workspace>/data/.ui-port (one line). Never raises."""
+    try:
+        import os
+        root = Path(app.config['WORKSPACE'])
+        target = root / 'data' / '.ui-port'
+        target.parent.mkdir(parents=True, exist_ok=True)
+        temp = target.with_name('.ui-port.tmp')
+        temp.write_text(f'{int(port)}\n', encoding='ascii')
+        os.replace(temp, target)
+        return True
+    except Exception:
+        return False
+
+def clear_ui_port(app, port=None):
+    """Remove the port file on shutdown, only if it still names this server's port."""
+    try:
+        target = Path(app.config['WORKSPACE']) / 'data' / '.ui-port'
+        if port is not None and target.read_text(encoding='ascii').strip() != str(int(port)):
+            return False
+        target.unlink()
+        return True
+    except Exception:
+        return False
+
 def serve(workspace=None, *, port=None, no_browser=False):
     import contextlib
     import io
@@ -45,6 +70,7 @@ def serve(workspace=None, *, port=None, no_browser=False):
         print('cannot start ui: requested port is unavailable.' if port is not None else 'cannot start ui: no available port from 8765 through 8785.',file=sys.stderr)
         return 2
     app.config['PORT']=selected
+    write_ui_port(app,selected)
     link=f'http://127.0.0.1:{selected}/?token={app.config["ACCESS_TOKEN"]}'
     print('Open this link: '+link,flush=True)
     if not no_browser:
@@ -55,8 +81,9 @@ def serve(workspace=None, *, port=None, no_browser=False):
         pass
     finally:
         server.server_close()
+        clear_ui_port(app,selected)
         from vcoutreach.web.gmail.scheduler import stop_scheduler
         stop_scheduler()
     return 0
 
-__all__=['create_app','seed_example_deck','serve']
+__all__=['create_app','seed_example_deck','serve','write_ui_port','clear_ui_port']

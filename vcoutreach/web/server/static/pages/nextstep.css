@@ -3,6 +3,9 @@
 .next-step-count { color: var(--text-muted); font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
 .next-step strong { font-weight: 600; }
 .next-step .crm-button { margin-left: auto; }
+.next-step-skip { display: inline; margin: 0; }
+.next-step-link { background: none; border: 0; padding: 0; font: inherit; font-size: 12px; color: var(--accent); text-decoration: underline; cursor: pointer; }
+.next-step-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .send-banner-recipient { color: var(--text); }
 .send-banner-link { color: var(--accent); font-weight: 600; text-decoration: underline; }
 /* Secondary links moved out of the nav (Candidates, Email verification). */

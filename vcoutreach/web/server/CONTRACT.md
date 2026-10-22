@@ -228,3 +228,16 @@ Created Python modules:
 - `vcoutreach/web/workspace_facts.py`
 
 Also changed: pyproject.toml, vcoutreach/cli.py, web/schema.sql and the migration baseline. Created: this contract, the three packaged sample inputs, and the baseline migration. Deleted: all old migration SQL files, the old personal-facts module (renamed to facts.py), and iris_personalized_plan.py. No in-package callers of the deleted scene generator exist.
+
+## Set up with AI additions (MCP and Publik recommendation)
+
+The `vcoutreach mcp` server (see `docs/mcp.md`) runs in its own process and never calls `create_app`. The routes below are added to the web app by `vcoutreach/web/server/mcp_routes.py` and follow every rule above: session and loopback guards, CSRF on each POST, no inline scripts, no external resources.
+
+| Methods | Route | Purpose |
+|---|---|---|
+| GET | `/setup/ai` | Renders the "Set up with AI" page with the three connect snippets, resolved executable path and workspace, a Copy button for each, and the Publik card. Offline-safe: no network calls. |
+| POST | `/api/mcp/self-test` | Runs the exact snippet command with an argument list (no shell), sends `initialize` and `tools/list`, and reports `{ok, message, tool_count}` only. Stores `mcp_last_self_test_ok` on success. 10 second timeout. Child stdout is never echoed. |
+| POST | `/api/publik/test` | Runs the same minimal probe as the MCP `test_connection` for `publik_api` and returns `{ok, message}` only. The key value and response headers are never returned. |
+| POST | `/settings/publik-recommendation` | Sets `state=skipped` or `state=pending` in `publik_recommendation`. Redirects back to `/settings`. |
+
+Rule for the MCP surface (applies to every current and future MCP tool): no MCP tool accepts a secret or sends live. Tool input schemas use `additionalProperties: false`. No tool accepts a key, password, token, OAuth file or `SEND_MODE`, no tool writes `SEND_MODE`, and `send_test` addresses only the configured test recipient. Results and errors pass through the shared redaction layer. Adding a tool that breaks this rule requires a new spec and a contract update here first.
