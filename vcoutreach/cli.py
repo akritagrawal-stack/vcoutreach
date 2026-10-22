@@ -341,6 +341,14 @@ def _ui(args: argparse.Namespace) -> int:
         return 0
 
 
+def _mcp(args: argparse.Namespace) -> int:
+    # Imported lazily so the other subcommands never pay for the MCP server.
+    # stdout carries JSON-RPC only; the server logs to stderr.
+    from vcoutreach.mcp.server import serve
+
+    return serve(args.workspace)
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="vcoutreach", description="Draft grounded outreach emails.")
     parser.add_argument("--version", action="version", version=f"vcoutreach {__version__}",
@@ -377,6 +385,11 @@ def _parser() -> argparse.ArgumentParser:
                     help="Use exactly this port (default: 8765, then the next 20 if busy).")
     ui.add_argument("--no-browser", action="store_true", help="Print the link without opening a browser.")
     ui.set_defaults(handler=_ui)
+
+    mcp = commands.add_parser("mcp", help="Run the Model Context Protocol server over stdio for AI assistants.")
+    mcp.add_argument("--workspace", type=Path, default=Path(os.environ.get("OUTREACH_HOME") or "."),
+                     help="Workspace directory (default: OUTREACH_HOME or current directory).")
+    mcp.set_defaults(handler=_mcp)
 
     send = commands.add_parser("send", help="Plan sends, or execute explicitly through Gmail.")
     send.add_argument("--drafts", type=Path, required=True, help="Directory of eligible top-level drafts.")
@@ -427,3 +440,7 @@ def main(argv=None) -> int:
         # Unexpected failures stay concise unless debug was explicitly enabled.
         _error(exc)
         return 3
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

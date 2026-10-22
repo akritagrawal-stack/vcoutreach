@@ -3,7 +3,7 @@
 {% block title %}Configure{% endblock %}
 {% set words = {'unset': 'Not set', 'saved': 'Key saved', 'ok': 'Connected', 'fail': 'Failed'} %}
 {% macro mark(id, letters) %}<svg class="svc-mark m-{{ id }}" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32"/><text x="16" y="21.5" text-anchor="middle">{{ letters }}</text></svg>{% endmacro %}
-{% macro chip(state) %}<span class="svc-status" role="status"><i class="svc-dot"></i><b data-svc-label>{{ words[state] }}</b></span>{% endmacro %}
+{% macro chip(state, saved_word=None) %}<span class="svc-status" role="status"><i class="svc-dot"></i><b data-svc-label>{{ saved_word if (saved_word and state == 'saved') else words[state] }}</b></span>{% endmacro %}
 {% macro fld(n, label, max=0, rows=0, type='text', wide=false) %}<label class="fld{{ ' wide' if wide }}"><span>{{ label }}</span>
   {%- if rows %}<textarea name="{{ n }}" rows="{{ rows }}" maxlength="{{ max }}" required>{{ settings[n] }}</textarea>
   {%- else %}<input name="{{ n }}" type="{{ type }}"{% if max %} maxlength="{{ max }}"{% endif %} value="{{ settings[n] }}"{% if n != 'pitch_deck_url' %} required{% endif %}>{% endif %}</label>{% endmacro %}
@@ -68,6 +68,15 @@
       </form>
     </article>
 
+    {% set ai_ready = settings.get('mcp_last_self_test_ok') %}
+    <article class="svc-card" id="svc-ai-setup" tabindex="-1" data-service="ai-setup" data-state="{{ 'ok' if ai_ready else 'unset' }}">
+      <header class="svc-head">{{ mark('ai-setup', 'AI') }}<h2>Set up with AI</h2><span class="svc-status" role="status"><i class="svc-dot"></i><b data-svc-label>{{ 'Ready' if ai_ready else 'Not connected' }}</b></span></header>
+      <p class="svc-hint">Let Claude, Codex or any MCP client walk you through setup and run the safe parts for you. It cannot see your keys and it cannot send a real email.</p>
+      <div class="svc-actions"><a class="svc-btn primary" href="/setup/ai">Set up with AI</a></div>
+    </article>
+
+    {% include '_publik_card.html' %}
+
     {% for s in services %}
     <article class="svc-card" id="svc-{{ s.id }}" tabindex="-1" data-service="{{ s.id }}" data-state="{{ s.state }}" data-test="{{ s.test }}">
       <header class="svc-head">{{ mark(s.id, s.mark) }}<h2>{{ s.name }}</h2>{{ chip(s.state) }}</header>
@@ -77,21 +86,22 @@
         {% for f in s.fields %}<label class="fld"><span>{{ f.label }}</span><input name="{{ f.name }}" type="{{ f.type }}" autocomplete="new-password" placeholder="{{ f.placeholder }}"></label>{% endfor %}
         <div class="svc-actions">
           {% if s.fields %}<button type="submit" class="svc-btn primary">Store</button>{% if s.provider %}<button type="submit" class="svc-btn danger" name="action" value="remove">Remove key</button>{% endif %}{% endif %}
-          {% if s.test == 'pitchbook' %}<button type="button" class="svc-btn primary" data-pitchbook-launch>Open sign-in</button><button type="button" class="svc-btn" data-pitchbook-check>Check session</button>
-          {% elif s.test %}<button type="button" class="svc-btn" data-svc-test>Test connection</button>{% endif %}
+          {% if s.test == 'pitchbook' %}<button type="button" class="svc-btn primary" data-pitchbook-launch>Open sign-in</button><button type="button" class="svc-btn" data-pitchbook-check>Check session</button><button type="button" class="svc-btn" data-pitchbook-close title="Quit the dedicated PitchBook Chrome window and free its memory">Close browser</button>
+          {% elif s.test %}<button type="button" class="svc-btn" data-svc-test>Test connection</button>
+          {% elif s.fields %}<span class="svc-hint svc-no-test" data-no-test>No connection test is available for this provider.</span>{% endif %}
         </div>
       </form>
-      <p class="svc-hint" data-svc-note{% if s.test == 'pitchbook' %} data-pitchbook-message{% endif %} role="status">{{ s.hint }}</p>
+      <p class="svc-hint" data-svc-note{% if s.test == 'pitchbook' %} data-pitchbook-message{% endif %} role="status">{% if s.test == 'pitchbook' %}Not connected. Sign in with your own PitchBook account in the dedicated browser, then turn PitchBook on under More settings.{% else %}{{ s.hint }}{% endif %}</p>
     </article>
     {% endfor %}
     <article class="svc-card" id="svc-searxng" data-service="searxng" data-state="{{ 'saved' if searxng_url else 'unset' }}">
-      <header class="svc-head"><h2>SearXNG</h2>{{ chip('saved' if searxng_url else 'unset') }}</header>
+      <header class="svc-head"><h2>SearXNG</h2>{{ chip('saved' if searxng_url else 'unset', 'URL saved') }}</header>
       <form method="post" action="/settings/keys" data-searxng-form>
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <label class="fld"><span>SearXNG URL</span><input type="url" name="SEARXNG_URL" value="{{ searxng_url }}" placeholder="http://localhost:8080"></label>
         <div class="svc-actions"><button type="submit" class="svc-btn primary">Save</button><button type="button" class="svc-btn" data-searxng-test>Test connection</button></div>
       </form>
-      <p class="svc-hint" data-searxng-note role="status">{{ searxng_url or 'No SearXNG URL saved.' }}</p>
+      <p class="svc-hint" data-searxng-note role="status">{{ searxng_url or 'Optional. No SearXNG URL saved. Add one only if you run your own SearXNG search.' }}</p>
     </article>
   </section>
 
@@ -132,6 +142,7 @@
       {{ fld('business_model','Business model and pricing',1400,5) }}{{ fld('competitive_advantage','Competitive advantage and moat',1400,5) }}{{ fld('founder_background','Founder background',1600,5) }}
     {% endcall %}
     {% call section('sec-package', 'Investor package', 'Pitch deck, attachment rules, email blurb') %}
+      <span id="svc-deck" class="wide"></span>
       <p class="svc-hint wide">A redacted Publik example deck is included so a new workspace has a working attachment. It is only an example: point the local path below at your own PDF before you send real email. Delete the path to send without a deck.</p>
       {{ fld('pitch_deck_label','Pitch deck label',160) }}{{ fld('pitch_deck_url','Optional shared deck URL',240,type='url') }}{{ fld('pitch_deck_path','Local pitch deck path',500,wide=true) }}
       {{ fld('attachment_notes','Attachment instructions',1200,3,wide=true) }}{{ fld('outreach_blurb_template','Full outreach blurb format',3000,10,wide=true) }}

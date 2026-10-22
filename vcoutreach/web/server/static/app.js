@@ -8,6 +8,12 @@
   document.addEventListener('DOMContentLoaded', function () {
     var page = document.body.dataset.page;
     var csrf = document.querySelector('meta[name="csrf-token"]').content;
+    function openHashDetails() {
+      var el = location.hash.length > 1 ? document.getElementById(decodeURIComponent(location.hash.slice(1))) : null;
+      if (el && el.tagName === 'DETAILS') el.open = true;
+    }
+    window.addEventListener('hashchange', openHashDetails);
+    openHashDetails();
 
     function fmtDur(secs) {
       if (secs < 60) return secs + ' sec';
@@ -32,6 +38,27 @@
       try { localStorage.setItem('publik-signal-theme', next); } catch (error) {}
     });
     themeButton.setAttribute('aria-pressed', String(document.documentElement.dataset.theme === 'dark'));
+    var pitchbookPoll = null;
+    function stopPitchbookPoll() { if (pitchbookPoll) { window.clearTimeout(pitchbookPoll); pitchbookPoll = null; } }
+    // After "Open sign-in", check lightly (every 5 s, at most 36 times) until the session is saved.
+    function startPitchbookPoll(message) {
+      stopPitchbookPoll();
+      var tries = 0;
+      (function tick() {
+        pitchbookPoll = window.setTimeout(function () {
+          tries += 1;
+          fetch('/demo/pitchbook-status', {credentials: 'same-origin', headers: {'X-CSRF-Token': csrf}})
+            .then(function (response) { return response.json(); })
+            .then(function (payload) {
+              document.dispatchEvent(new CustomEvent('pitchbook-status', {detail: {status: payload.status, ok: payload.ok !== false}}));
+              if (payload.message) message.textContent = payload.message;
+              if (payload.status === 'session_ready' || payload.status === 'attention_required') { stopPitchbookPoll(); return; }
+              if (tries < 36) tick(); else { pitchbookPoll = null; message.textContent = 'Still waiting for sign in. Use Check session after you finish signing in.'; }
+            })
+            .catch(function () { pitchbookPoll = null; });
+        }, 5000);
+      })();
+    }
     document.querySelectorAll('[data-pitchbook-launch], [data-pitchbook-check]').forEach(function (button) {
       button.addEventListener('click', function () {
         var message = document.querySelector('[data-pitchbook-message]') || document.createElement('span');
@@ -39,6 +66,7 @@
         var data = new FormData();
         data.append('csrf_token', csrf);
         button.disabled = true;
+        stopPitchbookPoll();
         message.textContent = launching ? 'Opening the dedicated PitchBook browser...' : 'Checking your browser session...';
         fetch(launching ? '/demo/pitchbook-visible' : '/demo/pitchbook-status', {
           method: launching ? 'POST' : 'GET',
@@ -46,10 +74,29 @@
           credentials: 'same-origin', headers: {'X-CSRF-Token': csrf}
         }).then(function (response) {
           return response.json().then(function (payload) {
-            if (!launching) document.dispatchEvent(new CustomEvent('pitchbook-status', {detail: {status: payload.status, ok: response.ok}}));
+            document.dispatchEvent(new CustomEvent('pitchbook-status', {detail: {status: payload.status, ok: response.ok}}));
             message.textContent = payload.message || (response.ok ? String(payload.status || 'Session checked').replaceAll('_', ' ') : 'PitchBook connection unavailable.');
+            if (payload.status !== 'session_ready' && payload.status !== 'attention_required' && (launching || payload.status === 'waiting_for_sign_in' || payload.status === 'browser_open')) startPitchbookPoll(message);
           });
         }).catch(function () { message.textContent = 'PitchBook connection unavailable. Check the local setup instructions.'; })
+          .finally(function () { button.disabled = false; });
+      });
+    });
+    document.querySelectorAll('[data-pitchbook-close]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        var message = document.querySelector('[data-pitchbook-message]') || document.createElement('span');
+        var data = new FormData();
+        data.append('csrf_token', csrf);
+        button.disabled = true;
+        stopPitchbookPoll();
+        message.textContent = 'Closing the dedicated PitchBook browser...';
+        fetch('/demo/pitchbook-close', {method: 'POST', body: data, credentials: 'same-origin', headers: {'X-CSRF-Token': csrf}})
+          .then(function (response) {
+            return response.json().then(function (payload) {
+              document.dispatchEvent(new CustomEvent('pitchbook-status', {detail: {status: 'idle', ok: response.ok}}));
+              message.textContent = payload.message || 'The PitchBook browser was closed.';
+            });
+          }).catch(function () { message.textContent = 'Could not close the PitchBook browser. Quit it from the Dock.'; })
           .finally(function () { button.disabled = false; });
       });
     });
@@ -344,6 +391,7 @@ document.querySelectorAll('[data-action="candidates_list-2"]').forEach(function 
 
 if (page === 'settings') {
   var WORDS = {unset: 'Not set', saved: 'Key saved', ok: 'Connected', fail: 'Failed'};
+  var SAVED_WORD = {searxng: 'URL saved'};
   var cards = {};
   document.querySelectorAll('.svc-card').forEach(function (card) { cards[card.dataset.service] = card; });
   function noteOf(card) { return card.querySelector('[data-svc-note]'); }
@@ -359,11 +407,12 @@ if (page === 'settings') {
     if (!card || !WORDS[state]) return;
     card.dataset.state = state;
     var label = card.querySelector('.svc-status [data-svc-label]');
-    if (label) label.textContent = WORDS[state];
+    var shown = (state === 'saved' && SAVED_WORD[id]) || WORDS[state];
+    if (label) label.textContent = shown;
     document.querySelectorAll('[data-tile-for="' + id + '"]').forEach(function (tile) {
       tile.dataset.state = state;
       var word = tile.querySelector('[data-svc-label]');
-      if (word) word.textContent = WORDS[state];
+      if (word) word.textContent = shown;
     });
     if (text) say(card, text);
     updateSummary();
@@ -494,8 +543,8 @@ if (page === 'settings') {
             if (result.ok) {
               var credits = result.payload.credits_remaining;
               setServiceStatus(id, 'ok', kind === 'tracking' ? 'Worker reachable and token accepted.' : kind === 'gemini' ? 'Probe passed on 3 anonymized emails. Nothing stored.' : 'Verified without using credits' + (credits != null ? '. Credits: ' + credits + '.' : '.'));
-            } else if (code === 'provider_key_not_configured') {
-              setServiceStatus(id, 'unset', 'Store a key first.');
+            } else if (code === 'provider_key_not_configured' || result.payload.unset) {
+              setServiceStatus(id, 'unset', 'Not set up yet. Optional.');
             } else {
               setServiceStatus(id, 'fail', kind === 'tracking' ? (result.payload.message || 'Could not verify the tracking Worker.') : 'Test stopped: ' + problem(result.payload, 'provider unavailable') + '.');
             }
@@ -509,8 +558,9 @@ if (page === 'settings') {
   // PitchBook has no key; the global session check reports through this event.
   document.addEventListener('pitchbook-status', function (event) {
     var status = event.detail && event.detail.status;
-    if (status === 'browser_open') setServiceStatus('pitchbook', 'ok');
-    else if (status === 'idle') setServiceStatus('pitchbook', 'unset');
+    if (status === 'session_ready') setServiceStatus('pitchbook', 'ok');
+    else if (status === 'attention_required') setServiceStatus('pitchbook', 'fail');
+    else if (status === 'idle' || status === 'browser_open' || status === 'waiting_for_sign_in') setServiceStatus('pitchbook', 'unset');
   });
 
   // More settings: per-key Set / Not set chips update in place.
@@ -910,18 +960,29 @@ document.querySelectorAll('[data-action="partners_list-12"]').forEach(function (
   });
 })();
 
-// Test the currently entered SearXNG URL without saving it.
-document.querySelectorAll('[data-searxng-form]').forEach(function (form) {
-  var button = form.querySelector('[data-searxng-test]');
-  var note = form.closest('article').querySelector('[data-searxng-note]');
-  button.addEventListener('click', function () {
-    var data = new FormData(form);
-    data.set('url', data.get('SEARXNG_URL'));
-    button.disabled = true;
-    fetch('/api/searxng/test', {method: 'POST', body: data, credentials: 'same-origin'})
-      .then(function (response) { return response.json(); })
-      .then(function (payload) { note.textContent = payload.message; })
-      .catch(function () { note.textContent = 'Could not reach the local connection check.'; })
-      .finally(function () { button.disabled = false; });
+// Test the currently entered SearXNG URL without saving it. Bound after the DOM exists, whatever the script load order.
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bindSearxngTest);
+else bindSearxngTest();
+function bindSearxngTest() {
+  document.querySelectorAll('[data-searxng-form]').forEach(function (form) {
+    var button = form.querySelector('[data-searxng-test]');
+    var article = form.closest('article');
+    var note = article && article.querySelector('[data-searxng-note]');
+    if (!button || !note) return;
+    var csrfMeta = document.querySelector('meta[name="csrf-token"]');
+    button.addEventListener('click', function () {
+      var data = new FormData(form);
+      data.set('url', data.get('SEARXNG_URL'));
+      button.disabled = true;
+      note.textContent = 'Checking the connection...';
+      fetch('/api/searxng/test', {method: 'POST', body: data, credentials: 'same-origin', headers: csrfMeta ? {'X-CSRF-Token': csrfMeta.content} : {}})
+        .then(function (response) { return response.json(); })
+        .then(function (payload) {
+          note.textContent = payload.message || (payload.ok ? 'SearXNG is reachable.' : 'Could not reach SearXNG.');
+          if (payload.ok && typeof window.setServiceStatus === 'function') window.setServiceStatus('searxng', 'ok');
+        })
+        .catch(function () { note.textContent = 'Could not reach the local connection check.'; })
+        .finally(function () { button.disabled = false; });
+    });
   });
-});
+}

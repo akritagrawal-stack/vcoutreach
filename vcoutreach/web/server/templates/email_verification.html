@@ -18,6 +18,8 @@
     </div>
   </header>
 
+  {% set key_ready = namespace(apollo=false, enrow=false) %}
+  {% for provider in data_providers %}{% if provider.id == 'apollo' and provider.configured %}{% set key_ready.apollo = true %}{% endif %}{% if provider.id == 'enrow' and provider.configured %}{% set key_ready.enrow = true %}{% endif %}{% endfor %}
   <section class="verification-provider-grid" aria-label="Provider status">
     {% for provider in data_providers %}
     {% set health = data_provider_health.get(provider.id, {}) %}
@@ -41,6 +43,7 @@
     <div class="verification-empty">No data providers are configured. Add an Apollo or Enrow key in <a href="/settings#svc-enrow">settings</a>.</div>
     {% endfor %}
   </section>
+  {% if not key_ready.apollo or not key_ready.enrow %}<p class="verification-key-hint" role="status">{% if not key_ready.apollo and not key_ready.enrow %}Add an <a href="/settings#svc-apollo">Apollo</a> or <a href="/settings#svc-enrow">Enrow</a> key in Settings to turn on the matching buttons.{% elif not key_ready.apollo %}Add an <a href="/settings#svc-apollo">Apollo key</a> in Settings to turn on Apollo enrich.{% else %}Add an <a href="/settings#svc-enrow">Enrow key</a> in Settings to turn on Enrow find and verify.{% endif %}</p>{% endif %}
 
   <section class="verification-workspace">
     <div class="verification-workspace-head">
@@ -95,19 +98,19 @@
                   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                   <input type="hidden" name="provider" value="apollo">
                   <input type="hidden" name="operation" value="person_enrich">
-                  <button type="submit" class="crm-button crm-button-small crm-button-secondary" {% if not contact.can_apollo_enrich %}disabled{% endif %}>Apollo enrich <small>0 to 1 credit</small></button>
+                  <button type="submit" class="crm-button crm-button-small crm-button-secondary" {% if not key_ready.apollo or not contact.can_apollo_enrich %}disabled{% endif %}{% if not key_ready.apollo %} title="Add an Apollo key in Settings to use this."{% endif %}>Apollo enrich <small>0 to 1 credit</small></button>
                 </form>
                 <form method="post" action="/email-verification/{{ contact.id }}/run">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                   <input type="hidden" name="provider" value="enrow">
                   <input type="hidden" name="operation" value="email_find">
-                  <button type="submit" class="crm-button crm-button-small crm-button-secondary" {% if not contact.can_enrow_find %}disabled{% endif %}>Enrow find <small>up to 1 credit</small></button>
+                  <button type="submit" class="crm-button crm-button-small crm-button-secondary" {% if not key_ready.enrow or not contact.can_enrow_find %}disabled{% endif %}{% if not key_ready.enrow %} title="Add an Enrow key in Settings to use this."{% endif %}>Enrow find <small>up to 1 credit</small></button>
                 </form>
                 <form method="post" action="/email-verification/{{ contact.id }}/run">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                   <input type="hidden" name="provider" value="enrow">
                   <input type="hidden" name="operation" value="email_verify">
-                  <button type="submit" class="crm-button crm-button-small crm-button-secondary" {% if not contact.can_verify %}disabled{% endif %}>Enrow verify <small>0.25 credit</small></button>
+                  <button type="submit" class="crm-button crm-button-small crm-button-secondary" {% if not key_ready.enrow or not contact.can_verify %}disabled{% endif %}{% if not key_ready.enrow %} title="Add an Enrow key in Settings to use this."{% endif %}>Enrow verify <small>0.25 credit</small></button>
                 </form>
               </div>
             </td>

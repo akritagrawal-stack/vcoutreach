@@ -5,17 +5,17 @@
 <meta name="csrf-token" content="{{ csrf_token }}">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{% block title %}{{ g_workspace.workspace_name }}{% endblock %} | Publikreach</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=20261021-ux3">
-<link rel="stylesheet" href="{{ url_for('static', filename='pages/partners.css') }}?v=20261021-ux3">
-<link rel="stylesheet" href="{{ url_for('static', filename='pages/crm.css') }}?v=20261021-ux3">
-<link rel="stylesheet" href="{{ url_for('static', filename='pages/replies.css') }}?v=20261021-ux3">
-<link rel="stylesheet" href="{{ url_for('static', filename='pages/misc.css') }}?v=20261021-ux3">
-<link rel="stylesheet" href="{{ url_for('static', filename='pages/nextstep.css') }}?v=20261021-ux3">
-<script src="{{ url_for('static', filename='app.js') }}?v=20261021-ux3"></script>
-<script src="{{ url_for('static', filename='pages/partners.js') }}?v=20261021-ux3" defer></script>
-<script src="{{ url_for('static', filename='pages/crm.js') }}?v=20261021-ux3" defer></script>
-<script src="{{ url_for('static', filename='pages/replies.js') }}?v=20261021-ux3" defer></script>
-<script src="{{ url_for('static', filename='pages/misc.js') }}?v=20261021-ux3" defer></script>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=20261021-ux4">
+<link rel="stylesheet" href="{{ url_for('static', filename='pages/partners.css') }}?v=20261021-ux4">
+<link rel="stylesheet" href="{{ url_for('static', filename='pages/crm.css') }}?v=20261021-ux4">
+<link rel="stylesheet" href="{{ url_for('static', filename='pages/replies.css') }}?v=20261021-ux4">
+<link rel="stylesheet" href="{{ url_for('static', filename='pages/misc.css') }}?v=20261021-ux4">
+<link rel="stylesheet" href="{{ url_for('static', filename='pages/nextstep.css') }}?v=20261021-ux4">
+<script src="{{ url_for('static', filename='app.js') }}?v=20261021-ux4"></script>
+<script src="{{ url_for('static', filename='pages/partners.js') }}?v=20261021-ux4" defer></script>
+<script src="{{ url_for('static', filename='pages/crm.js') }}?v=20261021-ux4" defer></script>
+<script src="{{ url_for('static', filename='pages/replies.js') }}?v=20261021-ux4" defer></script>
+<script src="{{ url_for('static', filename='pages/misc.js') }}?v=20261021-ux4" defer></script>
 </head>
 <body data-page="{% block page_id %}{% endblock %}">
 <a class="skip-link" href="#main-content">Skip to content</a>
@@ -115,9 +115,13 @@
     {% endif %}
   {% endwith %}
 
-  {% if g_next_step and not (active_page == 'settings' and g_next_step.key in ('gmail', 'test_recipient')) %}
-  <section class="next-step" id="nextStep" aria-label="Next step"><span class="next-step-count">Step {{ g_next_step.index }} of {{ g_next_step.total }}</span> <strong>{{ g_next_step.label }}</strong> <a class="crm-button crm-button-small crm-button-primary" href="{{ g_next_step.href }}" data-next-step="{{ g_next_step.key }}">Go</a></section>
+  {% block next_step_banner %}
+  {% if g_next_step and not (active_page == 'settings' and g_next_step.key in ('gmail', 'test_recipient', 'publik_api')) %}
+  <section class="next-step" id="nextStep" aria-label="Next step"><span class="next-step-count">Step {{ g_next_step.index }} of {{ g_next_step.total }}</span> <strong>{{ g_next_step.label }}</strong> <a class="crm-button crm-button-small crm-button-primary" href="{{ g_next_step.href }}" data-next-step="{{ g_next_step.key }}">Go</a>
+    {%- if g_next_step.key == 'publik_api' %} <form class="next-step-skip" method="post" action="/settings/publik-recommendation"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="state" value="skipped"><input type="hidden" name="next" value="{{ request.path }}"><button type="submit" class="next-step-link" data-next-step-skip="publik_api">Skip, use my own key or the offline template</button></form>{% endif %}
+    {%- if request.path != '/setup/ai' %} <a class="next-step-link" href="/setup/ai" data-next-step-ai>or set up with AI</a>{% endif %}</section>
   {% endif %}
+  {% endblock %}
 
   {% block content %}{% endblock %}
 </main>

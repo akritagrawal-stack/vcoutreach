@@ -10,6 +10,8 @@ datas += collect_data_files('googleapiclient')
 for distribution in ('pywebview', 'google-auth', 'google-auth-oauthlib', 'google-api-python-client', 'requests', 'certifi'):
     datas += copy_metadata(distribution)
 hidden = collect_submodules('vcoutreach')
+# The --mcp mode imports these lazily, so name them explicitly.
+hidden += ['vcoutreach.mcp'] + collect_submodules('vcoutreach.mcp')
 for module in ('google.auth', 'google.oauth2', 'google_auth_oauthlib', 'googleapiclient', 'requests', 'bs4', 'anthropic'):
     hidden += collect_submodules(module)
 hidden += ['webview.platforms.cocoa', 'AppKit', 'Foundation', 'WebKit', 'PyObjCTools.AppHelper']

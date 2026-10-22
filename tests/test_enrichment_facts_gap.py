@@ -260,9 +260,9 @@ def test_failure_flash_names_the_class_in_plain_words_even_when_the_raw_error_do
 
 
 def test_regenerating_a_hook_with_no_enrichment_says_no_enrichment_facts_yet(ew):
-    seed_contacts(ew, [ADA])
-    add_draft_row(ew, "ada")
-    text = generate_hook(ew, "ada")[2]
+    seed_contacts(ew, [THIN])
+    add_draft_row(ew, "thin")
+    text = generate_hook(ew, "thin")[2]
     assert "no enrichment facts yet" in text.lower(), text
 
 

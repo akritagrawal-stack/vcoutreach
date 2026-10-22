@@ -122,6 +122,16 @@ class LocalServer:
             self.server.shutdown()
             self.thread.join(timeout=5)
             self.server.server_close()
+            try:
+                from vcoutreach.web import clear_ui_port
+                clear_ui_port(self.app, self.server.server_port)
+            except Exception:
+                pass
+            try:
+                from vcoutreach.web.server.app import _close_pitchbook_browser
+                _close_pitchbook_browser()
+            except Exception:
+                pass
             from vcoutreach.web.gmail.scheduler import stop_scheduler
             stop_scheduler()
 
@@ -145,6 +155,11 @@ def start_server(workspace, *, server_factory=None):
     server = factory('127.0.0.1', 0, app, threaded=True, request_handler=QuietHandler)
     port = server.server_port
     app.config['PORT'] = port
+    try:
+        from vcoutreach.web import write_ui_port
+        write_ui_port(app, port)
+    except Exception:
+        pass
     thread = threading.Thread(target=server.serve_forever, name='publik-loopback', daemon=True)
     try:
         thread.start()

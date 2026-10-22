@@ -6,9 +6,11 @@ import logging
 import os
 import re
 import secrets
+import signal
 import sqlite3
 import subprocess
 import sys
+import time
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from urllib.error import URLError
@@ -83,6 +85,7 @@ from vcoutreach.web.server.sample_email import build_sample_email
 from vcoutreach.web.keys import write_env, key_status, KEY_NAMES
 from vcoutreach.web.security import install_security
 from vcoutreach.web import drafts_service
+from markupsafe import Markup
 from vcoutreach.web.db import init_db, get_conn, cursor_ctx
 
 _PROJECT_ROOT = WorkspacePath()
@@ -97,9 +100,183 @@ _EMAIL_PATTERN = re.compile(r'\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b', re.I)
 def _env(name, default=''):
     return get_workspace().value(name,default)
 
-def _activate_pitchbook_browser(tabs=None):
-    # Browser launcher handles focusing. Never execute arbitrary AppleScript.
-    return bool(tabs)
+_TARGET_ID_PATTERN = re.compile(r'^[A-Za-z0-9]{8,64}$')
+# Fixed literal script. The only variable input is one integer PID passed as argv.
+_RAISE_PID_SCRIPT = (
+    'on run argv',
+    'tell application "System Events" to set frontmost of '
+    '(first process whose unix id is (item 1 of argv as integer)) to true',
+    'end run',
+)
+
+def _pitchbook_cdp_listener_pid(port: int) -> int | None:
+    """PID of the process listening on the loopback CDP port (the dedicated Chrome)."""
+
+    try:
+        result = subprocess.run(
+            ['/usr/sbin/lsof', '-nP', f'-iTCP:{int(port)}', '-sTCP:LISTEN', '-t'],
+            capture_output=True, text=True, timeout=3, check=False,
+            stdin=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return None
+    for line in result.stdout.split():
+        if line.isascii() and line.isdigit() and 1 < int(line) < 4194304:
+            return int(line)
+    return None
+
+def _raise_process_to_front(pid: int) -> bool:
+    """Bring one macOS process to the front. Fixed script, integer PID only."""
+
+    if sys.platform != 'darwin' or not isinstance(pid, int) or isinstance(pid, bool) or pid <= 1:
+        return False
+    command = ['/usr/bin/osascript']
+    for line in _RAISE_PID_SCRIPT:
+        command += ['-e', line]
+    command.append(str(pid))
+    try:
+        result = subprocess.run(command, capture_output=True, text=True, timeout=10,
+                                check=False, stdin=subprocess.DEVNULL)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return result.returncode == 0
+
+def _cdp_browser_close() -> bool:
+    """Send CDP Browser.close over a minimal loopback websocket. Never raises."""
+
+    import base64
+    import socket
+    from urllib.parse import urlsplit
+    try:
+        with urlopen(f'{_pitchbook_cdp_url()}/json/version', timeout=2) as response:
+            ws_url = str(json.load(response).get('webSocketDebuggerUrl', ''))
+        parts = urlsplit(ws_url)
+        port = _pitchbook_cdp_port()
+        if parts.scheme != 'ws' or parts.hostname not in {'127.0.0.1', 'localhost'} or parts.port != port:
+            return False
+        path = parts.path or '/'
+        key = base64.b64encode(os.urandom(16)).decode('ascii')
+        with socket.create_connection(('127.0.0.1', port), timeout=2) as sock:
+            sock.sendall((f'GET {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nUpgrade: websocket\r\n'
+                          f'Connection: Upgrade\r\nSec-WebSocket-Key: {key}\r\n'
+                          'Sec-WebSocket-Version: 13\r\n\r\n').encode('ascii'))
+            if b' 101 ' not in sock.recv(4096).split(b'\r\n', 1)[0] + b' ':
+                return False
+            payload = json.dumps({'id': 1, 'method': 'Browser.close'}).encode('ascii')
+            mask = os.urandom(4)
+            masked = bytes(byte ^ mask[i % 4] for i, byte in enumerate(payload))
+            sock.sendall(bytes([0x81, 0x80 | len(payload)]) + mask + masked)
+        return True
+    except (OSError, URLError, ValueError, TypeError, AttributeError):
+        return False
+
+def _close_pitchbook_browser() -> bool:
+    """Quit only the dedicated PitchBook Chrome. True when it was open.
+
+    Asks Chrome to quit over CDP (Browser.close); if the CDP port still answers, ends
+    only the PID listening on that port. No shell string is built; the PID is an int.
+    """
+
+    if not _pitchbook_cdp_tabs():
+        return False
+    pid = _pitchbook_cdp_listener_pid(_pitchbook_cdp_port())
+    _cdp_browser_close()
+    for _ in range(6):
+        if not _pitchbook_cdp_tabs():
+            return True
+        time.sleep(0.25)
+    if pid:
+        try:
+            os.kill(int(pid), signal.SIGTERM)
+        except (OSError, ValueError):
+            pass
+    return True
+
+def _activate_pitchbook_tab(tabs=None) -> bool:
+    """Select the first PitchBook tab through the loopback CDP activate endpoint."""
+
+    pages = _pitchbook_page_tabs(tabs)
+    target_id = str(pages[0].get('id', '')) if pages else ''
+    if not _TARGET_ID_PATTERN.match(target_id):
+        return False
+    try:
+        with urlopen(f'{_pitchbook_cdp_url()}/json/activate/{target_id}', timeout=2) as response:
+            return 200 <= response.status < 300
+    except (OSError, URLError, ValueError):
+        return False
+
+def _activate_pitchbook_browser(tabs=None) -> bool:
+    """Raise the dedicated PitchBook Chrome. True only when it is really in front.
+
+    Selects the PitchBook tab over CDP, then raises that exact Chrome process (found by
+    its CDP listener PID, so a second normal Chrome is never targeted). Fails soft.
+    """
+
+    tab_ok = _activate_pitchbook_tab(tabs)
+    if sys.platform != 'darwin':
+        return tab_ok
+    pid = _pitchbook_cdp_listener_pid(_pitchbook_cdp_port())
+    return _raise_process_to_front(pid) if pid else False
+
+_PB_SIGNED_OUT_HINTS = ('login', 'signin', 'sign-in', 'sign_in', 'sso', 'auth', 'password', 'logout')
+
+def _pitchbook_looks_signed_in(tabs=None) -> bool:
+    """Cheap hint from tab URLs only: a my.pitchbook.com page that is not a sign-in page."""
+
+    from urllib.parse import urlsplit
+    for row in _pitchbook_page_tabs(tabs):
+        parts = urlsplit(str(row.get('url', '')))
+        if (parts.hostname or '').lower() != 'my.pitchbook.com':
+            continue
+        target = f'{parts.path}?{parts.query}'.lower()
+        if parts.path.strip('/') and not any(hint in target for hint in _PB_SIGNED_OUT_HINTS):
+            return True
+    return False
+
+def _pitchbook_refresh_state(current: dict, tabs: list[dict], *, spawn: bool = True) -> str:
+    """Return 'session_ready', 'waiting_for_sign_in', 'refreshing' or 'attention_required'.
+
+    Starts at most one cookie refresher per 20 seconds, and only once a PitchBook tab no
+    longer looks like a sign-in page, so Playwright never runs while the user is typing.
+    A saved session is trusted for 10 minutes, then re-checked.
+    """
+
+    import time as _time
+    now = _time.time()
+    process = current.get('refresh_process')
+    started = float(current.get('refresh_started_epoch', 0))
+    code = process.poll() if process is not None else None
+    if process is not None and code is None:
+        return 'refreshing'
+    if code == 0:
+        current['session_saved_epoch'] = now
+        current['refresh_process'] = process = None
+    if now - float(current.get('session_saved_epoch', 0)) < 600:
+        return 'session_ready'
+    if process is not None and code == 2 and now - started < 20:
+        return 'attention_required'
+    if not _pitchbook_looks_signed_in(tabs):
+        return 'waiting_for_sign_in'
+    if not spawn or now - started < 20:
+        return 'waiting_for_sign_in'
+    command = [sys.executable, str(_SCRIPTS_ROOT / 'pb_cookie_refresher.py'), '--once', '--no-navigate', '--cdp-url', _pitchbook_cdp_url()]
+    try:
+        current['refresh_process'] = subprocess.Popen(
+            command, cwd=str(get_workspace().root),
+            env={**os.environ, **get_workspace().env(), 'OUTREACH_HOME': str(get_workspace().root)},
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            start_new_session=True)
+        current['refresh_started_epoch'] = now
+    except OSError:
+        return 'attention_required'
+    return 'refreshing'
+
+_PB_STATE_TEXT = {
+    'session_ready': 'Signed in, session saved.',
+    'refreshing': 'Signed in. Saving your session...',
+    'waiting_for_sign_in': 'Waiting for sign in. Finish signing in to PitchBook in the dedicated Chrome window.',
+    'attention_required': 'PitchBook session could not be saved. Check that Playwright is installed, then try again.',
+}
 def _bounded_int(value: str | None, default: int, minimum: int = 0, maximum: int = 9999) -> int:
     try:
         parsed = int(value) if value is not None else default
@@ -135,12 +312,12 @@ def _crm_inbound_match_count(db_path: Path) -> int:
         conn.close()
 
 def _pitchbook_cdp_port() -> int:
-    return _bounded_int(
-        _env('PITCHBOOK_CDP_PORT'),
-        default=9223,
-        minimum=1024,
-        maximum=65535,
-    )
+    """Dedicated Chrome CDP port. Anything outside 1024 to 65535, or not an integer, means 9223."""
+    try:
+        port = int(str(_env('PITCHBOOK_CDP_PORT') or '').strip())
+    except (TypeError, ValueError):
+        return 9223
+    return port if 1024 <= port <= 65535 else 9223
 
 def _pitchbook_cdp_url() -> str:
     return f'http://127.0.0.1:{_pitchbook_cdp_port()}'
@@ -196,7 +373,17 @@ def _write_relationship_updates(payload: dict[str, dict]) -> None:
 _SECRET_PATTERN = re.compile(r'(?i)(bearer\s+[A-Za-z0-9._~+/=-]+|sk-[A-Za-z0-9_-]{8,}|[A-Za-z0-9_-]{32,}|key=[^&\s]+)')
 
 def flash(message, category='message'):
+    if isinstance(message, Markup):
+        flask_flash(message, category)
+        return
     flask_flash(drafts_service.friendly_message(message).replace('first..','first.'), category)
+
+def _settings_card_link(anchor: str, label: str) -> Markup:
+    """Link to one Settings card, for flashes that tell the user which setting to fix."""
+    return Markup('<a href="{}#{}">{}</a>').format('/settings', anchor, label)
+
+_PROVIDER_CARDS = {'apollo': ('svc-apollo', 'Apollo'), 'enrow': ('svc-enrow', 'Enrow'), 'pitchbook': ('svc-pitchbook', 'PitchBook'),
+                   'gmail': ('svc-gmail', 'Gmail'), 'gemini': ('svc-gemini', 'Gemini')}
 
 def _hook_failure_reason(exc: Exception) -> str:
     """Say what failed (missing key, rate limit, network, bad output) without leaking secrets."""
@@ -215,7 +402,7 @@ def _hook_failure_reason(exc: Exception) -> str:
     elif 'without enrichment facts' in lowered:
         kind = 'no enrichment facts yet'
     else:
-        return 'Provider operation failed; check its connection in Settings'
+        return 'The model provider could not be reached. Open the Gemini, OpenAI or Anthropic card in Settings and run Test connection'
     return f'{kind}: {detail}' if detail else kind
 
 def _redact_dashboard_text(value: str | None) -> str:
@@ -277,7 +464,7 @@ def _selected_draft_ids():
     return list(dict.fromkeys(int(value) for value in raw if value.isdigit() and len(value)<20 and int(value)<=9223372036854775807))
 
 def _show_send_result(result):
-    message=f"Sent {result['sent']}; refused or failed {result['failed']}." if result['sent'] else f"Nothing sent: {result['failed']} drafts were refused (see reasons below)."
+    message=f"Sent {result['sent']}; refused or failed {result['failed']}." if result['sent'] else f"Nothing sent: {result['failed']} {'draft was' if result['failed'] == 1 else 'drafts were'} refused (see reasons below)."
     flash(message,'success' if result['sent'] else 'warning')
     for error in result.get('errors',[]):
         flash(error,'error')
@@ -307,40 +494,14 @@ def _gmail_connection_state() -> str:
         return 'not connected'
     return 'OAuth required'
 
-_NEXT_STEPS = (('gmail', 'Connect Gmail', '/settings#svc-gmail'),
-               ('test_recipient', 'Set your test recipient', '/settings#svc-test-recipient'),
-               ('contact', 'Add your first contact', '/crm/new'),
-               ('draft', 'Write drafts', '/crm/drafts#writeDrafts'),
-               ('approve', 'Review and approve a draft', '/crm/drafts'),
-               ('send_test', 'Send a test email', '/partners'))
-
 def first_run_next_step(app) -> dict | None:
-    """First unmet setup step for the global Next step banner, or None when all six are done.
-    Reads local files and the workspace database only (no network); any failure hides the banner."""
+    """First unmet setup step for the global Next step banner, or None when all seven are done.
+    Seven steps (Publik recommendation first) come from vcoutreach.web.setup_steps, the same
+    helper the MCP setup_status tool uses. Local files and the workspace database only (no
+    network); any failure hides the banner."""
     try:
-        done = {'gmail': _gmail_connection_state() == 'connected', 'test_recipient': bool(_env('TEST_RECIPIENT_EMAIL'))}
-        partner_id = None
-        if all(done.values()):
-            conn = get_conn(app.config['CRM_DB_PATH'])
-            try:
-                done['contact'] = conn.execute('SELECT 1 FROM partners LIMIT 1').fetchone() is not None
-                drafts_dir = get_workspace().drafts_dir
-                files = drafts_dir.is_dir() and any(drafts_dir.glob('*.md'))
-                done['draft'] = bool(files) or conn.execute('SELECT 1 FROM drafts LIMIT 1').fetchone() is not None
-                approved = conn.execute("SELECT partner_id FROM drafts WHERE status='approved' ORDER BY id LIMIT 1").fetchone()
-                partner_id = approved['partner_id'] if approved else None
-                done['send_test'] = (conn.execute("SELECT 1 FROM web_send_journal WHERE state='sent' LIMIT 1").fetchone() is not None
-                                     or conn.execute('SELECT 1 FROM drafts WHERE sent_to_address IS NOT NULL LIMIT 1').fetchone() is not None)
-                # A sent draft leaves 'approved', so a completed send also settles the approve step.
-                done['approve'] = approved is not None or done['send_test']
-            finally:
-                conn.close()
-        for index, (key, label, href) in enumerate(_NEXT_STEPS, 1):
-            if not done.get(key, False):
-                if key == 'send_test' and partner_id:
-                    href = f'/partners/{partner_id}'
-                return {'key': key, 'index': index, 'total': len(_NEXT_STEPS), 'label': label, 'href': href}
-        return None
+        from vcoutreach.web import setup_steps as _setup_steps
+        return _setup_steps.next_step(_setup_steps.setup_steps(get_workspace()))
     except Exception:
         return None
 
@@ -357,7 +518,7 @@ def _settings_services(gemini_status: dict, health: dict) -> list:
     def state(configured, ok=False):
         return 'ok' if ok else 'saved' if configured else 'unset'
     cards = [{'id': 'pitchbook', 'name': 'PitchBook', 'state': 'unset', 'fields': [], 'action': '', 'test': 'pitchbook',
-              'hint': 'No key. Sign in with your own account in the dedicated browser, then set PITCHBOOK_ENABLED under More settings.'}]
+              'hint': 'Not connected. Sign in with your own PitchBook account in the dedicated browser, then turn PitchBook on under More settings.'}]
     for provider in _local_provider_statuses(data=True):
         ok = (health.get(provider['id']) or {}).get('health_status') == 'connected'
         cards.append({'id': provider['id'], 'name': provider['label'], 'state': state(provider['configured'], ok),
@@ -439,6 +600,8 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
     with app.app_context():
         init_db()
     install_security(app)
+    from vcoutreach.web.server.mcp_routes import bp as mcp_bp
+    app.register_blueprint(mcp_bp)
     from vcoutreach.web.gmail.setup import register_setup_routes
     register_setup_routes(app, _gmail_connection_state)
     drafts_service.register_routes(app)
@@ -669,7 +832,7 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
     def crm_tracking():
         # GET only reads the snapshot cached by the explicit sync action.
         snapshot=get_workspace().read_json('data/tracking-snapshot.json')
-        return render_template('crm_tracking.html',snapshot=snapshot,error=None if snapshot else 'Sync tracking to load your Worker data.',
+        return render_template('crm_tracking.html',snapshot=snapshot,error=None if snapshot else 'Sync tracking to load your Worker data',
             tracking_dashboard_url=(_env('TRACKING_WORKER_URL',_env('TRACKING_ORIGIN')).rstrip('/') + '/dashboard') if _env('TRACKING_WORKER_URL',_env('TRACKING_ORIGIN')) else None,active_page='tracking')
 
     @app.get('/crm/review-preview')
@@ -746,7 +909,9 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
             uncertain_sends = [dict(row) for row in conn.execute("SELECT id,mode,lane,target_email,created_at FROM web_send_journal WHERE partner_id=? AND state='uncertain' ORDER BY id", (partner_id,))]
         finally:
             conn.close()
-        response = app.make_response(render_template('crm_contact.html', **detail, uncertain_sends=uncertain_sends, stages=CRM_STAGES, active_page='crm'))
+        from vcoutreach.web.pipeline.loader import get_draft_for_partner
+        has_draft = get_draft_for_partner(partner_id) is not None
+        response = app.make_response(render_template('crm_contact.html', **detail, uncertain_sends=uncertain_sends, has_draft=has_draft, stages=CRM_STAGES, active_page='crm'))
         response.headers['Cache-Control'] = 'no-store'
         return response
 
@@ -1056,7 +1221,8 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
         except TrackingUnavailable as exc:
             text = str(exc)
             known = text if text.startswith('Configure a') else ''
-            return {'ok': False, 'message': known or 'Could not verify the tracking Worker.'}, 400
+            unset = text.startswith('Configure a tracking Worker token') or text.startswith('Configure a tracking Worker URL')
+            return {'ok': False, 'unset': unset, 'message': known or 'Could not verify the tracking Worker.'}, 400
         except Exception:
             return {'ok': False, 'message': 'Could not verify the tracking Worker.'}, 400
         return {'ok': True, 'message': 'Worker reachable and token accepted.'}
@@ -1078,6 +1244,7 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
             return {
                 **status,
                 'ok': False,
+                'unset': str(exc) == 'gemini_key_missing',
                 'error_code': str(exc),
                 'raw_content_stored': False,
                 'delivery_authority': False,
@@ -1220,29 +1387,17 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
                 'process': None,
                 'started_at': datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
             })
-            _activate_pitchbook_browser(existing_tabs)
-            refresh_process = current.get('refresh_process')
-            if refresh_process is None or refresh_process.poll() is not None:
-                command=[sys.executable,str(_SCRIPTS_ROOT/'pb_cookie_refresher.py'),'--once','--no-navigate','--cdp-url',_pitchbook_cdp_url()]
-                try:
-                    refresh_process=subprocess.Popen(command,cwd=str(get_workspace().root),
-                        env={**os.environ,**get_workspace().env(),'OUTREACH_HOME':str(get_workspace().root)},
-                        stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,start_new_session=True)
-                    current['refresh_process']=refresh_process
-                except OSError:
-                    return {'ok':False,'status':'attention_required','message':'PitchBook session refresh could not start.'},400
-            refresh_code = refresh_process.poll() if refresh_process is not None else None
-            if refresh_process is not None and refresh_code == 0:
-                return {
-                    'ok': True,
-                    'status': 'session_ready',
-                    'message': 'PitchBook is ready and its dedicated Chrome window is in front.',
-                }
-            return {
-                'ok': True,
-                'status': 'browser_open',
-                'message': 'PitchBook is open and its dedicated Chrome window is in front.',
-            }, 202
+            raised = _activate_pitchbook_browser(existing_tabs)
+            state = _pitchbook_refresh_state(current, existing_tabs)
+            front = ('The dedicated PitchBook Chrome window is now in front.' if raised
+                     else 'PitchBook is open; bring Chrome to the front from the Dock.')
+            message = f'{_PB_STATE_TEXT[state]} {front}'
+            if state == 'attention_required':
+                return {'ok': False, 'status': 'attention_required', 'message': message, 'raised': raised}, 400
+            if state == 'session_ready':
+                return {'ok': True, 'status': 'session_ready', 'message': message, 'raised': raised}
+            return {'ok': True, 'status': 'waiting_for_sign_in' if state == 'waiting_for_sign_in' else 'browser_open',
+                    'message': message, 'raised': raised}, 202
         current = runs.get('pitchbook')
         process = current.get('process') if isinstance(current, dict) else None
         if process is not None and process.poll() is None:
@@ -1294,12 +1449,46 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
             'message': 'Dedicated Google Chrome is opening. Complete PitchBook sign-in there.',
         }, 202
 
+    @app.post('/demo/pitchbook-close')
+    def demo_pitchbook_close():
+        """Quit only the dedicated PitchBook Chrome (CDP Browser.close, else its listener PID)."""
+
+        closed = _close_pitchbook_browser()
+        runs = app.extensions.setdefault('visible_demo_runs', {})
+        runs.pop('pitchbook', None)
+        return {'ok': True, 'status': 'closed' if closed else 'idle',
+                'message': ('The PitchBook browser was closed. Use Open sign-in to connect again.' if closed
+                            else 'The PitchBook browser was not open.')}
+
     @app.get('/demo/pitchbook-status')
     def demo_pitchbook_status():
-        current=app.extensions.get('visible_demo_runs',{}).get('pitchbook',{})
-        process=current.get('process')
-        return {'ok':True,'status':'browser_open' if process is not None and process.poll() is None else 'idle',
-                'message':'Use Open PitchBook to connect or refresh the browser session.'}
+        current = app.extensions.setdefault('visible_demo_runs', {}).setdefault('pitchbook', {})
+        # Cheap local check first: when no process listens on the CDP port there is nothing to
+        # poll, so the status route never opens a socket (and cannot fail) in that case.
+        try:
+            nothing_listening = (os.path.exists('/usr/sbin/lsof')
+                                 and _pitchbook_cdp_listener_pid(_pitchbook_cdp_port()) is None)
+        except Exception:
+            nothing_listening = False
+        try:
+            tabs = [] if nothing_listening else _pitchbook_cdp_tabs()
+        except Exception:
+            tabs = []
+        if not tabs:
+            process = current.get('process')
+            starting = process is not None and process.poll() is None
+            # Chrome is gone: the next launch may raise it once again.
+            current.pop('raised_once', None)
+            return {'ok': True, 'status': 'browser_open' if starting else 'idle',
+                    'message': ('Chrome is starting...' if starting
+                                else 'PitchBook browser is closed. Use Open sign-in to connect.')}
+        if not current.get('raised_once'):
+            current['raised_once'] = True
+            _activate_pitchbook_browser(tabs)
+        state = _pitchbook_refresh_state(current, tabs)
+        status = {'session_ready': 'session_ready', 'attention_required': 'attention_required',
+                  'waiting_for_sign_in': 'waiting_for_sign_in'}.get(state, 'browser_open')
+        return {'ok': state != 'attention_required', 'status': status, 'message': _PB_STATE_TEXT[state]}
 
     # Contact provider management
 
@@ -1372,7 +1561,13 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
                 idempotency_key=f'{provider}:{operation}:{partner_id}:{secrets.token_hex(16)}',
             )
         except (RuntimeSecretError, ValueError) as exc:
-            flash(f'Provider lookup stopped: check your settings.', 'error')
+            anchor, label = _PROVIDER_CARDS.get(provider, ('svc-' + provider, provider.title()))
+            if isinstance(exc, RuntimeSecretError):
+                flash(Markup('{} lookup stopped: no {} key is saved. Add it on the ').format(label, label)
+                      + _settings_card_link(anchor, f'{label} card in Settings') + Markup('.'), 'error')
+            else:
+                flash(Markup('{} lookup stopped: the request was not valid. Check the ').format(label)
+                      + _settings_card_link(anchor, f'{label} card in Settings') + Markup('.'), 'error')
             return redirect(url_for('email_verification', q=partner.get('partner_name', '')))
 
         state = str(attempt.get('state') or 'unknown').replace('_', ' ')
@@ -1396,7 +1591,7 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
                 confirmation=request.form.get('confirmation', ''),
             )
         except ValueError as exc:
-            flash(f'Candidate was not applied: check your settings.', 'error')
+            flash('Candidate was not applied. The confirmation did not match this address or the candidate is no longer open. Reload the page and try again.', 'error')
             return redirect(url_for('email_verification'))
         flash('Candidate address applied. It still requires a dedicated deliverability check.', 'success')
         return redirect(url_for('email_verification'))
@@ -1408,7 +1603,7 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
         try:
             dismiss_candidate(attempt_id=attempt_id)
         except ValueError as exc:
-            flash(f'Candidate was not dismissed: check your settings.', 'error')
+            flash('Candidate was not dismissed. It may already be closed. Reload the page and try again.', 'error')
         else:
             flash('Candidate address dismissed. The evidence remains in history.', 'success')
         return redirect(url_for('email_verification'))
@@ -1484,7 +1679,8 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
                     recipient_firm=partner.get('firm'),
                 )
             except Exception as exc:
-                flash(f'Email assembly error: check your settings', 'error')
+                flash(Markup('The email preview could not be built. Check the sender profile on the ')
+                      + Markup('<a href="{}#sec-sender">sender profile card in Settings</a>').format('/settings') + Markup('.'), 'error')
 
         if draft and draft['boilerplate_version'].startswith('engine-'):
             from html import escape
@@ -1500,6 +1696,7 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
             enrichment_facts = get_enrichment_facts(partner_id) or []
         except Exception:
             pass
+        enrichment_facts = drafts_service.manual_fact_list(partner.get('facts')) + list(enrichment_facts)
 
         return render_template('partner_detail.html',
                                partner=partner,
@@ -1541,25 +1738,27 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
     def partner_approve(partner_id: int):
         from vcoutreach.web.pipeline.loader import get_draft_for_partner
         draft = get_draft_for_partner(partner_id)
+        _next = request.form.get('next', '')
+        back = _next if re.fullmatch(r'/crm/drafts/[A-Za-z0-9._%-]+', _next) else url_for('partner_detail', partner_id=partner_id)
         if draft is None:
             flash('No draft found for this partner.', 'error')
-            return redirect(url_for('partner_detail', partner_id=partner_id))
+            return redirect(back)
 
         if draft['status'] == 'drafted':
             flash('Draft already pushed to Gmail.', 'info')
-            return redirect(url_for('partner_detail', partner_id=partner_id))
+            return redirect(back)
 
         blocked_reason=drafts_service.draft_block_reason(draft)
         if blocked_reason:
             flash('Draft cannot be approved; blocked: '+blocked_reason,'error')
-            return redirect(url_for('partner_detail',partner_id=partner_id))
+            return redirect(back)
         from vcoutreach.web.llm.hook_grounding import hook_is_ungrounded, UNGROUNDED_APPROVAL_MESSAGE
         if hook_is_ungrounded(draft):
             flash(UNGROUNDED_APPROVAL_MESSAGE, 'error')
-            return redirect(url_for('partner_detail', partner_id=partner_id))
+            return redirect(back)
         set_draft_status(draft['id'], 'approved')
         flash('Draft approved. Select it on Partners when you are ready to send.', 'success')
-        return redirect(url_for('partner_detail', partner_id=partner_id))
+        return redirect(back)
 
     # ── Reject ────────────────────────────────────────────────────────────────
 
@@ -1595,13 +1794,18 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
     @app.route('/partners/<int:partner_id>/send-test', methods=['POST'])
     def partner_send_test(partner_id: int):
         from vcoutreach.web.gmail.push_worker import send_one_test,SendRefused
+        from vcoutreach.web.pipeline.loader import get_draft_for_partner
+        if get_partner(partner_id) is not None and get_draft_for_partner(partner_id) is None:
+            flash('Write a draft first, then send a test.','warning')
+            return redirect(url_for('partner_detail',partner_id=partner_id))
         try:
             send_one_test(partner_id)
             flash('Test email sent to the configured test recipient.','success')
         except SendRefused as exc:
             flash(str(exc),'error')
         except Exception:
-            flash('Test sending is unavailable. Check Gmail and workspace settings.','error')
+            flash(Markup('Test sending is unavailable. Check the ') + _settings_card_link('svc-gmail', 'Gmail card')
+                  + Markup(' and the ') + _settings_card_link('svc-test-recipient', 'Test recipient card') + Markup(' in Settings.'),'error')
         return redirect(url_for('partner_detail',partner_id=partner_id))
 
     # ── Send (single partner, respects SEND_MODE) ────────────────────────────
@@ -1612,8 +1816,11 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
         from vcoutreach.web.pipeline.loader import get_draft_for_partner
         partner=get_partner(partner_id)
         draft=get_draft_for_partner(partner_id)
-        if partner is None or draft is None:
+        if partner is None:
             abort(404)
+        if draft is None:
+            flash('Write a draft first, then send.','warning')
+            return redirect(url_for('partner_detail',partner_id=partner_id))
         if send_mode()=='live' and (request.form.get('confirm_text') or request.form.get('confirm'))!=f'SEND TO {partner["email"]}':
             flash(f'Type exactly: SEND TO {partner["email"]}','error')
         else:
@@ -1671,7 +1878,9 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
         pb_enabled = _env('PITCHBOOK_ENABLED', '0') == '1'
         if not pb_enabled:
             flash(
-                'PitchBook enrichment is disabled. Open Settings, find the PitchBook section, start the browser session, then set PITCHBOOK_ENABLED=1 in the workspace .env.',
+                Markup('PitchBook enrichment is off. Turn it on from the ')
+                + _settings_card_link('svc-pitchbook', 'PitchBook card in Settings')
+                + Markup(' by starting the browser session.'),
                 'warning',
             )
             return redirect(url_for('partner_detail', partner_id=partner_id))
@@ -1697,7 +1906,8 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
                 msg += f' ({len(errors)} provider error(s); check credentials and service status.)'
             flash(msg, 'success' if not errors or len(pb_facts) > 0 else 'warning')
         except Exception as exc:
-            flash(f'PitchBook enrichment failed: check your settings', 'error')
+            flash(Markup('PitchBook enrichment failed. Check the ') + _settings_card_link('svc-pitchbook', 'PitchBook card in Settings')
+                  + Markup(' and make sure the browser session is signed in.'), 'error')
 
         return redirect(url_for('partner_detail', partner_id=partner_id))
 
@@ -1753,19 +1963,23 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
         from vcoutreach.web.replies.poller import poll_gmail_for_replies
         limit_str = request.form.get('limit', '')
         limit = int(limit_str) if limit_str.isdigit() else None
+        gmail_card = _settings_card_link('svc-gmail', 'Gmail card in Settings')
+        if _gmail_connection_state() != 'connected':
+            flash(Markup('Gmail is not connected, so there is nothing to poll. Connect it on the ') + gmail_card + Markup('.'), 'warning')
+            return redirect(url_for('replies_list'))
         try:
             result = poll_gmail_for_replies(limit=limit)
         except Exception as exc:
-            flash(f'Poll failed: check your settings', 'error')
+            flash(Markup('Polling Gmail failed. Reconnect on the ') + gmail_card + Markup(' and try again.'), 'error')
             return redirect(url_for('replies_list'))
 
-        n = result.get('new_replies', 0)
-        threads = result.get('threads_scanned', 0)
+        n = int(result.get('new_replies', 0) or 0)
+        threads = int(result.get('threads_scanned', 0) or 0)
         errs = result.get('errors', [])
-        msg = f'Polled {threads} thread(s), found {n} new reply(s).'
+        msg = f"Polled {threads} {'thread' if threads == 1 else 'threads'}, found {n} new {'reply' if n == 1 else 'replies'}."
         flash(msg, 'success' if not errs else 'warning')
-        for e in errs[:3]:
-            flash('A provider operation failed. Check credentials and provider status.', 'error')
+        if errs:
+            flash(Markup('Gmail returned an error while polling. Check the ') + gmail_card + Markup('.'), 'error')
         return redirect(url_for('replies_list'))
 
     # ── Regenerate hook with LLM ──────────────────────────────────────────────
@@ -1801,12 +2015,17 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
             enrichment_facts = get_enrichment_facts(partner_id) or None
         except Exception:
             pass  # proceed without facts if enrichment not available
+        manual_facts = drafts_service.manual_fact_list(partner_dict.get('facts'))
+        if manual_facts:
+            enrichment_facts = manual_facts + list(enrichment_facts or [])
 
         try:
             result = generate_hook(partner_dict, enrichment_facts=enrichment_facts)
-        except HookGenerationError as exc:
-            message = f'Hook generation failed: {_hook_failure_reason(exc)}. Retry after addressing this reason.'
-            session['hook_errors'] = {**session.get('hook_errors', {}), str(partner_id): message}
+        except (HookGenerationError, RuntimeSecretError) as exc:
+            reason = _hook_failure_reason(exc).rstrip('. ')
+            message = f'Hook generation failed: {reason}. Retry after addressing this reason.'
+            # One place only: the flash. The banner on the page reads session['hook_errors'], so clear it.
+            session['hook_errors'] = {key: value for key, value in session.get('hook_errors', {}).items() if key != str(partner_id)}
             flash(message, 'error')
             return redirect(url_for('partner_detail', partner_id=partner_id))
 
@@ -1981,7 +2200,7 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
             # All active (non-dropped) partners
             partners = conn.execute(
                 """
-                SELECT p.id, p.partner_name, p.firm, p.tier, p.verification_status
+                SELECT p.id, p.partner_name, p.firm, p.tier, p.verification_status, p.facts
                 FROM partners p
                 WHERE p.dropped_reason IS NULL
                 ORDER BY p.id
@@ -2126,7 +2345,7 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
                 count = sd.get('count', 0)
                 source_data[src] = {'present': count > 0, 'count': count}
 
-            total_facts = sum(sd['count'] for sd in source_data.values())
+            total_facts = sum(sd['count'] for sd in source_data.values()) + len(drafts_service.manual_fact_list(p['facts']))
 
             # Last enriched timestamp
             fetched_times = [src_map[s]['fetched_at'] for s in src_map if src_map[s].get('fetched_at')]
@@ -2238,7 +2457,7 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
         try:
             from vcoutreach.contacts import _EMAIL_RE
             if mode == 'test' and not _EMAIL_RE.fullmatch(_env('TEST_RECIPIENT_EMAIL')):
-                raise SendRefused('TEST_RECIPIENT_EMAIL must be a single valid email address.')
+                raise SendRefused('Enter one valid email address.')
             require_gmail_connection()
         except SendRefused as exc:
             flash(str(exc), 'error')

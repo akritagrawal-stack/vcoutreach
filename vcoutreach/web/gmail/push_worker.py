@@ -114,7 +114,7 @@ def _send(draft_id, mode):
     if mode=='test' and not test_to:
         raise SendRefused('Set TEST_RECIPIENT_EMAIL before sending in TEST mode.')
     if mode=='test' and not _EMAIL_RE.fullmatch(test_to):
-        raise SendRefused('TEST_RECIPIENT_EMAIL must be a single valid email address.')
+        raise SendRefused('Enter one valid email address.')
     journal=Journal(workspace.path('.vcoutreach','journal.jsonl'))
     workspace.path('.vcoutreach','send.lock')
     workspace.path('.vcoutreach','journal.jsonl.lock')

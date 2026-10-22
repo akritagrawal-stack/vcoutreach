@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import logging
 import re
 import secrets
 import unicodedata
@@ -42,6 +43,8 @@ def friendly_message(value):
         return 'LinkedIn is not set up; skipped.'
     return text
 
+_NO_CONTACTS_MESSAGE = 'No contacts found. Paste or upload a CSV with a header row and the columns name and email (optional: org, role, facts).'
+
 def parse_csv(text, *, label='your CSV', report=None):
     if any(ord(c) < 32 and c not in '\r\n\t' for c in text):
         raise ContactsError('That file is not a UTF-8 CSV')
@@ -54,7 +57,7 @@ def parse_csv(text, *, label='your CSV', report=None):
         records = list(csv.reader(io.StringIO(text)))
         header_index = next((i for i, cells in enumerate(records) if any(c.strip() for c in cells)), None)
         if header_index is None:
-            raise ContactsError('no contacts found in ' + label)
+            raise ContactsError(_NO_CONTACTS_MESSAGE)
         # Validate each row through the shared loader so duplicate emails can be skipped later.
         # Keep original row numbers when reporting malformed input.
         output = io.StringIO()
@@ -82,7 +85,7 @@ def parse_csv(text, *, label='your CSV', report=None):
         if report is not None:
             report['skipped_blank_rows'] = blank_rows
         if not parsed:
-            raise ContactsError('no contacts found in ' + label)
+            raise ContactsError(_NO_CONTACTS_MESSAGE)
         return parsed
     except (ContactsError, csv.Error) as exc:
         message = str(exc).replace(path.name, label)
@@ -112,6 +115,14 @@ def contact_from_row(row):
         lane=Lane(row.get('lane') or 'first_touch'), thread_subject=row.get('thread_subject') or '',
         in_reply_to=row.get('in_reply_to') or '', references=row.get('refs') or '', preferred_name=row.get('first_name') or '')
 
+def manual_fact_list(raw):
+    """Facts the user typed or imported for a contact (partners.facts), as {source, text} dicts."""
+    try:
+        items = json.loads(raw) if isinstance(raw, (str, bytes)) else list(raw or [])
+    except (ValueError, TypeError):
+        return []
+    return [{'source': 'manual', 'text': str(item).strip()} for item in items if str(item).strip()]
+
 def contacts(db_path=None, include_enrichment=False):
     conn = get_conn(db_path)
     try:
@@ -120,8 +131,8 @@ def contacts(db_path=None, include_enrichment=False):
         conn.close()
     if include_enrichment:
         # Stored enrichment facts follow the CSV facts; export and import stay CSV-only.
-        from vcoutreach.web.enrichment_facts import with_enrichment
-        found = [with_enrichment(c, db_path=db_path) for c in found]
+        from vcoutreach.web.enrichment_facts import with_enrichment_many
+        found = with_enrichment_many(found, db_path=db_path)
     return found
 
 def import_contacts(items, db_path=None, batch_name='Import', *, report=None):
@@ -219,6 +230,26 @@ def save_sender(values):
         temporary.unlink(missing_ok=True)
     return output
 
+_NEEDS_FACTS_CODES = {'no_facts', 'insufficient_facts'}
+
+def _plural(count, one, many):
+    return one if count == 1 else many
+
+def _contact_names(slugs):
+    """(partner_id, display name) for each slug, in the given order."""
+    conn = get_conn()
+    try:
+        rows = {r['slug']: (r['id'], r['partner_name'] or r['slug']) for r in conn.execute('SELECT id, slug, partner_name FROM partners')}
+    finally:
+        conn.close()
+    return [rows[s] for s in slugs if s in rows]
+
+def _plain_error(message):
+    """Strip workspace and temp file paths from an engine error before showing it."""
+    text = re.sub(r'(?:[A-Za-z]:)?(?:/[^\s:\'"]+)+', 'the file', str(message))
+    return text.replace('sender file the file', 'the sender profile')
+
+
 def _sender():
     return load_sender(get_workspace().path('sender.json'))
 
@@ -257,7 +288,11 @@ def list_drafts():
         conn.close()
     result = []
     for path in _draft_paths():
-        draft = read_draft(path)
+        try:
+            draft = read_draft(path)
+        except OutreachError:
+            logging.getLogger(__name__).warning('Skipping unreadable draft file %s', path.name)
+            continue
         contact = all_contacts.get(draft.contact_id)
         try:
             draft = _lint(draft, contact)
@@ -558,21 +593,69 @@ def register_routes(app):
 
     @app.post('/crm/drafts/write')
     def crm_drafts_write():
+        from markupsafe import Markup, escape
         selected=request.form.getlist('slugs') or request.form.getlist('slug')
         selected=[slug.strip() for raw in selected for slug in raw.split(',') if slug.strip()]
         try:
+            try:
+                _sender()
+            except OutreachError:
+                flash(Markup('Add your sender profile first. <a href="'+url_for('workspace_settings')+'#sec-sender">Open the sender profile card in Settings</a>.'),'error')
+                return redirect(url_for('crm_drafts'))
             overwrite=request.form.get('overwrite')=='1'
             skipped=sum(1 for row in list_drafts() if not selected or row['slug'] in selected) if not overwrite else 0
-            result=write_drafts(selected,request.form.get('provider','auto'),overwrite)
-            message=f'Wrote {len(result)} drafts.'
+            from vcoutreach.web.setup_steps import stored_provider_preference
+            result=write_drafts(selected,request.form.get('provider') or stored_provider_preference(),overwrite)
+            needs=[d.contact_id for d in result if any(i.code in _NEEDS_FACTS_CODES for i in d.issues)]
+            message=Markup(escape(f'Wrote {len(result)} '+_plural(len(result),'draft','drafts')))
+            if needs:
+                names=_contact_names(needs)
+                links=Markup(', ').join(Markup('<a href="{}">{}</a>').format(url_for('crm_contact',partner_id=pid),name) for pid,name in names[:8])
+                more=len(names)-8
+                message+=Markup(escape(f', {len(needs)} '+('needs facts' if len(needs)==1 else 'need facts')+': '))+links
+                if more>0:
+                    message+=Markup(escape(f' and {more} more'))
+                message+=Markup('. Open each contact and use Add facts.')
+            else:
+                message+=Markup('.')
             if skipped:
-                message+=f" {skipped} partners already have a draft. Tick 'Replace existing drafts' to rewrite them with the model. Replacing discards the saved hook."
-            flash(message,'warning' if skipped else 'success')
+                message+=Markup(escape(f" {skipped} "+('contact already has a draft' if skipped==1 else 'contacts already have a draft')+". Tick 'Replace existing drafts' to rewrite them with the model. Replacing discards the saved hook."))
+            flash(message,'warning' if skipped or needs else 'success')
         except OutreachError as exc:
-            flash(str(exc).splitlines()[0], 'error')
+            flash(_plain_error(str(exc).splitlines()[0]), 'error')
         except ValueError:
             flash('Draft generation failed. Check sender, facts, provider keys and model settings.','error')
         return redirect(url_for('crm_drafts'))
+
+    @app.post('/crm/<int:partner_id>/facts')
+    def crm_contact_add_facts(partner_id):
+        conn=get_conn()
+        try:
+            row=conn.execute('SELECT id,facts FROM partners WHERE id=?',(partner_id,)).fetchone()
+        finally:
+            conn.close()
+        if row is None:
+            abort(404)
+        added=[]
+        try:
+            existing=json.loads(row['facts'] or '[]')
+            if not isinstance(existing,list):
+                existing=[]
+        except ValueError:
+            existing=[]
+        known={str(f).strip().lower() for f in existing}
+        merged=[str(f) for f in existing]
+        for raw in re.split(r'[\r\n]+|\s\|\s',request.form.get('facts','')):
+            fact=clean_contact_text(raw,500)
+            if fact and fact.lower() not in known:
+                known.add(fact.lower()); merged.append(fact); added.append(fact)
+        if not added:
+            flash('Enter at least one new fact, one per line.','error')
+            return redirect(url_for('crm_contact',partner_id=partner_id))
+        with cursor_ctx() as (_,cur):
+            cur.execute('UPDATE partners SET facts=? WHERE id=?',(json.dumps(merged),partner_id))
+        flash(f'Saved {len(added)} '+_plural(len(added),'fact','facts')+'. Write a draft again to use '+('it' if len(added)==1 else 'them')+'.','success')
+        return redirect(url_for('crm_contact',partner_id=partner_id))
 
     @app.route('/crm/drafts/<slug>',methods=['GET','POST'])
     def crm_draft_editor(slug):
@@ -593,8 +676,18 @@ def register_routes(app):
                         conn.close()
                     if row:
                         add_activity(row['id'],'note','Draft reviewed',draft.subject)
-                flash('Edit saved; draft returned to Pending and needs re-approval' if was_approved else 'Draft saved with issues. Review the checks below.' if draft.status=='blocked' else 'Draft saved and checked.',
-                      'warning' if draft.status=='blocked' else 'success')
+                from markupsafe import Markup
+                approve_link=Markup('<a href="{}#approve">approve it here</a>').format('/crm/drafts/'+slug)
+                reviewed=request.form.get('action')=='review' or request.form.get('reviewed')=='1'
+                saved_row=next((r for r in list_drafts() if r['slug']==slug),None)
+                if draft.status=='blocked' or (saved_row and saved_row.get('blocked_reason')):
+                    flash('Draft saved, but it is blocked. See the guidance below.','warning')
+                elif was_approved:
+                    flash(Markup('Edit saved. The draft went back to Pending and needs approval again: ')+approve_link+Markup('.'),'warning')
+                elif reviewed:
+                    flash(Markup('Draft saved and marked reviewed. Reviewing does not approve it, so ')+approve_link+Markup(' before sending.'),'success')
+                else:
+                    flash('Draft saved and checked.','success')
             except (ValueError,OutreachError):
                 flash('Could not save draft. Check sender profile, lane and message fields.','error')
             return redirect(url_for('crm_draft_editor',slug=slug))

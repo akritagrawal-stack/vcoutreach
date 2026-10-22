@@ -116,7 +116,8 @@
     {% elif g_send_mode == 'test' %}
       <form method="POST" action="/partners/{{ partner['id'] }}/send" data-busy="Sending test...">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <button type="submit" class="btn {{ 'crm-button-primary' if primary == 'send' else 'btn-secondary' }} btn-sm" title="Sends to {{ g_test_recipient }} (test mode)">Send test email</button>
+        <button type="submit" class="btn {{ 'crm-button-primary' if primary == 'send' else 'btn-secondary' }} btn-sm" title="Sends to {{ g_test_recipient }} (test mode)"{% if not draft %} disabled{% endif %}>Send test email</button>
+        {% if not draft %}<span class="crm-source-note">Write a draft first.</span>{% endif %}
       </form>
     {% else %}
       <button type="button" class="btn btn-danger btn-sm" data-action="partner_detail-1">Send to {{ partner['email'] }}</button>
@@ -129,9 +130,10 @@
     {% if g_send_mode != 'test' %}
     <form method="POST" action="/partners/{{ partner['id'] }}/send-test" data-busy="Sending test...">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <button type="submit" class="btn btn-ghost btn-sm" title="Sends to {{ g_test_recipient }} regardless of approval">Send test to {{ g_test_recipient }}</button>
+      <button type="submit" class="btn btn-ghost btn-sm" title="Sends to {{ g_test_recipient }} regardless of approval"{% if not draft %} disabled{% endif %}>Send test to {{ g_test_recipient }}</button>
     </form>
     {% endif %}
+
   </div>
 
   {% if draft and not locked %}

@@ -1,5 +1,6 @@
 """Loopback authentication, constant-time CSRF and confined request handling."""
 from __future__ import annotations
+import hashlib
 import secrets
 import threading
 from urllib.parse import urlsplit
@@ -9,13 +10,21 @@ from werkzeug.exceptions import HTTPException
 CSP = "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'self'"
 AUTH_MESSAGE = 'Open the newest link printed in the Terminal window.'
 
+def _cookie_name(workspace) -> str:
+    """One stable session cookie name per workspace, so two local instances on 127.0.0.1 do not overwrite each other."""
+    if not workspace:
+        return 'outreach_session'
+    digest = hashlib.sha256(str(workspace).encode('utf-8')).hexdigest()[:10]
+    return 'outreach_session_' + digest
+
+
 def install_security(app):
     token = secrets.token_urlsafe(32)
     app.config['ACCESS_TOKEN'] = token
     app.config['BOOTSTRAP_TOKEN'] = token
     app.config.update(MAX_CONTENT_LENGTH=2 * 1024 * 1024,
                       SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE='Strict',
-                      SESSION_COOKIE_PATH='/', SESSION_COOKIE_NAME='outreach_session')
+                      SESSION_COOKIE_PATH='/', SESSION_COOKIE_NAME=_cookie_name(app.config.get('WORKSPACE')))
     lock = threading.Lock()
     app.extensions['access_token_used'] = False
 
@@ -23,6 +32,21 @@ def install_security(app):
         if request.path.startswith('/api/') or request.is_json:
             return jsonify(error=message), status
         return app.response_class(message, status=status, mimetype='text/plain')
+
+    def csrf_expired():
+        message = 'Your session expired or this page is out of date. Reload the page and try again.'
+        if request.path.startswith('/api/') or request.is_json:
+            return jsonify(error=message), 400
+        back = '/crm'
+        try:
+            path = urlsplit(request.referrer or '').path
+        except ValueError:
+            path = ''
+        if path.startswith('/') and not path.startswith('//') and '\\' not in path:
+            back = path
+        html = render_template('error.html', heading='Session expired', message=message,
+                               back_href=back, back_label='Go back and reload', active_page='')
+        return app.response_class(html, status=400, mimetype='text/html')
 
     @app.before_request
     def guard():
@@ -59,7 +83,7 @@ def install_security(app):
             expected_token = session.get('csrf', '')
             given = request.form.get('csrf_token') or request.headers.get('X-CSRF-Token', '')
             if not expected_token or not secrets.compare_digest(str(given).encode('utf-8'), expected_token.encode('utf-8')):
-                return error('Invalid CSRF token.', 400)
+                return csrf_expired()
             for source in ('Origin', 'Referer'):
                 value = request.headers.get(source)
                 if value:

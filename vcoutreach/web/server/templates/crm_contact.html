@@ -81,11 +81,18 @@
       <button type="submit" class="crm-button crm-button-small crm-button-secondary">Mark email verified (I checked it myself)</button>
     </form>
     <div class="form-actions">
-      <form method="post" action="/partners/{{ partner.id }}/send-test"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit" class="crm-button crm-button-secondary">Send test</button></form>
+      {% if not has_draft %}
+      <form method="post" action="/partners/{{ partner.id }}/send-test"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit" class="crm-button crm-button-secondary" disabled aria-describedby="contactSendHint">Send test email</button></form>
+      <p class="crm-source-note" id="contactSendHint">Write a draft first. <a href="/crm/drafts">Open drafts</a></p>
+      {% elif g_send_mode == 'live' %}
+      <form method="post" action="/partners/{{ partner.id }}/send-test"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit" class="crm-button crm-button-secondary">Send test to {{ g_test_recipient }}</button></form>
       <form method="post" action="/partners/{{ partner.id }}/send" class="settings-fields"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        {% if g_send_mode == 'live' %}<label for="contactSendConfirm">Type SEND TO {{ partner.email }}<input id="contactSendConfirm" name="confirm_text" autocomplete="off" required></label>{% endif %}
-        <button type="submit" class="crm-button crm-button-primary">{{ 'Send to contact' if g_send_mode == 'live' else 'Send in test mode' }}</button>
+        <label for="contactSendConfirm">Type SEND TO {{ partner.email }}<input id="contactSendConfirm" name="confirm_text" autocomplete="off" required></label>
+        <button type="submit" class="crm-button crm-button-primary">Send to contact</button>
       </form>
+      {% else %}
+      <form method="post" action="/partners/{{ partner.id }}/send-test"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit" class="crm-button crm-button-primary" title="Sends to {{ g_test_recipient }} (test mode)">Send test email</button></form>
+      {% endif %}
     </div>
   </section>
 
@@ -242,7 +249,13 @@
         </div>
       </details>
 
-      <details class="crm-panel crm-collapse"><summary>Available context ({{ engine_contact.facts|length + enrichment_facts|length }} facts)</summary>
+      <details class="crm-panel crm-collapse" id="contact-facts"{% if not engine_contact.facts and not enrichment_facts %} open{% endif %}><summary>Available context ({{ engine_contact.facts|length + enrichment_facts|length }} {{ 'fact' if engine_contact.facts|length + enrichment_facts|length == 1 else 'facts' }})</summary>
+        <form class="crm-form" method="post" action="{{ url_for('crm_contact_add_facts', partner_id=partner.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <label for="contactAddFacts"><span>Add facts</span><textarea id="contactAddFacts" name="facts" rows="3" maxlength="2000" placeholder="your talk on shipping weekly&#10;your essay on small teams"></textarea></label>
+          <p class="crm-source-note">One fact per line (a " | " between facts also works). Drafts only use facts you add here or that were found by research.</p>
+          <button type="submit" class="crm-button crm-button-small crm-button-secondary">Add facts</button>
+        </form>
         <div class="crm-fact-list">
           {% for fact in engine_contact.facts %}<article class="crm-fact-card"><p>{{ fact }}</p></article>{% endfor %}
           {% for fact in enrichment_facts %}

@@ -16,6 +16,19 @@ _SENTENCE_START = re.compile(
     r"|(?:he|she|it)['’]s)(?!\w))",
     re.IGNORECASE,
 )
+# Facts written as a verb phrase about the contact ("Wrote an essay on X", "Hosts a weekly podcast"). Pasting
+# these after "I came across" is ungrammatical, so they are quoted instead. Noun phrases keep the original stem.
+_VERB_LEAD = re.compile(
+    r"(?:wrote|writes|hosts?|hosted|leads?|led|runs?|ran|founded|founds?|co-?founded|built|builds?|launch(?:ed|es)|"
+    r"joined|joins|raised|raises|published|publishes|spoke|speaks|manages?|managed|invested|invests|authored|authors|"
+    r"created|creates|started|starts|sold|acquired|mentors?|mentored|teach(?:es)?|taught|maintains?|maintained|"
+    r"posted|posts|shared|shares|announced|announces|serves?|served|works?|worked|previously|currently|recently)\b",
+    re.IGNORECASE,
+)
+_VERB_THEN_ARTICLE = re.compile(
+    r"(?!its\b|this\b|his\b|was\b|has\b|is\b)\w+(?:ed|s)\s+(?:a|an|the|their|his|her|our|over|with|at|in|on|to|for|from)\b",
+    re.IGNORECASE,
+)
 SENTENCE_FACT_MESSAGE = (
     "the offline template needs facts written as noun phrases "
     '(for example "your 2024 essay on X"), not sentences'
@@ -41,6 +54,17 @@ class TemplateProvider:
             stem = cleaned.rstrip(".").rstrip()
             if stem.startswith("Your "):
                 stem = "your " + stem[len("Your "):]
+            if stem and (_VERB_LEAD.match(stem) or _VERB_THEN_ARTICLE.match(stem)):
+                shown = stem if '"' in stem else '"%s"' % stem
+                return Hook(
+                    text=(
+                        "I was reading about you and came across this line, which stayed with me: %s. "
+                        "I wanted to reach out directly rather than send a generic note, "
+                        "and I would value your thoughts on what we are building." % shown
+                    ),
+                    provider=self.name,
+                    model="none",
+                )
             if stem:
                 return Hook(
                     text=f"I came across {stem}, and I found it interesting.",
