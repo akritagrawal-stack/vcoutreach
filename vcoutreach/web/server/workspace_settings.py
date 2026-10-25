@@ -288,9 +288,13 @@ def bundled_example_deck() -> Path:
     return Path(str(files('vcoutreach').joinpath('data', 'examples', 'Publik_Pitch_Deck_Example.pdf')))
 
 
-#: md5 of every previously bundled example deck. A workspace copy that still matches one of these is an
-#: untouched seed from an older release, so it is refreshed in place. Any other file is the user's own.
-KNOWN_OLD_EXAMPLE_DECK_MD5 = ('558bb3abc414862536936ef6329d1aad',)
+#: md5 of every previously bundled example deck (kept for tests and audits). The file name
+#: Example_Pitch_Deck.pdf is owned by the app: uploads that collide with it get a suffixed name, so any
+#: copy under that exact name whose bytes differ from the bundled deck is a stale seed and is refreshed.
+KNOWN_OLD_EXAMPLE_DECK_MD5 = (
+    '558bb3abc414862536936ef6329d1aad',
+    '33fabacc25dff7baa41fc967f27cc53a',  # pre-release 8 page build that still showed real TAM and SAM
+)
 
 
 def _file_md5(path) -> str:
@@ -303,14 +307,14 @@ def _file_md5(path) -> str:
 
 
 def _refresh_old_example_deck(workspace, source: Path) -> bool:
-    """Replace the workspace example deck with the bundled one when it is a known old bundled version."""
+    """Replace the workspace Example_Pitch_Deck.pdf with the bundled one whenever the bytes differ."""
     target = workspace.path('attachments', EXAMPLE_DECK_NAME)
     try:
         if not target.is_file() or not source.is_file():
             return False
-        if _file_md5(target) not in KNOWN_OLD_EXAMPLE_DECK_MD5:
-            return False
         if _file_md5(source) in KNOWN_OLD_EXAMPLE_DECK_MD5:
+            return False
+        if _file_md5(target) == _file_md5(source):
             return False
         temporary = target.with_name(target.name + '.refresh.tmp')
         try:
@@ -328,8 +332,8 @@ def ensure_example_deck() -> bool:
 
     Returns True only when the deck was copied and saved as pitch_deck_path.
     A marker file stops re-seeding after the user clears or replaces the path.
-    A seeded copy that still matches a known older bundled deck (KNOWN_OLD_EXAMPLE_DECK_MD5) is
-    refreshed to the current bundled deck; a file with any other content is never touched.
+    A stale Example_Pitch_Deck.pdf (any bytes other than the bundled deck) is refreshed on every call, so an
+    older, less redacted seed can never linger; the user's own decks keep their own names and are never touched.
     """
     workspace = get_workspace()
     marker = workspace.path(*_EXAMPLE_DECK_MARKER)
