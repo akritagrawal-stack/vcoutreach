@@ -20,6 +20,7 @@ import dataclasses
 import hashlib
 import json
 import os
+import re
 import secrets as _secrets
 import sys
 import threading
@@ -155,8 +156,9 @@ def publik_card() -> dict:
     state = publik_state()
     return {
         'state': state,
+        'has_key': state == 'connected',
         'chip_state': 'ok' if state == 'connected' else 'unset',
-        'chip_word': {'connected': 'Connected', 'pending': 'Recommended', 'skipped': 'Skipped'}[state],
+        'chip_word': {'connected': 'Connected', 'pending': 'Not connected', 'skipped': 'Skipped'}[state],
         'key_url': PUBLIK_KEY_URL,
     }
 
@@ -260,10 +262,44 @@ def build_snippets() -> dict:
 # GET /setup/ai
 # ---------------------------------------------------------------------------
 
+_HOME_SHAPED = re.compile(r'(?:[A-Za-z]:)?[\\/]+(?:Users|home)[\\/]+[^\\/"\'\s,\]]+', re.IGNORECASE)
+SNIPPET_KEYS = ('claude_desktop', 'claude_code', 'codex')
+HOME_PLACEHOLDER = '~'
+
+
+def _home_variants() -> list:
+    """Spellings of the user's home folder, longest first, so the redaction cannot leave a tail behind."""
+    found = set()
+    for getter in (lambda: Path.home(), lambda: Path(os.path.expanduser('~'))):
+        try:
+            home = getter()
+        except Exception:
+            continue
+        for candidate in (str(home), str(home.resolve())):
+            if len(candidate) > 1 and candidate not in ('/', '\\'):
+                found.add(candidate)
+                found.add(candidate.replace('\\', '\\\\'))
+                found.add(candidate.replace('\\', '/'))
+    return sorted(found, key=len, reverse=True)
+
+
+def display_text(text: str) -> str:
+    """The snippet as shown on the page: the home folder becomes ``~`` so the page never prints it.
+
+    The real text is served only by ``POST /api/mcp/snippet`` for the Copy buttons.
+    """
+    text = str(text)
+    for variant in _home_variants():
+        text = text.replace(variant, HOME_PLACEHOLDER)
+    return _HOME_SHAPED.sub(HOME_PLACEHOLDER, text)
+
+
 @bp.get('/setup/ai')
 def setup_ai():
-    snippets = build_snippets()
-    spec = snippets['spec']
+    real = build_snippets()
+    spec = real['spec']
+    snippets = {key: display_text(real[key]) for key in SNIPPET_KEYS}
+    snippets['spec'] = {'hint': spec.get('hint')}
     last_ok = _read_setting('mcp_last_self_test_ok', '')
     return render_template(
         'setup_ai.html',
@@ -272,6 +308,18 @@ def setup_ai():
         last_self_test=last_ok,
         active_page='settings',
     )
+
+
+@bp.post('/api/mcp/snippet')
+def mcp_snippet():
+    """The real (unredacted) text of one snippet, for the Copy button. POST only, so a plain GET never prints paths."""
+    key = (request.form.get('key') or '').strip()
+    if key not in SNIPPET_KEYS:
+        return jsonify({'ok': False, 'error': 'Unknown snippet.'}), 400
+    try:
+        return jsonify({'ok': True, 'text': build_snippets()[key]})
+    except Exception:
+        return jsonify({'ok': False, 'error': 'Could not build the snippet.'}), 500
 
 
 # ---------------------------------------------------------------------------
@@ -433,3 +481,138 @@ def publik_recommendation():
     flash('Publik API skipped. You can undo this from Settings.' if state == 'skipped'
           else 'Publik API recommendation restored.', 'success')
     return redirect(_safe_back('/settings'))
+
+
+# ---------------------------------------------------------------------------
+# POST /crm/setup/publik  ("Let Publik do it for you")
+# ---------------------------------------------------------------------------
+
+SETUP_NO_KEY = 'Add your Publik API key to let Publik set this up.'
+SETUP_OK = 'Publik drafted your email template and saved it. Read it below and edit anything you like.'
+SETUP_AUTH = 'Publik rejected the key. Check it on the Set up with AI page.'
+SETUP_CREDIT = 'Publik reports no remaining credit on this account. Add credit, then try again.'
+SETUP_RATE = 'Publik is busy right now. Wait a minute, then try again.'
+SETUP_TRANSPORT = "We couldn't reach Publik. Check your connection and try again."
+SETUP_RESPONSE = 'Publik answered, but the reply was not usable. Try again.'
+SETUP_CONFIG = 'The Publik settings are not valid. Check the model and base URL in your .env file.'
+SETUP_OTHER = "Publik couldn't set this up. Try again in a moment."
+SETUP_MAX_BLURB = 3000
+SETUP_NO_KEY_PATH = '/setup/ai'
+
+_SETUP_FACT_KEYS = (
+    ('company_name', 'Company'), ('product_name', 'Product'), ('one_liner', 'One line'),
+    ('problem_statement', 'Problem'), ('solution_statement', 'Solution'),
+    ('traction_line', 'Traction'), ('founder_line', 'Founder'), ('ask_line', 'Ask'),
+    ('call_to_action', 'Call to action'),
+)
+
+
+def _setup_facts(settings: dict) -> str:
+    lines = []
+    for key, label in _SETUP_FACT_KEYS:
+        value = str(settings.get(key) or '').strip()
+        if value:
+            lines.append(f'{label}: {value[:400]}')
+    return '\n'.join(lines)
+
+
+def _setup_messages(settings: dict) -> list:
+    job = str(settings.get('campaign_kind') or '').strip() == 'job_search'
+    audience = 'a hiring manager' if job else 'an investor'
+    attachment = 'resume' if job else 'pitch deck'
+    system = (
+        f'You write the short email template for a cold outreach campaign sent to {audience}. '
+        f'Write 3 to 5 plain sentences the sender can reuse, in the first person, mentioning that the {attachment} is attached. '
+        'Use only the facts you are given. Invent nothing: no numbers, names, customers or claims. '
+        'Never use an em dash. No greeting, no sign-off, no subject line, no markdown. Reply with the template text only.')
+    facts = _setup_facts(settings) or 'No details have been added yet. Write a short neutral template with no specific claims.'
+    return [{'role': 'system', 'content': system}, {'role': 'user', 'content': 'Facts:\n' + facts}]
+
+
+def _clean_blurb(text: str) -> str:
+    text = re.sub(r'\s*[\u2014\u2013]\s*', ', ', str(text or ''))
+    text = re.sub(r'[ \t]+', ' ', text).strip()
+    return text[:SETUP_MAX_BLURB].rstrip()
+
+
+def _run_setup(settings_dict: dict, transport=None) -> dict:
+    """Draft the blurb with one Publik call. Returns {'ok', 'message', 'blurb'}; no provider text is echoed."""
+    try:
+        from vcoutreach.config import load_settings
+        from vcoutreach.providers.http import USER_AGENT
+        from vcoutreach.providers.openai_compat import extract_chat_completion_text
+        from vcoutreach.providers.publik import PublikProvider
+        from vcoutreach.types import (
+            ProviderAuthError, ProviderConfigError, ProviderCreditError, ProviderRateLimitError,
+            ProviderResponseError, ProviderTransportError,
+        )
+    except Exception:
+        return {'ok': False, 'message': SETUP_OTHER, 'blurb': ''}
+    try:
+        ws = _workspace()
+        settings = load_settings(env=ws.env(), dotenv_path=ws.env_path)
+        settings = dataclasses.replace(
+            settings, publik_max_retries=0,
+            publik_timeout_seconds=min(float(settings.publik_timeout_seconds or PROBE_TIMEOUT_SECONDS) * 3,
+                                       PROBE_TIMEOUT_SECONDS * 3))
+        provider = PublikProvider(settings, transport=transport)
+        headers = {
+            'Authorization': 'Bearer ' + provider._api_key, 'Content-Type': 'application/json',
+            'Accept': 'application/json', 'User-Agent': USER_AGENT,
+        }
+        payload = {'model': provider._model, 'messages': _setup_messages(settings_dict),
+                   'temperature': 0.4, 'max_tokens': 500}
+        response = provider._post(provider._url, headers, payload)
+        provider._raise_for_status(response)
+        blurb = _clean_blurb(extract_chat_completion_text(response.body, provider.label))
+        if not blurb:
+            return {'ok': False, 'message': SETUP_RESPONSE, 'blurb': ''}
+        return {'ok': True, 'message': SETUP_OK, 'blurb': blurb}
+    except ProviderAuthError:
+        return {'ok': False, 'message': SETUP_AUTH, 'blurb': ''}
+    except ProviderCreditError:
+        return {'ok': False, 'message': SETUP_CREDIT, 'blurb': ''}
+    except ProviderRateLimitError:
+        return {'ok': False, 'message': SETUP_RATE, 'blurb': ''}
+    except ProviderTransportError:
+        return {'ok': False, 'message': SETUP_TRANSPORT, 'blurb': ''}
+    except ProviderResponseError:
+        return {'ok': False, 'message': SETUP_RESPONSE, 'blurb': ''}
+    except ProviderConfigError:
+        return {'ok': False, 'message': SETUP_CONFIG, 'blurb': ''}
+    except Exception:
+        return {'ok': False, 'message': SETUP_OTHER, 'blurb': ''}
+
+
+def _save_blurb(blurb: str) -> None:
+    from vcoutreach.web.server.workspace_settings import _persist_settings, load_settings, normalize_settings
+    current = load_settings()
+    current['outreach_blurb_template'] = blurb
+    _persist_settings(normalize_settings(current))
+
+
+@bp.post('/crm/setup/publik')
+def publik_setup():
+    """Let Publik draft the email template. The transport can be injected via app.extensions['publik_transport']."""
+    from flask import current_app
+    if not _publik_key():
+        if _wants_json():
+            return jsonify({'ok': False, 'message': SETUP_NO_KEY, 'redirect': SETUP_NO_KEY_PATH}), 200
+        flash(SETUP_NO_KEY, 'error')
+        return redirect(SETUP_NO_KEY_PATH)
+    back = _safe_back('/crm/drafts')
+    try:
+        from vcoutreach.web.server.workspace_settings import load_settings as load_workspace_settings
+        facts = load_workspace_settings()
+    except Exception:
+        facts = {}
+    result = _run_setup(facts, transport=current_app.extensions.get('publik_transport'))
+    if result['ok']:
+        try:
+            _save_blurb(result['blurb'])
+        except Exception:
+            result = {'ok': False, 'message': 'Publik drafted it, but we could not save it. Try again.', 'blurb': ''}
+    if _wants_json():
+        return jsonify({'ok': result['ok'], 'message': result['message']})
+    flash(result['message'], 'success' if result['ok'] else 'error')
+    return redirect(back)

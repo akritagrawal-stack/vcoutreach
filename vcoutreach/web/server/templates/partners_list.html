@@ -1,158 +1,249 @@
 {% extends 'base.html' %}
-{% from '_partner_macros.html' import verification_badge, status_badge, tier_badge, responsive_badge, empty_value %}
+{% from "_icons.html" import icon %}
+{% from '_partner_macros.html' import empty_value %}
 {% block page_id %}partners_list{% endblock %}
-{% block title %}Partners{% endblock %}
+{% block title %}Send{% endblock %}
+
+{# One status pill per row. Approved keeps the badge-approved class that the batch helpers look for. #}
+{% macro status_pill(item, sent_to, test_recipient) -%}
+  {%- set st = item.get('status') -%}
+  {%- set tests = item.get('test_sent_count') or 0 -%}
+  {%- if item.get('live_sent_at') or st == 'live_sent' -%}
+    <span class="pk-pill pk-pill--sent badge-sent pl-badge-live" title="Live sent to {{ item.get('live_sent_to') or 'unknown' }} on {{ (item.get('live_sent_at') or '')[:10] }}">Sent</span>
+    {%- if tests > 0 %} <span class="pk-pill pk-pill--test-sent badge-test-sent" title="Also test-sent {{ tests }} time(s). Last: {{ (item.get('last_test_sent_at') or '')[:10] }}">+{{ tests }} test</span>{% endif -%}
+  {%- elif st == 'pending' -%}<span class="pk-pill pk-pill--needs-review badge-pending">Needs review</span>
+  {%- elif st == 'approved' -%}<span class="pk-pill pk-pill--approved badge-approved">Approved</span>
+  {%- elif st == 'rejected' -%}<span class="pk-pill pk-pill--rejected badge-rejected">Rejected</span>
+  {%- elif st == 'drafted' -%}<span class="pk-pill pk-pill--info badge-drafted">Drafted</span>
+  {%- elif st == 'test_sent' or (st == 'sent' and (tests > 0 or (sent_to and sent_to == test_recipient))) -%}
+    <span class="pk-pill pk-pill--test-sent badge-test-sent" title="Test-sent {{ tests or 1 }} time(s). Last: {{ (item.get('last_test_sent_at') or item.get('sent_at') or '')[:10] }}">Test sent{% if tests > 1 %} x{{ tests }}{% endif %}</span>
+  {%- elif st == 'sent' -%}<span class="pk-pill pk-pill--sent badge-sent">Sent</span>
+  {%- else -%}<span class="pk-pill pk-pill--neutral">{{ (st or 'none')|replace('_',' ')|capitalize }}</span>
+  {%- endif -%}
+{%- endmacro %}
 
 {% block content %}
 {% set rows = partners|default(rows|default([])) %}
 {% set tier_filters = [tier_filter] if tier_filter|default('') else [] %}
 {% set status_filters = [status_filter] if status_filter|default('') else [] %}
 {% set verif_filters = request.args.getlist('verif') %}
-{% set channel_filter = request.args.get('channel', '') %}
 {% set partner_counts = partner_counts|default({}) %}
-{% set any_filter = tier_filters or status_filters or verif_filters or channel_filter or search|default('') %}
+{% set counts = counts|default({}) %}
+{% set any_filter = tier_filters or status_filters or verif_filters or search|default('') %}
+{% set quality_now = 'verified' if ('verified' in verif_filters or 'verified_strong' in verif_filters) else ('risky' if 'weak' in verif_filters else ('unknown' if 'unverified' in verif_filters else '')) %}
+{% set kpi = namespace(ready=0, bounced=0) %}
+{% for r in rows %}
+  {% if r.get('status') == 'approved' and not r.get('blocked_reason') and not r.get('dropped_reason') %}{% set kpi.ready = kpi.ready + 1 %}{% endif %}
+  {% if r.get('email_verification_status') == 'invalid' or r.get('status') == 'bounced' %}{% set kpi.bounced = kpi.bounced + 1 %}{% endif %}
+{% endfor %}
+{% set sent_total = (counts.get('live_sent', 0) or 0) + (counts.get('sent', 0) or 0) %}
 
-<div class="section-header page-title">
-  <h1>Partners <span class="page-count">{{ rows|length }}</span></h1>
-  {% if partner_counts %}
-  <p class="pl-counters text-muted">
-    <strong class="text-ok">{{ partner_counts.get('partners_verified', 0) }}</strong> verified
-    <span class="chip-sep">&middot;</span>
-    <strong>{{ partner_counts.get('partners_dropped', 0) }}</strong> dropped during cleanup
-  </p>
-  {% endif %}
-  <p class="pl-more-links">
-    <a class="crm-button crm-button-small crm-button-secondary" href="/candidates">Candidates</a>
-    <a class="crm-button crm-button-small crm-button-secondary" href="/email-verification">Email verification</a>
-  </p>
-</div>
-
-<div class="filter-bar mb-6">
-  <span class="filter-label">Tier</span>
-  <button type="button" class="chip {% if not tier_filters %}active{% endif %}" data-action="partners_list-0">All</button>
-  {% for tv, tl in [('1','Tier 1'),('2','Tier 2')] %}
-  <button type="button" class="chip {% if tv in tier_filters %}active{% endif %}" data-action="partners_list-1" data-arg0="{{ tv }}">{{ tl }}</button>
-  {% endfor %}
-
-  <span class="chip-sep">&middot;</span>
-  <span class="filter-label">Status</span>
-  {% for sv, sl in [('pending','Pending'),('approved','Approved'),('rejected','Rejected'),('drafted','Drafted'),('sent','Sent')] %}
-  <button type="button" class="chip {% if sv in status_filters %}active{% endif %}" data-action="partners_list-2" data-arg0="{{ sv }}">{{ sl }}</button>
-  {% endfor %}
-
-  <span class="chip-sep">&middot;</span>
-  <span class="filter-label">Verified</span>
-  {% for vv, vl in [('verified_strong','Strong'),('verified','Verified'),('weak','Weak'),('unverified','Unverified')] %}
-  <button type="button" class="chip {% if vv in verif_filters %}active{% endif %}" data-action="partners_list-3" data-arg0="{{ vv }}">{{ vl }}</button>
-  {% endfor %}
-
-  <span class="chip-sep">&middot;</span>
-  <span class="filter-label">Channel</span>
-  <button type="button" class="chip {% if channel_filter == 'twitter' %}active{% endif %}" data-action="partners_list-4">Twitter</button>
-
-  {% if tier_filters or status_filters or channel_filter or verif_filters %}
-  <button type="button" class="chip chip-clear" data-action="partners_list-5">&#x2715; Clear</button>
-  {% endif %}
-
-  <div class="search-wrap pl-search">
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-    <input aria-label="Search contacts" class="search-input" id="partnerSearch" type="search" value="{{ search|default('') }}" placeholder="Search name, firm, or notes" autocomplete="off">
+<header class="pk-page-head">
+  <div class="pk-page-head__text">
+    <h1>Send</h1>
+    <p class="pk-page-sub">Pick approved emails, check the address quality, then send them now or schedule them for later.</p>
   </div>
+</header>
+
+<ul class="pk-kpis" aria-label="Send queue numbers">
+  <li class="pk-kpi" data-kpi="ready">
+    <span class="pk-kpi__label">Ready to send
+      <span class="pk-info pk-info--start">
+        <button type="button" class="pk-info__btn" aria-label="About Ready to send">i</button>
+        <span class="pk-popover" role="tooltip">Approved emails with nothing blocking them, counted in the list below.</span>
+      </span>
+    </span>
+    <span class="pk-kpi__value">{{ kpi.ready }}</span>
+  </li>
+  <li class="pk-kpi" data-kpi="approved">
+    <span class="pk-kpi__label">Approved</span>
+    <span class="pk-kpi__value">{{ counts.get('approved', 0) or 0 }}</span>
+  </li>
+  <li class="pk-kpi" data-kpi="sent">
+    <span class="pk-kpi__label">Sent</span>
+    <span class="pk-kpi__value">{{ sent_total }}</span>
+  </li>
+  <li class="pk-kpi" data-kpi="bounced">
+    <span class="pk-kpi__label">Bounced
+      <span class="pk-info">
+        <button type="button" class="pk-info__btn" aria-label="About Bounced">i</button>
+        <span class="pk-popover" role="tooltip">Addresses a check marked as invalid, counted in the list below.</span>
+      </span>
+    </span>
+    <span class="pk-kpi__value">{{ kpi.bounced }}</span>
+  </li>
+</ul>
+
+<div class="pk-filterbar pl-filters">
+  <label class="pk-search pl-search" for="partnerSearch">
+    <span class="sr-only">Search contacts</span>
+    {{ icon("search", 16) }}
+    <input id="partnerSearch" type="search" value="{{ search|default('') }}" placeholder="Search name, firm or notes" autocomplete="off">
+  </label>
+  <label class="pl-filter">
+    <span class="sr-only">Status</span>
+    <select class="pk-select" data-pl-filter="status" aria-label="Status">
+      <option value="">All statuses</option>
+      {% for sv, sl in [('pending','Needs review'),('approved','Approved'),('drafted','Drafted'),('rejected','Rejected'),('sent','Sent')] %}
+      <option value="{{ sv }}" {% if sv in status_filters %}selected{% endif %}>{{ sl }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label class="pl-filter">
+    <span class="sr-only">Email quality</span>
+    <select class="pk-select" data-pl-filter="verif" aria-label="Email quality">
+      <option value="">Any email quality</option>
+      {% for qv, ql in [('verified','Verified'),('risky','Risky'),('unknown','Unknown')] %}
+      <option value="{{ qv }}" {% if qv == quality_now %}selected{% endif %}>{{ ql }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label class="pl-filter">
+    <span class="sr-only">Priority</span>
+    <select class="pk-select" data-pl-filter="tier" aria-label="Priority">
+      <option value="">Any priority</option>
+      {% for tv, tl in [('1','High priority'),('2','Normal priority')] %}
+      <option value="{{ tv }}" {% if tv in tier_filters %}selected{% endif %}>{{ tl }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  {% if tier_filters or status_filters or verif_filters %}
+  <a id="chip-clear" class="pk-btn pk-btn--ghost pk-btn--sm" href="/partners">{{ icon("x", 14) }}Clear filters</a>
+  {% endif %}
 </div>
 
 <form id="bulkForm" method="POST" action="/send-batch">
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 
-  {# One bulk control: send (test submit, or typed live confirm) and schedule drawer share this bar. #}
-  <div id="bulkBar" class="bulk-bar" role="region" aria-label="Bulk actions">
-    <span id="bulkCount" class="bulk-count"></span>
-    {% if g_send_mode == 'test' %}
-      <button type="submit" class="btn btn-primary btn-sm">Send selected (test mode)</button>
-    {% else %}
-      <button type="button" id="bulkLiveBtn" class="btn btn-danger btn-sm" data-action="partners_list-6">Send selected [LIVE]</button>
-      <div id="bulkLiveConfirm" class="bulk-live-confirm">
-        <input aria-label="Confirm Text" type="text" name="confirm_text" id="bulkConfirmInput" class="form-control mono-input" placeholder="SEND BATCH OF N" autocomplete="off">
-        <button type="button" class="btn btn-danger btn-sm" data-action="partners_list-7">Confirm</button>
-      </div>
-    {% endif %}
-    <button type="button" class="btn btn-secondary btn-sm" data-action="partners_list-8">Schedule for later</button>
-    <button type="button" class="btn btn-ghost btn-sm" data-action="partners_list-9">Cancel</button>
-  </div>
+  <section class="pk-card pk-card--flush pl-card">
+    <div class="pk-table-wrap pl-wrap">
+      <table class="pk-table pl-table" id="partnersTable"><caption class="sr-only">Emails ready to review and send</caption>
+        <thead>
+          <tr>
+            <th class="pk-col-check"><input aria-label="Select all visible contacts" type="checkbox" id="selectAll" title="Select all visible" data-action="partners_list-10"></th>
+            <th>Contact</th>
+            <th>Email quality
+              <span class="pk-info pk-info--start">
+                <button type="button" class="pk-info__btn" aria-label="About email quality">i</button>
+                <span class="pk-popover" role="tooltip">Verified means the address was checked. Risky means the domain accepts any address or the check was weak. Unknown means it was not checked yet. Invalid addresses should not be sent to.</span>
+              </span>
+            </th>
+            <th>Status
+              <span class="pk-info pk-info--end">
+                <button type="button" class="pk-info__btn" aria-label="About status">i</button>
+                <span class="pk-popover" role="tooltip">Needs review: the email still needs your OK. Approved: ready to send. Sent: it went out. Test sent: it went only to your test address.</span>
+              </span>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+          {% set email_status = row.get('email_verification_status') %}
+          {% set email_verified = email_status in ['valid','deliverable','pb_verified'] %}
+          {% set verification = 'verified' if email_verified else (row.get('verification_status') or 'unverified') %}
+          {% if email_status == 'invalid' %}{% set q_cls, q_txt, q_tip = 'danger', 'Invalid', 'The address check rejected this email. Do not send.' %}
+          {% elif email_status == 'catch_all' %}{% set q_cls, q_txt, q_tip = 'warning', 'Risky', 'The domain accepts every address, so delivery is not certain.' %}
+          {% elif email_verified or verification in ['verified','verified_strong'] %}{% set q_cls, q_txt, q_tip = 'success', 'Verified', 'This address was checked.' %}
+          {% elif verification == 'weak' or email_status in ['mx_pattern_match','mx_only'] %}{% set q_cls, q_txt, q_tip = 'warning', 'Risky', 'The domain accepts mail but this address is not confirmed.' %}
+          {% else %}{% set q_cls, q_txt, q_tip = 'neutral', 'Unknown', 'This address has not been checked yet.' %}
+          {% endif %}
+          <tr data-verif="{{ verification }}" data-name="{{ (row['partner_name'] or '')|lower }}" data-firm="{{ (row['firm'] or '')|lower }}" data-notes="{{ (row['notes'] or '')|lower }}">
+            <td class="pk-col-check">
+              <input aria-label="Select {{ row['partner_name'] }}" type="checkbox" name="draft_ids" value="{{ row.get('draft_id') or row['id'] }}"
+                     class="row-check" {% if 'draft_id' in row and row.draft_id is none %}disabled{% endif %} data-action="partners_list-11">
+            </td>
+            <td data-label="Contact">
+              <a href="/partners/{{ row['partner_id'] }}" class="pl-name">{{ row['partner_name'] }}</a>
+              {% if row['email_uncertain'] %}<span class="pk-pill pk-pill--warning pl-flag" title="The email address is uncertain">Check email</span>{% endif %}
+              {% if row.get('dropped_reason') %}<span class="pk-pill pk-pill--blocked pl-flag" title="{{ row['dropped_reason'] }}">Dropped</span>{% endif %}
+              <span class="pk-cell-sub">
+                {{ row['firm'] or '' }}{% if row['firm'] and row['tier'] %} &middot; {% endif %}{% if row['tier'] == 1 %}High priority{% elif row['tier'] %}Normal priority{% endif %}{% if not row['firm'] and not row['tier'] %}{{ empty_value() }}{% endif %}
+              </span>
+            </td>
+            <td data-label="Email quality">
+              <span class="pk-pill pk-pill--{{ q_cls }} pk-pill--dot" title="{{ q_tip }}">{{ q_txt }}</span>
+              {% if row['responsiveness'] %}<span class="pk-cell-sub">{{ row['responsiveness'] }} response rate</span>{% endif %}
+            </td>
+            <td data-label="Status">
+              {{ status_pill(row, (sent_to_map|default({})).get(row['id']), g_test_recipient) }}
+              {% if row.get('blocked_reason') and row.get('status') == 'approved' %}<span class="pk-cell-sub pl-blocked">Held back: {{ row['blocked_reason'] }}</span>{% endif %}
+              <span class="pk-cell-sub">{{ hook_grounding_state(row) }}</span>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="4" class="pl-empty-cell">
+              <div class="pk-empty">
+                {% if any_filter %}
+                  <p class="pk-empty__title">No partners match the current filter.</p>
+                  <p>Clear a filter or change the search to see more.</p>
+                  <a class="pk-btn pk-btn--secondary pk-btn--sm" href="/partners">Clear filters</a>
+                {% else %}
+                  <p class="pk-empty__title">No partners yet.</p>
+                  <p>Add a contact to start building your send queue.</p>
+                  <a class="pk-btn pk-btn--primary pk-btn--sm" href="/crm/new">{{ icon("plus", 14) }}Add your first contact</a>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
 
-  <div class="data-table-wrap">
-    <table class="data-table pl-table" id="partnersTable"><caption class="sr-only">Partners List records</caption>
-      <thead>
-        <tr>
-          <th class="col-check"><input aria-label="Select all visible contacts" type="checkbox" id="selectAll" title="Select all visible" data-action="partners_list-10"></th>
-          <th>Partner</th>
-          <th>Firm</th>
-          <th>Verified</th>
-          <th>Tier</th>
-          <th>Responsive</th>
-          <th>Channel</th>
-          <th>Status</th>
-          <th class="col-action"><span class="sr-only">Open</span></th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for row in rows %}
-        {% set email_verified = row.get('email_verification_status') in ['valid','deliverable','pb_verified'] %}
-        {% set verification = 'verified' if email_verified else (row.get('verification_status') or 'unverified') %}
-        <tr data-verif="{{ verification }}" data-channel="{{ row.get('channel') or 'email' }}" data-name="{{ (row['partner_name'] or '')|lower }}" data-firm="{{ (row['firm'] or '')|lower }}" data-notes="{{ (row['notes'] or '')|lower }}">
-          <td class="col-check">
-            <input aria-label="Select {{ row['partner_name'] }}" type="checkbox" name="draft_ids" value="{{ row.get('draft_id') or row['id'] }}"
-                   class="row-check" {% if 'draft_id' in row and row.draft_id is none %}disabled{% endif %} data-action="partners_list-11">
-          </td>
-          <td data-label="Partner">
-            <a href="/partners/{{ row['partner_id'] }}" class="fw-600 row-link">{{ row['partner_name'] }}</a>
-            {% if row['email_uncertain'] %}<span class="badge badge-email-unverified" title="Email address is uncertain">email?</span>{% endif %}
-            {% if row.get('dropped_reason') %}<span class="badge badge-dropped" title="{{ row['dropped_reason'] }}">dropped</span>{% endif %}
-          </td>
-          <td data-label="Firm" class="text-muted">{{ row['firm'] or '' }}{% if not row['firm'] %}{{ empty_value() }}{% endif %}</td>
-          <td data-label="Verified">{{ verification_badge(row.get('email_verification_status'), row.get('verification_status')) }}</td>
-          <td data-label="Tier">{{ tier_badge(row['tier']) }}</td>
-          <td data-label="Responsive">{{ responsive_badge(row['responsiveness'] or '') }}</td>
-          <td data-label="Channel">{% if row['channel'] == 'twitter' %}<span class="badge badge-twitter">Twitter</span>{% else %}<span class="text-faint">Email</span>{% endif %}</td>
-          <td data-label="Status">{{ status_badge(row, (sent_to_map|default({})).get(row['id']), g_test_recipient) }}<span class="crm-table-subline">{{ hook_grounding_state(row) }}</span></td>
-          <td class="col-action"><a href="/partners/{{ row['partner_id'] }}" class="btn btn-ghost btn-sm">View</a></td>
-        </tr>
-        {% else %}
-        <tr>
-          <td colspan="9" class="empty-state">
-            {% if any_filter %}
-              <p>No partners match the current filter.</p>
-              <p class="text-faint">Clear a filter or change the search to see more.</p>
-            {% else %}
-              <p>No partners yet.</p>
-              <p><a class="btn btn-primary btn-sm" href="/crm/new">Add your first contact</a></p>
-            {% endif %}
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  {# One bulk control, shown only while rows are selected. app.js toggles its display; send and schedule share it. #}
+  <div id="bulkBar" class="pk-sticky-bar pl-bulkbar" role="region" aria-label="Selected emails">
+    <span id="bulkCount" class="pk-sticky-bar__count"></span>
+    <div class="pk-sticky-bar__actions">
+      {% if g_send_mode == 'test' %}
+        <button type="submit" class="pk-btn pk-btn--primary pk-btn--sm" title="Test mode: every email goes to your test address">{{ icon("play", 14) }}Send (test mode)</button>
+      {% else %}
+        <button type="button" id="bulkLiveBtn" class="pk-btn pk-btn--danger pk-btn--sm" data-action="partners_list-6">{{ icon("play", 14) }}Send live</button>
+        <div id="bulkLiveConfirm" class="pl-live-confirm">
+          <input aria-label="Confirm Text" type="text" name="confirm_text" id="bulkConfirmInput" class="pk-input pl-mono" placeholder="SEND BATCH OF N" autocomplete="off">
+          <button type="button" class="pk-btn pk-btn--danger-solid pk-btn--sm" data-action="partners_list-7">{{ icon("check", 14) }}Confirm</button>
+        </div>
+      {% endif %}
+      <button type="button" class="pk-btn pk-btn--secondary pk-btn--sm" data-action="partners_list-8">{{ icon("calendar", 14) }}Schedule</button>
+      <button type="button" class="pk-btn pk-btn--ghost pk-btn--sm" data-action="partners_list-9">Cancel</button>
+    </div>
   </div>
 </form>
 
-{# Schedule drawer: same control as the bulk bar, anchored directly above it. Ids are read by app.js. #}
+{% if partner_counts %}
+<p class="pl-counters">
+  <strong class="text-ok">{{ partner_counts.get('partners_verified', 0) }}</strong> verified
+  <span class="chip-sep">&middot;</span>
+  <strong>{{ partner_counts.get('partners_dropped', 0) }}</strong> dropped during cleanup
+  <span class="chip-sep">&middot;</span>
+  <a href="/candidates">Candidates</a>
+  <span class="chip-sep">&middot;</span>
+  <a href="/email-verification">Email verification</a>
+</p>
+{% else %}
+<p class="pl-counters"><a href="/candidates">Candidates</a> <span class="chip-sep">&middot;</span> <a href="/email-verification">Email verification</a></p>
+{% endif %}
+
+{# Schedule drawer: anchored directly above the bulk bar. Ids are read by app.js. #}
 <div role="dialog" aria-labelledby="scheduleDialogTitle" id="bulkScheduleOverlay" class="bulk-drawer">
   <div class="bulk-drawer-panel">
-    <h2 id="scheduleDialogTitle" class="bulk-drawer-title">Schedule send</h2>
+    <h2 id="scheduleDialogTitle" class="bulk-drawer-title">{{ icon("calendar") }} Schedule send</h2>
     <form id="bulkScheduleForm" method="POST" action="/schedule-send">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <div id="bulkSchedIdsContainer"></div>
       <div class="bulk-drawer-fields">
         <div class="form-group">
           <label class="form-label" for="bsd">Date</label>
-          <input type="date" name="sched_date" id="bsd" class="form-control" required>
+          <input type="date" name="sched_date" id="bsd" class="pk-input" required>
         </div>
         <div class="form-group">
           <label class="form-label" for="bst">Time</label>
-          <input type="time" name="sched_time" id="bst" class="form-control" required>
+          <input type="time" name="sched_time" id="bst" class="pk-input" required>
         </div>
         <div class="form-group">
           <label class="form-label" for="bsm">Mode</label>
-          <select name="sched_mode" id="bsm" class="form-control">
+          <select name="sched_mode" id="bsm" class="pk-select">
             <option value="test" {% if g_send_mode == 'test' %}selected{% endif %}>Test (safe)</option>
             <option value="live" {% if g_send_mode == 'live' %}selected{% endif %}>Live (real emails)</option>
           </select>
@@ -163,11 +254,11 @@
         <label class="form-label text-danger" for="bulkSchedConfirmInput">
           Type exactly: <code id="bulkSchedPhrase">SCHEDULE LIVE FOR N</code>
         </label>
-        <input type="text" name="confirm_text" id="bulkSchedConfirmInput" class="form-control mono-input" placeholder="SCHEDULE LIVE FOR N" autocomplete="off">
+        <input type="text" name="confirm_text" id="bulkSchedConfirmInput" class="pk-input pl-mono" placeholder="SCHEDULE LIVE FOR N" autocomplete="off">
       </div>
       <div class="bulk-drawer-actions">
-        <button type="submit" id="bulkSchedSubmitBtn" class="btn btn-primary btn-sm">Schedule N sends</button>
-        <button type="button" class="btn btn-ghost btn-sm" data-action="partners_list-12">Cancel</button>
+        <button type="submit" id="bulkSchedSubmitBtn" class="pk-btn pk-btn--primary pk-btn--sm">{{ icon("calendar", 14) }} Schedule N sends</button>
+        <button type="button" class="pk-btn pk-btn--ghost pk-btn--sm" data-action="partners_list-12">{{ icon("x", 14) }} Cancel</button>
       </div>
     </form>
   </div>

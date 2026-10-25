@@ -1,58 +1,63 @@
 {% extends 'base.html' %}
+{% from "_icons.html" import icon %}
 {% from '_partner_macros.html' import verification_badge, tier_badge, empty_value %}
 {% block page_id %}enrichment_status{% endblock %}
 {% block title %}Enrichment{% endblock %}
 
 {% block content %}
-<div class="section-header page-title">
-  <h1>Enrichment status <span class="page-count">{{ rows|length }}</span></h1>
-</div>
+<header class="pk-page-head">
+  <div class="pk-page-head__text">
+    <h1>Enrichment status <span class="pk-pill pk-pill--neutral">{{ rows|length }}</span></h1>
+    <p class="pk-page-sub">Which research sources each partner has, and whether the saved hook is backed by them.</p>
+  </div>
+</header>
 
-<div class="stats-grid section en-stats">
-  <div class="stat-item"><div class="stat-number">{{ stats.total }}</div><div class="stat-label">Partners</div></div>
-  <div class="stat-item"><div class="stat-number text-ok">{{ stats.fully_enriched }}</div><div class="stat-label">Fully enriched</div></div>
-  <div class="stat-item"><div class="stat-number text-warn">{{ stats.needs_pb }}</div><div class="stat-label">Needs PB enrichment</div></div>
-  <div class="stat-item"><div class="stat-number text-warn">{{ stats.needs_linkedin }}</div><div class="stat-label">Needs LinkedIn</div></div>
-  <div class="stat-item"><div class="stat-number text-danger">{{ stats.needs_hook_regen }}</div><div class="stat-label">Needs hook regen</div></div>
-</div>
+<ul class="pk-kpis en-stats" aria-label="Enrichment overview">
+  <li class="pk-kpi"><span class="pk-kpi__label">Partners</span><span class="pk-kpi__value">{{ stats.total }}</span></li>
+  <li class="pk-kpi"><span class="pk-kpi__label">Fully enriched</span><span class="pk-kpi__value">{{ stats.fully_enriched }}</span></li>
+  <li class="pk-kpi"><span class="pk-kpi__label">Needs PB enrichment</span><span class="pk-kpi__value">{{ stats.needs_pb }}</span></li>
+  <li class="pk-kpi"><span class="pk-kpi__label">Needs LinkedIn</span><span class="pk-kpi__value">{{ stats.needs_linkedin }}</span></li>
+  <li class="pk-kpi"><span class="pk-kpi__label">Needs hook regen</span><span class="pk-kpi__value">{{ stats.needs_hook_regen }}</span></li>
+</ul>
 
 {% if rows %}
-<div class="filter-bar mb-6" id="filterBar">
-  <span class="filter-label">Source</span>
-  <button type="button" class="chip" id="chip-has-pb-api" data-action="enrichment_status-0">Has PB API</button>
-  <button type="button" class="chip" id="chip-miss-pb-api" data-action="enrichment_status-1">Missing PB API</button>
-  <button type="button" class="chip" id="chip-miss-linkedin" data-action="enrichment_status-2">Missing LinkedIn</button>
-  <button type="button" class="chip" id="chip-miss-web" data-action="enrichment_status-3">Missing Web Search</button>
+<div class="pk-filterbar en-filters" id="filterBar">
+  <span class="en-filter-label">Source</span>
+  <button type="button" class="pk-chip chip" id="chip-has-pb-api" data-action="enrichment_status-0">Has PB API</button>
+  <button type="button" class="pk-chip chip" id="chip-miss-pb-api" data-action="enrichment_status-1">Missing PB API</button>
+  <button type="button" class="pk-chip chip" id="chip-miss-linkedin" data-action="enrichment_status-2">Missing LinkedIn</button>
+  <button type="button" class="pk-chip chip" id="chip-miss-web" data-action="enrichment_status-3">Missing Web Search</button>
 
-  <span class="chip-sep">&middot;</span>
-  <span class="filter-label">Hook</span>
-  <button type="button" class="chip" id="chip-hq-cite" data-action="enrichment_status-4">Cite-specific</button>
-  <button type="button" class="chip" id="chip-hq-generic" data-action="enrichment_status-5">Generic</button>
-  <button type="button" class="chip" id="chip-hq-none" data-action="enrichment_status-6">No hook</button>
+  <span class="en-sep" aria-hidden="true"></span>
+  <span class="en-filter-label">Hook</span>
+  <button type="button" class="pk-chip chip" id="chip-hq-cite" data-action="enrichment_status-4">Cite-specific</button>
+  <button type="button" class="pk-chip chip" id="chip-hq-generic" data-action="enrichment_status-5">Generic</button>
+  <button type="button" class="pk-chip chip" id="chip-hq-none" data-action="enrichment_status-6">No hook</button>
 
-  <span class="chip-sep">&middot;</span>
-  <span class="filter-label">Tier</span>
+  <span class="en-sep" aria-hidden="true"></span>
+  <span class="en-filter-label">Tier</span>
   {% for tv in ['1','2','3','4'] %}
-  <button type="button" class="chip" id="chip-tier-{{ tv }}" data-action="enrichment_status-7" data-arg0="{{ tv }}">T{{ tv }}</button>
+  <button type="button" class="pk-chip chip" id="chip-tier-{{ tv }}" data-action="enrichment_status-7" data-arg0="{{ tv }}">T{{ tv }}</button>
   {% endfor %}
 
-  <button type="button" class="chip chip-clear" id="chip-clear" data-action="enrichment_status-8">&#x2715; Clear filters</button>
+  <button type="button" class="pk-chip chip chip-clear" id="chip-clear" data-action="enrichment_status-8">&#x2715; Clear filters</button>
 </div>
 
-<p class="en-legend text-muted">
+<p class="en-legend pk-note">
   <span class="en-ok" aria-hidden="true">&#x2713;</span> source present (fact count beside it)
-  <span class="chip-sep">&middot;</span> <span class="text-faint">none</span> source missing
-  <span class="chip-sep">&middot;</span> Hook: <span class="en-ok" aria-hidden="true">&#x2713;</span> cites a specific company,
-  <span class="en-bad" aria-hidden="true">&#x2717;</span> generic, <span class="text-faint">Not checked</span> hook not yet verified, <span class="en-bad">Ungrounded</span> hook claims not in the research, <span class="text-faint">?</span> cannot tell
+  <span class="en-dot" aria-hidden="true">&middot;</span> <span class="pk-faint">none</span> source missing
+  <span class="en-dot" aria-hidden="true">&middot;</span> Hook: <span class="en-ok" aria-hidden="true">&#x2713;</span> cites a specific company,
+  <span class="en-bad" aria-hidden="true">&#x2717;</span> generic, <span class="pk-faint">Not checked</span> hook not yet verified, <span class="en-bad">Ungrounded</span> hook claims not in the research, <span class="pk-faint">?</span> cannot tell
 </p>
 
-<div class="data-table-wrap">
-  <table class="data-table pl-table en-table" id="enrichTable"><caption class="sr-only">Enrichment Status records</caption>
+<section class="pk-card pk-card--flush">
+<div class="pk-table-wrap">
+  <table class="pk-table en-table" id="enrichTable"><caption class="sr-only">Enrichment Status records</caption>
     <thead>
       <tr>
         <th aria-sort="none" data-sort="partner"><button class="table-sort" type="button">Partner &#x2195;</button></th>
         <th aria-sort="none" data-sort="tier"><button class="table-sort" type="button">Tier &#x2195;</button></th>
-        <th>Verified</th>
+        <th scope="col">Verified</th>
         <th aria-sort="none" data-sort="pb_api"><button class="table-sort" type="button">PB API &#x2195;</button></th>
         <th aria-sort="none" data-sort="pb"><button class="table-sort" type="button">PB Scrape &#x2195;</button></th>
         <th aria-sort="none" data-sort="linkedin"><button class="table-sort" type="button">LinkedIn &#x2195;</button></th>
@@ -62,7 +67,7 @@
         <th aria-sort="none" data-sort="eg"><button class="table-sort" type="button">Email &#x2195;</button></th>
         <th aria-sort="none" data-sort="facts"><button class="table-sort" type="button">Facts &#x2195;</button></th>
         <th aria-sort="none" data-sort="hook"><button class="table-sort" type="button">Hook &#x2195;</button></th>
-        <th>Last enriched</th>
+        <th scope="col">Last enriched</th>
       </tr>
     </thead>
     <tbody>
@@ -83,39 +88,43 @@
         data-total="{{ row.total_facts }}"
       >
         <td data-label="Partner">
-          <a href="/partners/{{ row.partner_id }}" class="fw-600 row-link">{{ row.partner_name }}</a>
-          {% if row.firm %}<span class="cell-sub text-faint">{{ row.firm }}</span>{% endif %}
+          <a href="/partners/{{ row.partner_id }}" class="pk-cell-title row-link">{{ row.partner_name }}</a>
+          {% if row.firm %}<span class="pk-cell-sub">{{ row.firm }}</span>{% endif %}
         </td>
         <td data-label="Tier">{{ tier_badge(row.tier) }}</td>
         <td data-label="Verified">{{ verification_badge(none, row.verification_status) }}</td>
         {% for src in src_order %}
         {% set sd = row.source_data[src] %}
-        <td data-label="{{ src|replace('_', ' ') }}" class="cell-center">
-          {% if sd.present %}<span class="en-ok" title="{{ sd.count }} facts">&#x2713;</span> <span class="text-faint cell-small">{{ sd.count }}</span>{% else %}{{ empty_value() }}{% endif %}
+        <td data-label="{{ src|replace('_', ' ') }}" class="en-c">
+          {% if sd.present %}<span class="en-ok" title="{{ sd.count }} facts">&#x2713;</span> <span class="pk-faint">{{ sd.count }}</span>{% else %}{{ empty_value() }}{% endif %}
         </td>
         {% endfor %}
-        <td data-label="Facts" class="cell-num">{% if row.total_facts == 0 %}<span class="text-faint">0</span>{% else %}{{ row.total_facts }}{% endif %}</td>
-        <td data-label="Hook" class="cell-center">
+        <td data-label="Facts" class="pk-num">{% if row.total_facts == 0 %}<span class="pk-faint">0</span>{% else %}{{ row.total_facts }}{% endif %}</td>
+        <td data-label="Hook" class="en-c">
           {% if row.hook_quality == 'cite_specific' %}<span class="en-ok" title="Hook cites a specific company from PB data">&#x2713;</span>
           {% elif row.hook_quality == 'generic' %}<span class="en-bad" title="Hook exists but does not cite a specific PB company">&#x2717;</span>
-          {% elif row.hook_quality == 'ungrounded' %}<span class="en-bad cell-small" title="Hook has claims that are not in the saved research. Regenerate it before approving.">Ungrounded</span>
+          {% elif row.hook_quality == 'ungrounded' %}<span class="en-bad" title="Hook has claims that are not in the saved research. Regenerate it before approving.">Ungrounded</span>
           {% elif row.hook_quality == 'grounded' %}<span class="en-ok" title="Every claim in the hook matches the saved research">&#x2713;</span>
-          {% elif row.hook_quality == 'not_checked' %}<span class="text-faint cell-small" title="Hook exists but has not been checked against enrichment facts">Not checked</span>
-          {% elif row.hook_quality == 'no_enrichment' %}<span class="text-faint" title="No enrichment, hook quality unknown">?</span>
-          {% elif row.hook_quality == 'unknown' %}<span class="text-faint" title="No PB data to check against">?</span>
-          {% else %}<span class="text-faint" title="No hook generated">none</span>{% endif %}
+          {% elif row.hook_quality == 'not_checked' %}<span class="pk-faint" title="Hook exists but has not been checked against enrichment facts">Not checked</span>
+          {% elif row.hook_quality == 'no_enrichment' %}<span class="pk-faint" title="No enrichment, hook quality unknown">?</span>
+          {% elif row.hook_quality == 'unknown' %}<span class="pk-faint" title="No PB data to check against">?</span>
+          {% else %}<span class="pk-faint" title="No hook generated">none</span>{% endif %}
         </td>
-        <td data-label="Last enriched" class="text-muted cell-small cell-nowrap">{{ row.last_enriched or '' }}{% if not row.last_enriched %}{{ empty_value() }}{% endif %}</td>
+        <td data-label="Last enriched" class="en-when">{{ row.last_enriched or '' }}{% if not row.last_enriched %}{{ empty_value() }}{% endif %}</td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
 </div>
+</section>
 {% else %}
-<div class="empty-state">
-  <p>No active partners to enrich yet.</p>
-  <p class="text-faint">Enrichment status appears here once partners exist.</p>
-  <p><a class="btn btn-primary btn-sm" href="/crm/new">Add a contact</a></p>
-</div>
+<section class="pk-card">
+  <div class="pk-empty">
+    <div class="pk-empty__icon">{{ icon("database", 28) }}</div>
+    <h2 class="pk-empty__title">No active partners to enrich yet</h2>
+    <p>Enrichment status appears here once partners exist.</p>
+    <p><a class="pk-btn pk-btn--primary pk-btn--sm" href="/crm/new">Add a contact</a></p>
+  </div>
+</section>
 {% endif %}
 {% endblock %}

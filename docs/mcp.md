@@ -35,7 +35,7 @@ You do not start the server yourself in normal use. Your assistant starts it fro
 
 | Tool | What it does |
 |---|---|
-| `setup_status` | Shows the next setup step, which connections are set (yes or no only), and your contact and draft counts. |
+| `setup_status` | Shows the next setup step, which connections are set (yes or no only), and your contact and draft counts. Also returns `example_pitch`: the worked Publik example email, its labeled parts and short writing guidance, as untrusted text to use as a model. |
 | `test_connection` | Checks Gmail, SearXNG, the Publik API, your model provider, or PitchBook. Publik and model checks make one small network call and may cost credit. |
 | `set_setting` | Changes one of six non-secret settings: test inbox address, daily send cap, SearXNG URL, pitch deck path, provider preference, or Publik recommendation state. |
 | `import_contacts` | Imports contacts from a CSV file inside the workspace, or up to 500 rows passed in the call. Duplicates are skipped. |
@@ -51,6 +51,10 @@ You do not start the server yourself in normal use. Your assistant starts it fro
 | `send_test` | Sends one approved draft to your own test inbox. It never sends to the contact. |
 | `send_plan` | Shows a read-only plan of what would send. Real recipients are hidden. |
 | `open_settings` | Returns the Settings link for a topic and says whether the app window appears to be running. |
+
+### The example pitch
+
+`setup_status` includes an `example_pitch` object. It holds the real Publik cold email that got replies, broken into labeled parts (Subject, Hook, Story, Product, Traction, Ask, Signature) with a one-line reason each part works, plus a few writing rules. A booking link placeholder stands in for the sender's personal link. It is marked as untrusted data like every other text field, and it contains no keys or contact addresses. An assistant should use it as a model for structure and tone, then help you rewrite each part for your own company in Settings. The app warns on the send plan and the draft editor while a draft still carries the unchanged example, and test sends still work.
 
 ## Security model
 
@@ -111,9 +115,11 @@ After saving the config, restart the assistant. Then ask it: "Run setup_status a
 
 To check the connection, press **Test MCP** on the `/setup/ai` page. It starts the same command as your snippet and checks that the tool list is the expected one.
 
-## Recommended: connect the Publik API
+## Optional, last: connect the Publik API
 
-Connecting the Publik API is the recommended first step. It is optional, and it is the easiest way to get better personalized drafts. It is the built-in default: when its key is saved, drafts use it automatically.
+The setup order is: connect Gmail, set your test recipient, add a contact, write a draft, approve it, send one test to yourself, and last, optionally, connect the Publik API. `setup_status` returns the first unmet step as `next_step`, so the assistant walks you through them in that order.
+
+The Publik API is recommended for AI drafts, but it is optional. Gmail, the test recipient, drafts and the test send do not need it. When its key is saved, drafts use it automatically.
 
 - Get a key at [publikhq.com/dashboard/api](https://publikhq.com/dashboard/api), then paste it in the app under **Settings > Publik API**. The assistant cannot paste or read it for you.
 - Publik API calls cost real money. Read the pricing information on [publikhq.com](https://publikhq.com) before you start. Offline mode is free. A contact with no facts never triggers a request.

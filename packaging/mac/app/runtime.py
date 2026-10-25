@@ -5,6 +5,7 @@ import fcntl
 import os
 import socket
 import stat
+import sys
 import threading
 from dataclasses import dataclass, field
 from http.cookies import SimpleCookie
@@ -174,8 +175,12 @@ def self_test(root):
     import http.client
     import importlib
     import json
-    for module in ('requests', 'bs4', 'anthropic'):
-        importlib.import_module(module)
+    # The bundled app must ship every integration library. A source checkout
+    # may lack these optional extras (the integrations import them lazily), so
+    # only the frozen bundle requires them.
+    if getattr(sys, 'frozen', False):
+        for module in ('requests', 'bs4', 'anthropic'):
+            importlib.import_module(module)
     workspace = bootstrap_workspace(root)
     with SingleInstanceLock(workspace.path('data', '.app.lock')):
         runtime = start_server(workspace)

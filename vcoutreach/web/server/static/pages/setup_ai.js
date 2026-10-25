@@ -4,7 +4,7 @@
   if (window.__publikreachSetupAi) return;
   window.__publikreachSetupAi = true;
 
-  var CHIP_WORDS = { connected: 'Connected', pending: 'Recommended', skipped: 'Skipped' };
+  var CHIP_WORDS = { connected: 'Connected', pending: 'Not connected', skipped: 'Skipped' };
   var FAIL_NET = 'Could not reach the app. Check that it is still running, then try again.';
 
   function csrf() {
@@ -90,7 +90,18 @@
       btn.addEventListener('click', function () {
         var node = document.getElementById(btn.getAttribute('data-copy'));
         if (!node) return;
-        copyText(node.textContent, node).then(function (ok) { finish(btn, ok, node); });
+        var snippet = btn.getAttribute('data-snippet');
+        if (!snippet) {
+          copyText(node.textContent, node).then(function (ok) { finish(btn, ok, node); });
+          return;
+        }
+        /* The page shows a home-folder placeholder; the real command comes from the app on demand. */
+        post('/api/mcp/snippet', new URLSearchParams({ key: snippet })).then(function (r) {
+          var real = r.data && r.data.ok && typeof r.data.text === 'string' ? r.data.text : '';
+          return copyText(real || node.textContent, node);
+        }, function () {
+          return copyText(node.textContent, node);
+        }).then(function (ok) { finish(btn, ok, node); });
       });
     });
     Array.prototype.forEach.call(document.querySelectorAll('[data-copy-text]'), function (btn) {
@@ -163,10 +174,12 @@
       toggle.textContent = 'Show';
       toggle.setAttribute('aria-controls', keyInput.id);
       toggle.setAttribute('aria-pressed', 'false');
+      toggle.setAttribute('aria-label', 'Show Publik API key');
       toggle.addEventListener('click', function () {
         var show = keyInput.type === 'password';
         keyInput.type = show ? 'text' : 'password';
         toggle.textContent = show ? 'Hide' : 'Show';
+        toggle.setAttribute('aria-label', (show ? 'Hide' : 'Show') + ' Publik API key');
         toggle.setAttribute('aria-pressed', show ? 'true' : 'false');
       });
       wrap.appendChild(toggle);
@@ -194,6 +207,8 @@
         try { window.setServiceStatus('publik', chipState(state), CHIP_WORDS[state]); } catch (e) { /* tile may not exist */ }
       }
       if (chip) chip.textContent = CHIP_WORDS[state];
+      var keyState = card.querySelector('[data-pk-keystate]');
+      if (keyState) keyState.textContent = state === 'connected' ? 'Key saved' : 'Not set';
     }
 
     function currentState() { return card.getAttribute('data-pk-state') || 'pending'; }

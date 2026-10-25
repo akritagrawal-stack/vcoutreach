@@ -172,7 +172,7 @@ def _send(draft_id, mode):
                 raise SendRefused('Daily send cap reached. Nothing was sent.')
             target=test_to if mode=='test' else row['email']
             if mode=='test' and target.casefold()==row['email'].casefold():
-                raise SendRefused('Test recipient must differ from the contact email.')
+                raise SendRefused('Test recipient must differ from the contact email. Change it in Settings, Test recipient card.')
             from_email=workspace.value('SENDER_EMAIL') or (test_to if mode=='test' else '')
             if not _EMAIL_RE.fullmatch(from_email):
                 raise SendRefused('Set SENDER_EMAIL to a valid address before sending.')
@@ -185,12 +185,15 @@ def _send(draft_id, mode):
                 message['In-Reply-To']=in_reply_to;message['References']=refs or in_reply_to
             message.set_content(body)
             message.add_alternative(''.join('<p>'+escape(p).replace('\n','<br>')+'</p>' for p in body.split('\n\n')),subtype='html')
-            from vcoutreach.web.server.workspace_settings import load_settings
-            deck=load_settings().get('pitch_deck_path') or workspace.value('PITCH_DECK_PATH')
+            from vcoutreach.web.server.workspace_settings import is_bundled_example_deck,load_settings
+            _settings=load_settings()
+            deck=_settings.get('pitch_deck_path') or workspace.value('PITCH_DECK_PATH')
             if deck:
                 path=workspace.path(deck)
                 if not path.is_file():
                     raise SendRefused('Configured pitch deck is missing.')
+            # A job search never carries the bundled Publik investor example deck as the resume.
+            if deck and not (_settings.get('campaign_kind')=='job_search' and is_bundled_example_deck(path)):
                 message.add_attachment(path.read_bytes(),maintype='application',subtype='pdf',filename=path.name)
             service=require_gmail_connection()
             cursor=conn.execute("INSERT INTO web_send_journal(draft_id,partner_id,recipient,lane,mode,state,target_email) VALUES (?,?,?,?,?,'sending',?)",

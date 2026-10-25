@@ -52,12 +52,13 @@ def many_rows(count, start=0):
 # setup_status
 # ---------------------------------------------------------------------------------------------------------------
 
-STEP_KEYS = ["publik_api", "gmail", "test_recipient", "contact", "draft", "approve", "send_test"]
+STEP_KEYS = ["gmail", "test_recipient", "contact", "draft", "approve", "send_test", "publik_api"]
 SERVICE_KEYS = {"publik_api", "openai", "anthropic", "openrouter", "gemini", "enrow", "apollo", "searxng",
                 "pitchbook", "tracking"}
+PUBLIK_LABEL = "Optional: connect the Publik API for AI drafts"
 
 
-def test_fresh_workspace_reports_seven_steps_and_recommends_the_publik_api_first(mcp):
+def test_fresh_workspace_reports_seven_steps_with_gmail_first_and_publik_last(mcp):
     session = mcp()
     res = session.call("setup_status")
     data = assert_ok(res)
@@ -66,30 +67,26 @@ def test_fresh_workspace_reports_seven_steps_and_recommends_the_publik_api_first
     for step in data["steps"]:
         assert set(step) >= {"key", "index", "label", "done", "recommended", "skipped"}
         assert step["done"] is False and step["skipped"] is False
-    assert [s["recommended"] for s in data["steps"]] == [True] + [False] * 6
-    # Spec 1.4 shows href "/setup/ai#publik" in the setup_status shape while 3.4 gives the banner entry the href
-    # "/settings#svc-publik"; the handler must use the banner's function, so either is accepted.
+    assert data["steps"][-1]["label"] == PUBLIK_LABEL
     next_step = dict(data["next_step"])
-    assert next_step.pop("href") in {"/setup/ai#publik", "/settings#svc-publik"}
-    assert next_step == {
-        "key": "publik_api", "index": 1, "total": 7,
-        "label": "Recommended: connect the Publik API for better personalization", "recommended": True,
-    }
+    assert next_step.pop("href") == "/settings#svc-gmail"
+    assert next_step["key"] == "gmail" and next_step["index"] == 1 and next_step["total"] == 7
+    assert "Gmail" in next_step["label"]
     assert data["test_mode_enforced"] is True
 
 
-def test_a_publik_key_already_in_env_completes_the_step_and_is_never_shown(mcp):
+def test_a_publik_key_already_in_env_completes_the_last_step_and_is_never_shown(mcp):
     key = "zzleak-publik-live-key-5521ab"
     session = mcp(env={"PUBLIK_API_KEY": key})
     res = session.call("setup_status")
     data = assert_ok(res)
-    assert data["steps"][0]["done"] is True and data["steps"][0]["skipped"] is False
+    assert data["steps"][-1]["key"] == "publik_api"
+    assert data["steps"][-1]["done"] is True and data["steps"][-1]["skipped"] is False
     assert data["publik_recommendation"] == "connected"
     assert data["services"]["publik_api"] is True
     assert data["provider_auto_would_pick"] == "publik"
     assert data["next_step"]["key"] == "gmail"
-    assert data["next_step"]["index"] == 2
-    assert data["next_step"]["recommended"] is False
+    assert data["next_step"]["index"] == 1
     assert key not in res.dump() and key not in session.all_output()
 
 
@@ -100,7 +97,8 @@ def test_skipping_the_recommendation_persists_across_a_server_restart(mcp):
     assert data["ok"] is True and data["name"] == "PUBLIK_RECOMMENDATION" and data["stored"] is True
     assert data["value"] == "skipped"
     status = assert_ok(session.call("setup_status"))
-    assert status["steps"][0]["done"] is True and status["steps"][0]["skipped"] is True
+    assert status["steps"][-1]["key"] == "publik_api"
+    assert status["steps"][-1]["done"] is True and status["steps"][-1]["skipped"] is True
     assert status["publik_recommendation"] == "skipped"
     assert status["next_step"]["key"] == "gmail"
     assert session.settings_file().get("publik_recommendation") == "skipped"
@@ -109,6 +107,7 @@ def test_skipping_the_recommendation_persists_across_a_server_restart(mcp):
     again = session.restart()
     status = assert_ok(again.call("setup_status"))
     assert status["publik_recommendation"] == "skipped"
+    assert status["steps"][-1]["skipped"] is True
     assert status["next_step"]["key"] == "gmail"
 
 
@@ -119,7 +118,7 @@ def test_setting_the_recommendation_back_to_pending_restores_the_step(mcp):
     assert data["value"] == "pending"
     status = assert_ok(session.call("setup_status"))
     assert status["publik_recommendation"] == "pending"
-    assert status["next_step"]["key"] == "publik_api"
+    assert status["steps"][-1]["done"] is False and status["steps"][-1]["skipped"] is False
 
 
 def test_setup_status_follows_a_real_first_run_through_the_steps(mcp):
@@ -129,10 +128,7 @@ def test_setup_status_follows_a_real_first_run_through_the_steps(mcp):
     assert done["gmail"] is True and done["test_recipient"] is True
     assert status["test_recipient_set"] is True
     assert status["gmail"] == "connected"
-    assert status["next_step"]["key"] == "publik_api"
-
-    assert_ok(session.call("set_setting", name="PUBLIK_RECOMMENDATION", value="skipped"))
-    assert assert_ok(session.call("setup_status"))["next_step"]["key"] == "contact"
+    assert status["next_step"]["key"] == "contact"
 
     session.seed(drafts=False)
     status = assert_ok(session.call("setup_status"))
@@ -153,6 +149,12 @@ def test_setup_status_follows_a_real_first_run_through_the_steps(mcp):
     assert_ok(session.call("send_test", partner_id=first["partner_id"]))
     status = assert_ok(session.call("setup_status"))
     assert status["counts"]["test_sends"] >= 1
+    # The optional Publik API step is last: it stays the next step until it is connected or skipped.
+    assert status["next_step"]["key"] == "publik_api" and status["next_step"]["index"] == 7
+    assert status["next_step"]["label"] == PUBLIK_LABEL
+
+    assert_ok(session.call("set_setting", name="PUBLIK_RECOMMENDATION", value="skipped"))
+    status = assert_ok(session.call("setup_status"))
     assert status["next_step"] is None
     assert all(s["done"] for s in status["steps"])
 
@@ -543,7 +545,8 @@ def test_gmail_connection_when_not_connected_points_at_the_connect_button(mcp):
     assert res.rpc_error is None
     assert res.data["ok"] is False
     action = res.data["human_action"]
-    assert action["what"] == "Click Connect Gmail in Settings and finish consent in your browser."
+    what = action["what"]
+    assert "OAuth client file" in what and "Connect Gmail" in what and "consent in your browser" in what
     assert action["settings_path"] == "/settings#svc-gmail"
     assert "get_key_url" not in action
 

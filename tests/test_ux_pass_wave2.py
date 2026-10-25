@@ -343,11 +343,20 @@ def test_5_segment_rows_for_every_dimension_live_in_that_one_table(send_web):
     assert all_dims <= dims
 
 
-def test_5_signal_buckets_share_one_table(send_web):
+def test_5_signal_buckets_share_one_tab_strip(send_web):
+    """Owner-approved design: the signal buckets are one tab strip with counts, not a Bucket column table."""
     w = analytics_web(send_web)
     root = dom(w, "/crm/analytics")
-    tables = [t for t in root.find_all("table") if any(th.all_text().lower() == "bucket" for th in t.find_all("th"))]
-    assert len(tables) == 1
+    assert not [t for t in root.find_all("table") if any(th.all_text().lower() == "bucket" for th in t.find_all("th"))], (
+        "the Bucket column table was replaced by tabs")
+    strips = [n for n in root.walk() if n.attrs.get("role") == "tablist"]
+    assert len(strips) == 1
+    tabs = [n for n in strips[0].walk() if n.attrs.get("role") == "tab"]
+    labels = [t.all_text().strip() for t in tabs]
+    for bucket in ("Hot", "Warm", "Engaged", "Replied"):
+        match = [l for l in labels if l.startswith(bucket)]
+        assert len(match) == 1, f"{bucket} tab missing or duplicated in {labels}"
+        assert re.search(r"\d+\s*$", match[0]), f"{bucket} tab must show its count: {match[0]!r}"
 
 
 def test_5_analytics_has_far_fewer_than_ten_tables(send_web):

@@ -31,34 +31,47 @@ page before you run a batch.
 ## Gmail
 
 **Needs.** The Gmail extra (`pip install -e ".[gmail]"`, already part of the Mac
-installer), and an OAuth client of type "Desktop app" from your own Google Cloud
-project with the Gmail API enabled. The client file is yours; none ships here.
+installer), and a Gmail account to connect. The recommended way is Google sign-in
+(OAuth) with a Desktop app OAuth client from your own Google Cloud project with the
+Gmail API enabled. The client file is yours; none ships here.
 
 **What it does.** Sends your messages (test sends, live sends, scheduled sends),
 reads replies when you click "Poll replies" or refresh the inbox, and checks the
-Sent folder after a send. There are two separate Gmail setups, with two token
-files, because they ask for different permissions:
+Sent folder after a send. Gmail is the first setup step and it is required for a
+test send.
+
+**Connect with Google sign-in (recommended).** In Settings, click **Choose OAuth
+client file** and pick the Desktop client JSON, then click **Connect Gmail**. Google
+opens a sign-in in your browser and this app never sees your password. The client is
+saved as `data/.gmail_credentials.json` and the token as `data/.gmail_token.json`
+in your workspace, both with mode 0600. The scope is `gmail.modify`, so the app can
+send, read replies and check Sent. Consent expires locally after three minutes if
+left unfinished.
+
+**Alternative: a Gmail app password.** Only if you cannot use an OAuth client file.
+In Settings, open the collapsed "Alternative: use a Gmail app password instead"
+section, enter your Gmail address and a 16 character app password, and click
+**Connect with app password**. Google requires 2-Step Verification for this, and a
+Workspace admin must allow app passwords. The password is stored in
+`data/.gmail_app_password.json` in your workspace with mode 0600 and is never shown
+or logged.
+
+**The command line.** The command line uses a separate, send-only setup, because it
+asks for a narrower permission:
 
 | Used by | Client file | Token file | Scope |
 | --- | --- | --- | --- |
 | The command line: `vcoutreach auth gmail`, `vcoutreach send --execute` | `GMAIL_CLIENT_SECRETS_PATH` (default `~/.config/vcoutreach/client_secret.json`) | `GMAIL_TOKEN_PATH` (default `~/.config/vcoutreach/token.json`) | `gmail.send` only; it never reads mail |
-| The browser app | `data/.gmail_credentials.json` in your workspace | `data/.gmail_token.json` in your workspace | `gmail.modify`, so the app can send, read replies and check Sent |
+| The browser app | `data/.gmail_credentials.json` in your workspace | `data/.gmail_token.json` in your workspace | `gmail.modify` |
 
 The command line refuses a token that has any scope other than `gmail.send`, so the
-two files cannot be shared. To authorize the browser app, save your OAuth client
-JSON as `data/.gmail_credentials.json` in the workspace, then run the app's own
-authorization routine from the workspace folder:
-
-```
-python -c "from vcoutreach.web.gmail.api import run_oauth_flow; print(run_oauth_flow())"
-```
-
-It opens a Google consent page in your browser and writes the token file with mode
-0600. There is no button for this in the app yet, and this routine has not been
-exercised against live Google in this repository's automated tests, so try it with
-a throwaway test mailbox first. Without a token, sends and reply checks stop with a
-one-line "Gmail credentials are missing" message and nothing is sent. Set
-`SENDER_EMAIL` and `TEST_RECIPIENT_EMAIL` in Settings.
+two token files cannot be shared. `vcoutreach auth gmail-web --workspace DIR` runs
+the browser app's authorization from a terminal, after the client JSON is saved in
+that workspace's data folder. The Google sign-in flow has not been exercised against
+live Google in this repository's automated tests, so try it with a throwaway test
+mailbox first. Without a connection, sends and reply checks stop with a one-line
+"Gmail credentials are missing" message and nothing is sent. Set
+`TEST_RECIPIENT_EMAIL` in Settings, on the Test recipient card.
 
 **Cost and terms.** The Gmail API itself is free within Google's quotas. Your
 Google account's sending limits and Google's terms and policies apply, and

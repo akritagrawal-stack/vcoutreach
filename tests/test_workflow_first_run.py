@@ -21,7 +21,7 @@ from web_helpers import (ADA, EM_DASH, EN_DASH, MINA, SENDER_EMAIL, TEST_INBOX, 
 MAIN_PAGES = ["/crm", "/crm/drafts", "/crm/analytics", "/crm/send-plan", "/settings", "/partners", "/replies",
               "/scheduled", "/candidates", "/email-verification", "/crm/tracking", "/enrichment"]
 CRED_WORDS = ("50+ meetings", "$600K")
-STEP_KEYS = ["publik_api", "gmail", "test_recipient", "contact", "draft", "approve", "send_test"]
+STEP_KEYS = ["gmail", "test_recipient", "contact", "draft", "approve", "send_test", "publik_api"]
 
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -44,6 +44,11 @@ def first_body_content(s):
             continue
         return child
     return None
+
+
+def set_kind(web, kind="fundraising"):
+    """Choose the campaign type, the way the Campaign page control does."""
+    assert web.post("/settings/campaign-kind", {"kind": kind}, follow=False).status_code in (302, 303)
 
 
 def before(s, a, b):
@@ -109,7 +114,9 @@ def ready_web(send_web, rows=None, **kw):
 def set_deck(web, path):
     settings = web.ws / "data" / "workspace-settings.json"
     settings.parent.mkdir(parents=True, exist_ok=True)
-    settings.write_text(json.dumps({"pitch_deck_path": str(path)}))
+    saved = json.loads(settings.read_text()) if settings.exists() else {}
+    saved["pitch_deck_path"] = str(path)  # keep the other saved choices, such as the campaign type
+    settings.write_text(json.dumps(saved))
 
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -119,48 +126,51 @@ def set_deck(web, path):
 def test_fresh_workspace_starts_at_step_one_connect_gmail(make_web):
     web = make_web()
     key, label, href, text = next_step(web)
-    assert (key, href) == ("publik_api", "/settings#svc-publik")
+    assert (key, href) == ("gmail", "/settings#svc-gmail")
     assert "Step 1 of 7" in text
-    assert "Publik API" in text + " " + label
+    assert "Gmail" in text + " " + label
 
 
 def test_the_next_step_banner_advances_through_all_seven_steps_and_then_goes_away(make_web):
     web = make_web({"SENDER_EMAIL": SENDER_EMAIL}, sender=True)
     key, _, href, text = next_step(web)
-    assert (key, href, "Step 1 of 7" in text) == ("publik_api", "/settings#svc-publik", True)
-
-    skip_publik(web)
-    key, _, href, text = next_step(web)
-    assert (key, href, "Step 2 of 7" in text) == ("gmail", "/settings#svc-gmail", True)
+    assert (key, href, "Step 1 of 7" in text) == ("gmail", "/settings#svc-gmail", True)
 
     connect_gmail(web)
     key, _, href, text = next_step(web)
     assert (key, href) == ("test_recipient", "/settings#svc-test-recipient")
-    assert "Step 3 of 7" in text and "Set your test recipient" in text
+    assert "Step 2 of 7" in text and "Set your test recipient" in text
 
     assert post_keys(web, {"TEST_RECIPIENT_EMAIL": TEST_INBOX}, follow=False).status_code == 302
     key, _, href, text = next_step(web)
-    assert (key, href) == ("contact", "/crm/new")
-    assert "Step 4 of 7" in text and "Add your first contact" in text
+    assert (key, href) == ("contact", "/crm/drafts#campaignContacts")
+    assert "Step 3 of 7" in text and "add your contacts" in text
 
     seed_contacts(web, [ADA])
     key, _, href, text = next_step(web)
     assert (key, href) == ("draft", "/crm/drafts#writeDrafts")
-    assert "Step 5 of 7" in text and "Write drafts" in text
+    assert "Step 4 of 7" in text and "write drafts" in text
 
     write_drafts(web)
     key, _, href, text = next_step(web)
     assert (key, href) == ("approve", "/crm/drafts")
-    assert "Step 6 of 7" in text and "Review and approve a draft" in text
+    assert "Step 5 of 7" in text and "Review and approve a draft" in text
 
     approve_drafts(web, ["ada"])
     key, _, href, text = next_step(web)
     assert (key, href) == ("send_test", f"/partners/{db_partner_id(web, 'ada@example.com')}")
-    assert "Step 7 of 7" in text and "Send a test email" in text
+    assert "Step 6 of 7" in text and "Send a test email" in text
 
     mark_verified(web, ["ada@example.com"])
     assert send_test(web, "ada").status_code == 200
     assert len(web.transport.calls) == 1
+
+    # The Publik API is the last, optional step. Until the user connects it or skips it the banner still points there.
+    key, _, href, text = next_step(web)
+    assert (key, href) == ("publik_api", "/settings#svc-publik")
+    assert "Step 7 of 7" in text and "Optional: connect the Publik API for AI drafts" in text
+
+    skip_publik(web)
     for path in ("/crm", "/crm/drafts", "/partners"):
         assert next_step(web, path) is None, f"the banner must disappear on {path} once all seven steps are met"
 
@@ -176,8 +186,6 @@ def test_the_next_step_banner_is_global_and_sits_below_the_test_mode_banner(make
 
 def test_the_next_step_banner_is_not_repeated_on_settings_where_the_step_is_done_on_the_page(make_web):
     web = make_web()
-    assert dom(web, "/settings").select_one("#nextStep") is None, "step publik_api"
-    skip_publik(web)
     assert next_step(web)[0] == "gmail"
     assert dom(web, "/settings").select_one("#nextStep") is None, "step gmail"
     connect_gmail(web)
@@ -202,11 +210,11 @@ def test_the_next_step_logic_survives_a_corrupt_journal_on_a_fresh_workspace(mak
     journal.parent.mkdir(parents=True, exist_ok=True)
     journal.write_text("not json at all\n\n{\n", encoding="utf-8")
     assert web.get("/crm").status_code == 200
-    assert next_step(web)[0] == "publik_api"
+    assert next_step(web)[0] == "gmail"
 
 
 # ---------------------------------------------------------------------------------------------------------------
-# P0-2  The Drafts page leads with Write drafts
+# P0-2  The Drafts page: Write drafts is a visible stage that follows the pitch and deck stage
 # ---------------------------------------------------------------------------------------------------------------
 
 def test_write_drafts_form_is_visible_busy_aware_and_offers_replace(make_web):
@@ -221,17 +229,19 @@ def test_write_drafts_form_is_visible_busy_aware_and_offers_replace(make_web):
 
 
 @pytest.mark.parametrize("with_drafts", [False, True])
-def test_write_drafts_comes_before_the_template_and_deck_panel(send_web, make_web, with_drafts):
+def test_write_drafts_comes_after_the_template_and_deck_panel(send_web, make_web, with_drafts):
     web = send_web([ADA]) if with_drafts else make_web()
+    set_kind(web)
     s = dom(web, "/crm/drafts")
     write, panel = s.select_one("#writeDrafts"), s.select_one("#templateDeckPanel")
     assert write is not None and panel is not None
-    assert before(s, write, panel)
+    assert before(s, panel, write)
 
 
 @pytest.mark.parametrize("with_drafts", [False, True])
 def test_the_credibility_sentence_appears_once_and_before_write_drafts(send_web, make_web, with_drafts):
     web = send_web([ADA]) if with_drafts else make_web()
+    set_kind(web)
     markup = body(web.get("/crm/drafts"))
     text = page_text(markup)
     for word in CRED_WORDS:
@@ -257,16 +267,20 @@ def test_the_drafting_explainer_says_a_template_draft_comes_first(make_web):
 
 
 def test_the_deck_panel_is_open_before_any_draft_and_collapses_after(send_web, make_web):
-    fresh = dom(make_web(), "/crm/drafts").select_one("#templateDeckPanel")
+    fresh_web = make_web()
+    set_kind(fresh_web)
+    fresh = dom(fresh_web, "/crm/drafts").select_one("#templateDeckPanel")
     assert fresh.name == "section"
-    panel = dom(send_web([ADA]), "/crm/drafts").select_one("#templateDeckPanel")
+    drafted_web = send_web([ADA])
+    set_kind(drafted_web)
+    panel = dom(drafted_web, "/crm/drafts").select_one("#templateDeckPanel")
     assert panel.name == "details" and not panel.has_attr("open")
 
 
 def test_the_drafts_table_headers_and_empty_state_are_actionable(make_web):
     s = dom(make_web(), "/crm/drafts")
     heads = [th.get_text(" ", strip=True) for th in s.select("table th")]
-    assert heads == ["Contact", "Subject", "Status", "Grounding", "Issues", "Words", "Action"]
+    assert heads == ["Contact", "Subject", "Status", "Checks", "Action"]
     cell = next((td for td in s.select("table td") if "No drafts yet." in td.get_text()), None)
     assert cell is not None
     assert "No drafts yet. Add a contact, then use Write drafts above." in " ".join(cell.get_text().split())
@@ -276,7 +290,7 @@ def test_the_drafts_table_headers_and_empty_state_are_actionable(make_web):
 def test_the_drafts_table_keeps_its_headers_when_drafts_exist(send_web):
     s = dom(send_web([ADA]), "/crm/drafts")
     assert [th.get_text(" ", strip=True) for th in s.select("table th")] == [
-        "Contact", "Subject", "Status", "Grounding", "Issues", "Words", "Action"]
+        "Contact", "Subject", "Status", "Checks", "Action"]
     assert not any("No drafts yet." in td.get_text() for td in s.select("table td"))
 
 
@@ -309,7 +323,7 @@ def test_saving_the_test_recipient_updates_the_banner_and_the_settings_card(make
     for path in ("/crm", "/crm/drafts", "/settings"):
         first = first_body_content(dom(web, path))
         assert "mode-test" in first["class"] and "TEST MODE" in first.get_text()
-        assert "Test mailbox: me@example.com" in " ".join(first.get_text().split()), path
+        assert "Test recipient: me@example.com" in " ".join(first.get_text().split()), path
         assert not any("Set test recipient" in a.get_text() for a in first.find_all("a")), path
     assert dom(web, "/settings").select_one('#svc-test-recipient[data-state="ok"]') is not None
 
@@ -421,10 +435,10 @@ def test_the_empty_state_goes_away_once_a_contact_exists(make_web):
 
 def test_the_overview_toolbar_has_one_primary_button_that_follows_the_state(make_web):
     web = make_web()
-    fresh = dom(web, "/crm").select(".crm-toolbar .crm-button-primary")
-    assert len(fresh) == 1 and fresh[0].get("href") == "/crm/new"
+    fresh = dom(web, "/crm").select(".pk-page-head__actions .pk-btn--primary")
+    assert len(fresh) == 1 and fresh[0].get("href") == "/crm/drafts#campaignContacts"
     seed_contacts(web, [ADA])
-    after = dom(web, "/crm").select(".crm-toolbar .crm-button-primary")
+    after = dom(web, "/crm").select(".pk-page-head__actions .pk-btn--primary")
     assert len(after) == 1 and "Review drafts" in after[0].get_text()
 
 
@@ -485,6 +499,7 @@ def test_the_empty_drafts_page_has_no_inline_styles(make_web):
 
 def test_the_deck_panel_links_to_the_package_settings_and_to_a_configured_deck(make_web):
     web = make_web()
+    set_kind(web)
     deck = web.ws / "attachments" / "deck.pdf"
     deck.parent.mkdir(parents=True, exist_ok=True)
     deck.write_bytes(b"%PDF-1.4 fake deck")

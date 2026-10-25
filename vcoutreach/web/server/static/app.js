@@ -1,10 +1,22 @@
 /* Publikreach interactions. Page data stays in escaped HTML attributes. */
 (function () {
   'use strict';
-  try {
-    var theme = localStorage.getItem('publik-signal-theme');
-    document.documentElement.dataset.theme = theme === 'dark' ? 'dark' : 'light';
-  } catch (error) { document.documentElement.dataset.theme = 'light'; }
+  // Early theme (this script runs in <head> before first paint): a saved Toggle theme choice wins, else follow the OS setting.
+  var saved = null;
+  try { saved = localStorage.getItem('publik-signal-theme'); } catch (error) { saved = null; }
+  var osDark = null;
+  try { osDark = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null; } catch (error) { osDark = null; }
+  document.documentElement.dataset.theme = saved === 'dark' || saved === 'light' ? saved : (osDark && osDark.matches ? 'dark' : 'light');
+  if (!(saved === 'dark' || saved === 'light') && osDark && osDark.addEventListener) {
+    osDark.addEventListener('change', function (event) {
+      var chosen = null;
+      try { chosen = localStorage.getItem('publik-signal-theme'); } catch (error) { chosen = null; }
+      if (chosen === 'dark' || chosen === 'light') return;
+      document.documentElement.dataset.theme = event.matches ? 'dark' : 'light';
+      var button = document.getElementById('themeToggle');
+      if (button) button.setAttribute('aria-pressed', String(event.matches));
+    });
+  }
   document.addEventListener('DOMContentLoaded', function () {
     var page = document.body.dataset.page;
     var csrf = document.querySelector('meta[name="csrf-token"]').content;
@@ -397,9 +409,10 @@ if (page === 'settings') {
   function noteOf(card) { return card.querySelector('[data-svc-note]'); }
   function say(card, text) { var note = card && noteOf(card); if (note) note.textContent = text; }
   function updateSummary() {
-    var ids = Object.keys(cards);
-    var ready = ids.filter(function (id) { return cards[id].dataset.state !== 'unset'; }).length;
-    document.querySelectorAll('[data-svc-summary]').forEach(function (node) { node.textContent = ready + ' of ' + ids.length + ' services set up'; });
+    // Counts exactly the header tiles (the same list and states as the chips), so the number matches what is on screen.
+    var tiles = document.querySelectorAll('.svc-tile');
+    var ready = Array.prototype.filter.call(tiles, function (tile) { return tile.dataset.state === 'ok' || tile.dataset.state === 'saved'; }).length;
+    document.querySelectorAll('[data-svc-summary]').forEach(function (node) { node.textContent = ready + ' of ' + tiles.length + ' services connected'; });
   }
   // The one place a service status changes: card chip, header tile and summary stay in sync, no reload.
   function setServiceStatus(id, state, text) {
@@ -414,6 +427,8 @@ if (page === 'settings') {
       var word = tile.querySelector('[data-svc-label]');
       if (word) word.textContent = shown;
     });
+    var removeKey = card.querySelector('[data-svc-remove]');
+    if (removeKey) removeKey.hidden = state === 'unset';
     if (text) say(card, text);
     updateSummary();
   }
@@ -450,6 +465,7 @@ if (page === 'settings') {
   function augmentSecretInputs(root) {
     secretInputsIn(root).forEach(function (input) {
       if (input.dataset.secretReady) return;
+      if (input.hasAttribute('data-pk-key')) return; // the Publik API card (setup_ai.js) owns its own Show button
       input.dataset.secretReady = '1';
       var label = input.closest('label');
       var span = label && label.querySelector(':scope > span');
@@ -587,7 +603,7 @@ if (page === 'settings') {
   var gmailSwitching = false;
   var VIEW_STATE = {'no-client': 'unset', ready: 'saved', running: 'saved', connected: 'ok', failed: 'fail'};
   var VIEW_TEXT = {
-    'no-client': 'Enter your Gmail address and app password, then choose Connect Gmail.',
+    'no-client': 'Gmail is not connected. Choose your Google OAuth client file, then choose Connect Gmail. Then set your test recipient below.',
     ready: 'OAuth client saved privately. Connect Gmail to continue. TEST mode still applies.',
     running: 'Finish consent in your system browser. This expires after three minutes.',
     connected: 'Gmail connected. The connection is saved privately in this workspace. TEST mode still applies.',
@@ -599,8 +615,12 @@ if (page === 'settings') {
   function showGmail(view, text) {
     if (!gmailCard) return;
     gmailCard.dataset.gmailView = view;
-    gmailCard.querySelector('[data-gmail-app-password]').hidden = view === 'connected' || view === 'running';
-    gmailCard.querySelector('[data-gmail-advanced]').hidden = view === 'connected';
+    var passwordForm = gmailCard.querySelector('[data-gmail-app-password]');
+    if (passwordForm) passwordForm.hidden = view === 'connected' || view === 'running';
+    var alternative = gmailCard.querySelector('[data-gmail-advanced]');
+    if (alternative) alternative.hidden = view === 'connected' || view === 'running';
+    var steps = gmailCard.querySelector('[data-gmail-steps]');
+    if (steps) steps.hidden = view === 'connected' || view === 'running';
     gmailCard.querySelectorAll('[data-gmail-panel]').forEach(function (panel) { panel.hidden = panel.dataset.gmailPanel !== view; });
     gmailButtons(view === 'running');
     setServiceStatus('gmail', VIEW_STATE[view], text || VIEW_TEXT[view]);
@@ -669,6 +689,13 @@ if (page === 'settings') {
     });
     gmailCard.querySelectorAll('[data-gmail-choose]').forEach(function (button) { button.addEventListener('click', function () { gmailChoose(false); }); });
     gmailCard.querySelectorAll('[data-gmail-connect]').forEach(function (button) { button.addEventListener('click', gmailConnect); });
+    // First-time Connect Gmail: choose the client file, then connect straight away.
+    gmailCard.querySelectorAll('[data-gmail-choose-connect]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        gmailSwitching = true;
+        gmailChoose(true);
+      });
+    });
     gmailFile.addEventListener('change', function () {
       if (!gmailFile.files.length) return;
       var upload = new FormData(gmailCard.querySelector('[data-gmail-upload]'));
@@ -701,9 +728,23 @@ if (page === 'settings') {
     void target.offsetWidth;
     target.classList.add('svc-hl');
     window.setTimeout(function () { target.classList.remove('svc-hl'); }, 1800);
-    var field = target.querySelector('input:not([type="hidden"]):not([hidden]), textarea, select, button:not([disabled])');
-    (field || target).focus({preventScroll: true});
-    target.scrollIntoView({block: 'center', behavior: 'smooth'});
+    // Focus the first usable input (skipping hidden panels and closed alternatives), else the first button.
+    function usable(node) {
+      for (var up = node; up && up !== target.parentElement; up = up.parentElement) {
+        if (up.hidden || (up.tagName === 'DETAILS' && !up.open)) return false;
+      }
+      return true;
+    }
+    function firstUsable(selector) {
+      return Array.prototype.slice.call(target.querySelectorAll(selector)).filter(usable)[0];
+    }
+    var field = firstUsable('input:not([type="hidden"]):not([type="file"]), textarea, select') || firstUsable('button:not([disabled])');
+    // No field to land on: focus the card heading (or the target itself) so keyboard and screen reader users move with the jump.
+    var heading = target.querySelector('h1, h2, h3, summary');
+    var landing = field || heading || target;
+    if (!field && landing.tabIndex < 0 && !landing.hasAttribute('tabindex')) landing.setAttribute('tabindex', '-1');
+    landing.focus({preventScroll: true});
+    target.scrollIntoView({block: 'start', behavior: 'smooth'});
   }
   document.querySelectorAll('.svc-tile').forEach(function (tile) {
     tile.addEventListener('click', function (event) {
@@ -711,6 +752,16 @@ if (page === 'settings') {
       history.replaceState(null, '', tile.getAttribute('href'));
       reveal(tile.getAttribute('href').slice(1));
     });
+  });
+  // Same-page #svc-* / #sec-* links (the Next step banner "Go" link) move focus even when the hash does not change.
+  document.addEventListener('click', function (event) {
+    var link = event.target.closest && event.target.closest('a[href*="#svc-"], a[href*="#sec-"]');
+    if (!link || link.classList.contains('svc-tile') || link.origin !== location.origin || link.pathname !== location.pathname) return;
+    var id = link.hash.slice(1);
+    if (!document.getElementById(id)) return;
+    event.preventDefault();
+    history.replaceState(null, '', link.hash);
+    reveal(id);
   });
   window.addEventListener('hashchange', function () { reveal(location.hash.slice(1)); });
   if (location.hash) reveal(location.hash.slice(1));
@@ -925,8 +976,7 @@ var tableRows = document.querySelectorAll('#partnersTable tbody tr[data-name]');
 function rowMatchesVerification(row) {
   var params = new URLSearchParams(window.location.search);
   var verification = params.getAll('verif');
-  var channel = params.get('channel');
-  return (!verification.length || verification.includes(row.dataset.verif)) && (!channel || row.dataset.channel === channel);
+  return !verification.length || verification.includes(row.dataset.verif);
 }
 tableRows.forEach(function (row) { if (!rowMatchesVerification(row)) row.style.display = 'none'; });
 if (searchInput) {
@@ -946,7 +996,6 @@ document.querySelectorAll('[data-action="partners_list-0"]').forEach(function (e
 document.querySelectorAll('[data-action="partners_list-1"]').forEach(function (element) { element.addEventListener('click', function (event) { toggleSingle('tier',this.dataset.arg0); }); });
 document.querySelectorAll('[data-action="partners_list-2"]').forEach(function (element) { element.addEventListener('click', function (event) { toggleSingle('status',this.dataset.arg0); }); });
 document.querySelectorAll('[data-action="partners_list-3"]').forEach(function (element) { element.addEventListener('click', function (event) { toggleFilter('verif',this.dataset.arg0); }); });
-document.querySelectorAll('[data-action="partners_list-4"]').forEach(function (element) { element.addEventListener('click', function (event) { toggleSingle('channel','twitter'); }); });
 document.querySelectorAll('[data-action="partners_list-5"]').forEach(function (element) { element.addEventListener('click', function (event) { clearAllFilters(); }); });
 document.querySelectorAll('[data-action="partners_list-6"]').forEach(function (element) { element.addEventListener('click', function (event) { document.getElementById('bulkLiveConfirm').style.display='flex'; }); });
 document.querySelectorAll('[data-action="partners_list-7"]').forEach(function (element) { element.addEventListener('click', function (event) { submitBulkLive(); }); });

@@ -2,18 +2,23 @@
 {% block page_id %}send_plan{% endblock %}
 {% block title %}Send plan{% endblock %}
 {% block content %}
-<div class="crm-shell send-plan-page">
-  <header class="crm-hero"><div><div class="crm-eyebrow">SEND GATE / READ ONLY</div><h1>Send plan.</h1><p>Nothing is sent from this screen.</p></div><a class="crm-button crm-button-secondary" href="/crm/drafts">Review drafts</a></header>
-  <section class="crm-metrics send-stats" aria-label="Plan totals">
-    <div class="crm-metric"><span>PLANNED</span><strong>{{ summary.planned }}</strong><small>Passed every gate</small></div>
-    <div class="crm-metric"><span>HELD</span><strong>{{ summary.held }}</strong><small>Blocked by a gate, reason shown</small></div>
-    <div class="crm-metric"><span>MODE</span><strong>{{ g_send_mode|upper }}</strong><small>{{ 'Test mailbox only' if g_send_mode == 'test' else 'Real recipients' }}</small></div>
+<div class="crm-shell send-plan-page cmp-page">
+  <header class="pk-page-head">
+    <div class="pk-page-head__text"><h1 class="pk-page-title">Send plan</h1><p class="pk-page-sub">Nothing is sent from this screen.</p></div>
+    <div class="pk-page-head__actions"><a class="pk-btn pk-btn--secondary pk-btn--sm" href="/crm/drafts">Review drafts</a></div>
+  </header>
+  <section class="pk-kpis send-stats" aria-label="Plan totals">
+    <div class="pk-kpi"><span class="pk-kpi__label">PLANNED</span><strong class="pk-kpi__value">{{ summary.planned }}</strong><small class="pk-kpi__caption">Passed every gate</small></div>
+    <div class="pk-kpi"><span class="pk-kpi__label">HELD</span><strong class="pk-kpi__value">{{ summary.held }}</strong><small class="pk-kpi__caption">Blocked by a gate, reason shown</small></div>
+    <div class="pk-kpi"><span class="pk-kpi__label">MODE</span><strong class="pk-kpi__value">{{ g_send_mode|upper }}</strong><small class="pk-kpi__caption">{{ 'Test mailbox only' if g_send_mode == 'test' else 'Real recipients' }}</small></div>
   </section>
   {% if error %}<p class="flash flash-error" role="status">{{ error }}</p>{% endif %}
+  {% set _example_slugs = example_draft_slugs() %}
+  {% if _example_slugs %}<p class="flash flash-warning example-warning" role="status" data-example-warning="1"><strong>{% if _example_slugs|length == 1 %}1 draft still carries{% else %}{{ _example_slugs|length }} drafts still carry{% endif %} the Publik example pitch.</strong> {{ example_warning_text }} <a href="/settings#sec-story">Edit your pitch in Settings</a>.</p>{% endif %}
   {% if g_send_mode == 'test' %}<p>Delivery target: {{ g_test_recipient or 'Test recipient not set' }}</p>{% endif %}
-  <section class="crm-panel">
-    <div class="crm-table-wrap"><table class="crm-table send-plan-table"><caption>Draft eligibility and delivery targets</caption><thead><tr><th>Contact</th><th>Delivery target</th><th>Approval</th><th>Subject</th><th>Mode</th><th>Result and reason</th></tr></thead><tbody>
-    {% for row in rows %}<tr><td>{{ row.recipient_name }}<span class="crm-table-subline">{{ row.recipient_email }}</span></td><td>{{ row.get('to') or 'Test recipient not set' }}</td><td>{{ row.approval_state }}</td><td>{{ row.get('subject', '') }}</td><td>{{ row.get('mode', g_send_mode)|upper }}</td><td><span class="badge {{ 'badge-success' if row.status == 'Planned' else 'badge-warning' }}">{{ row.status }}</span>{% if row.get('detail') %}<span class="crm-table-subline">{{ row.detail }}{% if 'Gmail is not connected.' in row.detail %} <a href="/settings">Open Settings</a>{% endif %}{% if 'not approved' in row.detail and row.get('slug') %} <a href="/crm/drafts/{{ row.slug|urlencode }}#approve">Review and approve this draft</a>{% endif %}</span>{% endif %}</td></tr>{% else %}<tr><td colspan="6" class="crm-empty-row">No drafts to plan. <a href="/crm/drafts">Write drafts</a>.</td></tr>{% endfor %}
+  <section class="pk-card pk-card--flush">
+    <div class="pk-table-wrap"><table class="pk-table crm-table send-plan-table"><caption>Draft eligibility and delivery targets</caption><thead><tr><th>Contact</th><th>Delivery target</th><th>Approval</th><th>Subject</th><th>Mode</th><th>Result and reason</th></tr></thead><tbody>
+    {% for row in rows %}<tr><td><span class="pk-cell-title">{{ row.recipient_name }}</span><span class="pk-cell-sub crm-table-subline">{{ row.recipient_email }}</span></td><td>{{ row.get('to') or 'Test recipient not set' }}</td><td>{{ row.approval_state }}</td><td>{{ row.get('subject', '') }}{% if row.get('slug') in _example_slugs %}<span class="pk-cell-sub crm-table-subline">Still the example pitch</span>{% endif %}</td><td>{{ row.get('mode', g_send_mode)|upper }}</td><td><span class="pk-pill pk-pill--dot {{ 'pk-pill--success' if row.status == 'Planned' else 'pk-pill--warning' }}">{{ row.status }}</span>{% if row.get('detail') %}<span class="pk-cell-sub crm-table-subline">{{ row.detail }}{% if 'Gmail is not connected.' in row.detail %} <a href="/settings">Open Settings</a>{% endif %}{% if 'not approved' in row.detail and row.get('slug') %} <a href="/crm/drafts/{{ row.slug|urlencode }}#approve">Review and approve this draft</a>{% endif %}</span>{% endif %}</td></tr>{% else %}<tr><td colspan="6" class="crm-empty-row">No drafts to plan. <a href="/crm/drafts">Write drafts</a>.</td></tr>{% endfor %}
     </tbody></table></div>
   </section>
 </div>

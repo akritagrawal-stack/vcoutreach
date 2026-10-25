@@ -1,7 +1,8 @@
 """Pure, escaped-by-template preview using editable workspace settings."""
 import re
 
-from vcoutreach.web.server.workspace_settings import normalize_settings
+from vcoutreach.web.server.example_pitch import EXAMPLE_DECK_LABEL
+from vcoutreach.web.server.workspace_settings import blurb_for_kind, effective_campaign_kind, normalize_settings
 
 _PLACEHOLDER = re.compile(r'\{([A-Za-z][A-Za-z _]*)\}')
 _HINTS = {
@@ -38,9 +39,12 @@ def _fill(body: str, values: dict[str, str]) -> str:
 
 def build_sample_email(payload: dict | None) -> dict[str, object]:
     settings = normalize_settings(payload)
-    body = _fill(settings['outreach_blurb_template'], _values(settings))
+    body = _fill(blurb_for_kind(settings['outreach_blurb_template'], effective_campaign_kind(settings)), _values(settings))
     body = re.sub(r'[ \t]{2,}', ' ', body)
-    return {'subject': settings['email_subject_rule'], 'attachment': settings['pitch_deck_label'],
+    attachment = settings['pitch_deck_label']
+    if effective_campaign_kind(settings) == 'job_search' and attachment in ('', EXAMPLE_DECK_LABEL):
+        attachment = 'Resume'
+    return {'subject': settings['email_subject_rule'], 'attachment': attachment,
             'from_label': settings['operator_name'] or 'Sender', 'to_label': 'Contact / example.com',
             'website': settings['website'], 'paragraphs': [p.strip() for p in body.split('\n\n') if p.strip()],
             'source': 'unsaved_form_preview', 'delivery_authority': False}

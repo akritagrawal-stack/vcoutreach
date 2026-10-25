@@ -122,7 +122,7 @@ def test_drafts_list_shows_true_approval_and_edit_notice(make_web):
     draft = read_draft_file(w.ws, "ada")
     r = w.post("/crm/drafts/ada", {"subject": draft.subject + " today", "body": draft.body,
                                   "lane": "first_touch"}, follow=True)
-    assert "Edit saved; draft returned to Pending and needs re-approval" in page_text(r)
+    assert "Edit saved. The draft went back to Pending and needs approval again" in page_text(r)
     row, = [r for r in plan_rows(w) if ADA["email"] in column(r, "contact")]
     assert "pending" in column(row, "approval").lower()
 

@@ -107,7 +107,7 @@ def _publik_action() -> dict:
 
 def _gmail_action() -> dict:
     return {
-        "what": "Click Connect Gmail in Settings and finish consent in your browser.",
+        "what": "In Settings, Gmail card, choose your Google OAuth client file, click Connect Gmail and finish consent in your browser.",
         "why": "Google sign-in happens in your browser, never through an AI assistant.",
         "settings_path": "/settings#svc-gmail",
         "how_to_open": "Open the Publikreach window (or run `vcoutreach ui`) and go to Settings.",
@@ -254,6 +254,24 @@ def _counts(workspace) -> dict:
     return counts
 
 
+def _example_pitch_payload() -> dict:
+    """The shipped Publik example email plus short writing guidance, as untrusted data to imitate.
+
+    It is a model for structure and tone only. The reader must replace every company fact with the user's own.
+    """
+    from vcoutreach.web.server import example_pitch
+    data = example_pitch.example_pitch()
+    parts_text = "\n".join(f"{p['label']}: {p['text']} (why: {p['why']})" for p in data["parts"])
+    return {
+        "label": data["label"],
+        "use": ("Model for structure and tone only. Replace every company fact with the user's own. "
+                "The user edits the real pitch in Settings; do not send this text as is."),
+        "example_email": _wrap(data["copy_text"], "example_pitch"),
+        "parts": _wrap(parts_text, "example_pitch_parts"),
+        "writing_guidance": _wrap("\n".join(data["guidance"]), "example_pitch_guidance"),
+    }
+
+
 def setup_status(params: dict) -> dict:
     from vcoutreach.web import setup_steps as steps_mod
     workspace = _workspace()
@@ -271,6 +289,7 @@ def setup_status(params: dict) -> dict:
         publik_recommendation=steps_mod.publik_recommendation_state(workspace),
         provider_auto_would_pick=_auto_provider(services),
         counts=_counts(workspace),
+        example_pitch=_example_pitch_payload(),
         ui_url_hint="Open the app window or run `vcoutreach ui` for Settings.",
         settings_links={
             "settings": "/settings",
@@ -284,7 +303,8 @@ def setup_status(params: dict) -> dict:
         summary = "Setup is complete: all seven steps are done. Live sending stays in the app window."
     elif nxt["key"] == "publik_api":
         summary = (
-            "Recommended first step: connect the Publik API for better personalization (optional). "
+            "Last step, optional: connect the Publik API (recommended for AI drafts). Gmail, the test recipient, "
+            "drafts and the test send do not need it. "
             f"Ask the user whether they want to get a key at {PUBLIK_KEY_URL} and paste it in Settings, "
             "or skip and use their own key or the offline template. If they skip, call set_setting "
             "PUBLIK_RECOMMENDATION=skipped so this is not asked again."

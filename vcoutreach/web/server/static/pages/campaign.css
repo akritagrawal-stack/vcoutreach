@@ -1,0 +1,110 @@
+/* Publikreach campaign page styles. Page-specific rules only; shared kit lives in components.css (pk- classes).
+   Loaded before crm.css and misc.css, so overrides of legacy rules use a .cmp-* parent for extra specificity. */
+
+/* Link-styled buttons: the legacy `.crm-shell a` accent color would otherwise beat the kit button colors */
+.crm-shell a.pk-btn--primary, .crm-shell a.pk-btn--primary:hover, .crm-shell a.pk-btn--primary:visited { color: var(--on-accent); text-decoration: none; }
+.crm-shell a.pk-btn--secondary, .crm-shell a.pk-btn--secondary:hover, .crm-shell a.pk-btn--secondary:visited { color: var(--text); text-decoration: none; }
+.crm-shell a.pk-btn--ghost, .crm-shell a.pk-btn--ghost:visited { color: var(--text-muted); text-decoration: none; }
+.crm-shell a.pk-btn--ghost:hover { color: var(--text); }
+
+/* Stepper: finished and upcoming steps collapse to one line, only the current step shows its body */
+.cmp-stepper { margin: 16px 0; }
+.cmp-stepper .cmp-step { min-width: 0; }
+.cmp-stepper .cmp-step__head { min-width: 0; }
+.cmp-stepper .cmp-step__head .pk-step__title { margin: 0; }
+.cmp-stepper .cmp-step__head .pk-step__sub { margin: 2px 0 0; }
+.cmp-stepper .cmp-step__edit { white-space: nowrap; }
+.cmp-stepper .cmp-step__body { min-width: 0; padding-top: 8px; display: grid; gap: 10px; align-content: start; }
+.cmp-stepper .cmp-step--collapsed .cmp-step__body { display: none; }
+.cmp-stepper .cmp-step--collapsed.cmp-step--open .cmp-step__body,
+.cmp-stepper .cmp-step--collapsed:target .cmp-step__body,
+.cmp-stepper .cmp-step--collapsed:has(:target) .cmp-step__body { display: grid; }
+.cmp-stepper .cmp-step--collapsed { padding-block: 8px; }
+.cmp-stepper .cmp-step--collapsed.cmp-step--open { padding-block: 12px; }
+.cmp-stepper .pk-step__badge svg { display: block; }
+.cmp-stepper .svc-hint, .cmp-stepper .crm-source-note { margin: 0; color: var(--text-muted); font-size: 13px; line-height: 1.5; }
+.cmp-stepper .campaign-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; }
+
+/* Campaign type switch */
+.cmp-kind.campaign-kind-switch { margin: 0 0 12px; }
+.cmp-kind-choices.campaign-kind-choices { margin: 0 0 16px; }
+
+/* Step 3 write form */
+.cmp-stepper .cmp-write { display: grid; gap: 8px; }
+.cmp-stepper .cmp-write__main { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.cmp-stepper .cmp-advanced > summary { cursor: pointer; font-size: 13px; font-weight: 500; color: var(--text-muted); min-height: 32px; display: flex; align-items: center; }
+.cmp-stepper .cmp-advanced[open] > summary { color: var(--text); }
+.cmp-advanced__body { display: grid; gap: 10px; padding: 4px 0 8px; max-width: 360px; }
+.cmp-advanced__body label { display: grid; gap: 4px; font-size: 12px; font-weight: 500; color: var(--text-muted); }
+.cmp-advanced__body label.cmp-check-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text); }
+.cmp-stepper .campaign-sender-form { margin: 0; }
+.cmp-stepper .campaign-sender-form input { width: 100%; }
+
+/* Readiness checklist (inside step 4) */
+.cmp-readiness .readiness-summary { margin-top: 0; }
+.cmp-readiness .readiness-list { margin-top: 8px; gap: 6px; }
+.cmp-readiness .readiness-row { padding: 6px 12px; min-height: var(--pk-row-h); border-radius: var(--pk-r-ctl); }
+.cmp-readiness .readiness-row.is-ok .readiness-mark { background: var(--success); border-color: var(--success); color: var(--on-success); }
+.cmp-readiness .readiness-name a { color: inherit; text-decoration: none; }
+.cmp-readiness .readiness-name a:hover { color: var(--accent); text-decoration: underline; }
+
+/* Drafts table card */
+.cmp-drafts { margin-bottom: 16px; }
+.cmp-drafts .cmp-drafts__head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
+.cmp-drafts .cmp-search { display: flex; align-items: center; gap: 8px; margin: 0; }
+.cmp-drafts .cmp-search .pk-input { width: 200px; max-width: 100%; }
+.cmp-drafts .cmp-tabs { padding: 0 16px; }
+.cmp-table td { vertical-align: middle; }
+.cmp-table .cmp-subject { max-width: 360px; }
+.cmp-table .cmp-subject .pk-cell-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+.cmp-table tr[data-href] { cursor: pointer; }
+.cmp-table tr[data-href]:hover td { background: var(--row-hover); }
+.cmp-table tr[data-href]:focus-visible { outline: 2px solid var(--focus, var(--accent)); outline-offset: -2px; }
+.cmp-table .pk-col-actions { white-space: nowrap; }
+.cmp-table .pk-col-actions a { display: inline-flex; align-items: center; gap: 6px; margin-right: 12px; }
+.cmp-check { font-size: 12px; font-weight: 500; }
+.cmp-check--ok { color: var(--success); }
+.cmp-check--bad { color: var(--danger); cursor: help; text-decoration: underline dotted; text-underline-offset: 3px; }
+.cmp-table .cmp-empty { text-align: center; color: var(--text-muted); padding: 32px 16px; }
+.cmp-table .cmp-empty svg { display: block; margin: 0 auto 8px; color: var(--text-faint); }
+
+/* Draft editor: two panes */
+.cmp-editor .cmp-panes.draft-editor-layout { grid-template-columns: minmax(0, 1fr) minmax(300px, 420px); gap: 16px; margin-top: 8px; }
+.cmp-editor .cmp-pane { min-width: 0; }
+.cmp-editor .cmp-pane--side { display: grid; gap: 16px; align-content: start; }
+.cmp-editor .cmp-pane--editor > .pk-card__body { display: grid; gap: 14px; }
+.cmp-editor .cmp-banner { display: flex; align-items: flex-start; gap: 8px; margin: 0 0 12px; }
+.cmp-editor .cmp-banner__icon { flex: none; display: inline-flex; padding-top: 2px; }
+.cmp-editor .lint-issues { margin: 0; border-radius: var(--pk-r-ctl); }
+.cmp-editor .draft-form { gap: 14px; }
+.cmp-editor .draft-meta { display: block; }
+.cmp-editor .draft-meta > .cmp-advanced__body { max-width: none; }
+.cmp-editor .draft-meta > summary { cursor: pointer; font-size: 13px; font-weight: 500; color: var(--text-muted); min-height: 32px; display: flex; align-items: center; }
+.cmp-editor .draft-actions { padding-top: 12px; }
+.cmp-editor .cmp-approval { display: grid; gap: 8px; padding-top: 12px; border-top: 1px solid var(--border-muted); }
+.cmp-editor .cmp-approve-row, .cmp-editor .cmp-approve-form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0; }
+.cmp-editor .cmp-approve-reason { font-size: 13px; color: var(--text-muted); margin: 0; }
+.cmp-editor .cmp-preview { position: sticky; top: 84px; }
+.cmp-editor .cmp-preview .draft-preview-email { padding: 12px; border: 1px solid var(--border-muted); border-radius: var(--pk-r-ctl); background: var(--bg-subtle); }
+.cmp-editor .cmp-preview .cmp-preview__subject { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 10px; }
+.cmp-editor .cmp-preview .attachment-chip { margin-left: 0; }
+.cmp-editor .cmp-preview .draft-preview-deck { margin-top: 14px; }
+.cmp-editor .cmp-siblings { position: static; max-height: none; }
+.cmp-editor .cmp-siblings ul { margin: 0; padding: 0 16px 8px; list-style: none; }
+.cmp-editor .cmp-siblings li > .pk-pill { grid-column: 2; grid-row: 1; justify-self: end; }
+.cmp-editor .cmp-siblings li > .crm-table-subline { grid-column: 1 / -1; grid-row: 2; }
+
+@media (max-width: 960px) {
+  .cmp-editor .cmp-panes.draft-editor-layout { grid-template-columns: minmax(0, 1fr); }
+  .cmp-editor .cmp-preview { position: static; }
+}
+@media (max-width: 640px) {
+  .cmp-stepper .pk-step { grid-template-columns: 24px minmax(0, 1fr); }
+  .cmp-stepper .cmp-step__edit { grid-column: 2; justify-self: start; }
+  .cmp-drafts .cmp-search { width: 100%; }
+  .cmp-drafts .cmp-search .pk-search { flex: 1 1 auto; min-width: 0; }
+  .cmp-drafts .cmp-search .pk-input { width: 100%; }
+  .cmp-drafts .cmp-tabs { overflow-x: auto; }
+  .cmp-table .cmp-subject { max-width: 200px; }
+  .cmp-editor .cmp-pane--editor > .pk-card__body { padding: 12px; }
+}

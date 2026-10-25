@@ -1,0 +1,39 @@
+/* Publikreach dashboard page styles. Page-specific rules only; shared kit lives in components.css (pk- classes). */
+.dash { min-width: 0; }
+.dash-actions { gap: 8px; }
+.dash-gmail { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.dash-gmail form { margin: 0; display: inline-flex; }
+.dash-gmail .crm-chip { max-width: 260px; }
+
+.dash-next { margin: 0 0 16px; }
+.dash-next__list { list-style: none; margin: 0; padding: 0; }
+.dash-next__item { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; border-top: 1px solid var(--border-muted); }
+.dash-next__item:first-child { border-top: 0; }
+.dash-next__text { font-size: 14px; line-height: 20px; color: var(--text); min-width: 0; }
+
+.dash-form { margin: 0; }
+.dash-tabs { margin-bottom: 12px; }
+.dash-tabs > button { font-family: var(--font-sans); }
+.dash-filters label { margin: 0; display: inline-flex; }
+.dash-filters .pk-search { display: block; }
+.dash-filters .pk-select { max-width: 200px; }
+
+.dash-table td { vertical-align: top; }
+.dash-table .pk-cell-sub { display: block; }
+.dash-similar { margin-left: 6px; font-size: 12px; color: var(--text-muted); text-decoration: underline; text-underline-offset: 2px; }
+.dash-similar:hover { color: var(--accent); }
+.dash-empty-row { padding: 24px 16px; }
+.dash-pager { display: inline-flex; align-items: center; gap: 8px; }
+
+.dash-empty-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; margin-top: 4px; }
+.dash-empty-actions form { margin: 0; }
+.pk-empty.crm-empty-state { padding: 40px 16px; }
+.pk-empty .crm-empty-steps { margin: 4px auto 8px; }
+
+@media (max-width: 640px) {
+  .dash-gmail .crm-chip { max-width: 190px; }
+  .dash-actions { width: 100%; justify-content: flex-start; margin-left: 0; }
+  .dash-filters .pk-select { max-width: none; flex: 1 1 140px; }
+  .dash-filters .pk-spacer { display: none; }
+  .dash-next__item { flex-wrap: wrap; }
+}

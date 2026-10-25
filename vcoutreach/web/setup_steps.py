@@ -3,8 +3,12 @@
 One pure helper so both consumers agree. It reads local files and the workspace
 database only (no network) and never returns or logs a secret value.
 
-Seven steps, Publik recommendation first:
-publik_api, gmail, test_recipient, contact, draft, approve, send_test.
+Seven steps, the Publik API last because it is optional:
+gmail, test_recipient, contact, draft, approve, send_test, publik_api.
+
+After the connections (Gmail, test recipient) the next steps live on the Campaign page
+(/crm/drafts): the ids stay ``contact``, ``draft``, ``approve`` and ``send_test`` so existing consumers
+keep working, but their labels and links now point into that page.
 """
 from __future__ import annotations
 
@@ -22,13 +26,13 @@ RECOMMENDATION_VALUES = ("pending", "skipped")
 PROVIDER_PREFERENCES = ("auto", "template", "publik", "openai", "anthropic")
 
 STEP_DEFINITIONS = (
-    ("publik_api", "Recommended: connect the Publik API for better personalization", "/settings#svc-publik"),
-    ("gmail", "Connect Gmail", "/settings#svc-gmail"),
+    ("gmail", "Connect Gmail with your Google OAuth client file (needed for the test email)", "/settings#svc-gmail"),
     ("test_recipient", "Set your test recipient", "/settings#svc-test-recipient"),
-    ("contact", "Add your first contact", "/crm/new"),
-    ("draft", "Write drafts", "/crm/drafts#writeDrafts"),
+    ("contact", "Set up your campaign: add your contacts", "/crm/drafts#campaignContacts"),
+    ("draft", "Set up your campaign: write drafts", "/crm/drafts#writeDrafts"),
     ("approve", "Review and approve a draft", "/crm/drafts"),
     ("send_test", "Send a test email", "/partners"),
+    ("publik_api", "Optional: connect the Publik API for AI drafts", "/settings#svc-publik"),
 )
 
 

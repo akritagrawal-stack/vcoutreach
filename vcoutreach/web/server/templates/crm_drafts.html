@@ -1,46 +1,179 @@
 {% extends 'base.html' %}
+{% from "_icons.html" import icon %}
 {% block page_id %}crm_drafts{% endblock %}
-{% block title %}Drafts (lint){% endblock %}
+{% block title %}Campaign{% endblock %}
 {% block content %}
-<div class="crm-shell">
-  <header class="crm-hero">
-    <div><div class="crm-eyebrow">DRAFT REVIEW / WORKSPACE FILES</div><h1>Drafts (lint).</h1><p>Review each email and fix flagged issues. Sending happens from the batch review, behind the typed SEND TO check.</p></div>
-    <div class="form-actions"><a class="crm-button crm-button-small crm-button-secondary" href="/crm/send-plan">View send plan</a><a class="crm-button crm-button-small crm-button-secondary" href="/partners">Review batch send</a></div>
+{% set c = campaign %}
+{% set k = c.words %}
+{% set all_rows = all_drafts|default(drafts) %}
+{% set approved_n = campaign_vm.approved_count(all_rows) %}
+{% set st = campaign_vm.stepper(c, approved_n) %}
+{% set tab_list = campaign_vm.tabs(all_rows, status_filter, query) %}
+{% set wb = campaign_vm.write_button(c, all_rows) %}
+{% set rows = campaign_vm.decorate(drafts) %}
+{% set short_kind = {'fundraising': 'Raising money', 'job_search': 'Looking for a role'} %}
+
+{#- One stepper step. State comes from st (campaign_vm.stepper): done steps and todo steps collapse to a title, a one-line
+    summary and an Edit/Open link; only the current step shows its body. -#}
+{% macro step(n, sid, hid, title, sub, st, act_label, act_href, act_toggle=true) %}
+{% from "_icons.html" import icon %}
+{% set is_done = st.done[n] %}
+{% set is_current = st.current == n %}
+<section class="pk-step cmp-step {{ 'pk-step--done' if is_done }} {{ 'pk-step--current' if is_current }} {{ 'pk-step--todo' if (not is_done and not is_current) }} {{ '' if is_current else 'cmp-step--collapsed' }}" id="{{ sid }}" aria-labelledby="{{ hid }}"{% if is_current %} aria-current="step"{% endif %}>
+  <span class="pk-step__badge" aria-hidden="true">{% if is_done %}{{ icon("check", 14) }}{% else %}{{ n }}{% endif %}</span>
+  <div class="cmp-step__head">
+    <h2 class="pk-step__title" id="{{ hid }}"><span class="sr-only">{{ n }}. </span>{{ title }}</h2>
+    <p class="pk-step__sub">{{ sub }}</p>
+  </div>
+  {% if not is_current and act_href %}<a class="pk-btn pk-btn--ghost pk-btn--sm cmp-step__edit" href="{{ act_href }}"{% if act_toggle %} data-step-edit="{{ sid }}"{% endif %}>{{ act_label }}</a>{% endif %}
+  <div class="pk-step__body cmp-step__body">{{ caller() }}</div>
+</section>
+{% endmacro %}
+
+{% set drafts_card %}
+<section class="pk-card pk-card--flush cmp-drafts" id="draftsTable" aria-labelledby="draftsHeading">
+  <div class="pk-card__head cmp-drafts__head">
+    <h2 class="pk-card__title" id="draftsHeading">Drafts</h2>
+    <span class="pk-card__sub">{{ draft_count }} drafts</span>
+    <span class="pk-spacer"></span>
+    <form class="cmp-search" method="get" action="/crm/drafts" role="search">
+      <label class="sr-only" for="draftSearch">Search drafts</label>
+      <span class="pk-search"><input class="pk-input" id="draftSearch" type="search" name="q" value="{{ query }}" placeholder="Search drafts"></span>
+      {% if status_filter %}<input type="hidden" name="status" value="{{ status_filter }}">{% endif %}
+      <button type="submit" class="pk-btn pk-btn--secondary pk-btn--sm">Search</button>
+    </form>
+  </div>
+  <nav class="pk-tabs cmp-tabs" aria-label="Filter drafts by status">
+    {% for t in tab_list %}<a class="pk-tab{{ ' is-active' if t.active }}" href="{{ t.href }}"{% if t.active %} aria-current="page"{% endif %}>{{ t.label }} <span class="pk-count">{{ t.count }}</span></a>{% endfor %}
+  </nav>
+  <div class="pk-table-wrap"><table class="pk-table cmp-table">
+    <caption class="sr-only">Workspace drafts and check results</caption>
+    <thead><tr><th scope="col">Contact</th><th scope="col">Subject</th><th scope="col">Status</th><th scope="col">Checks</th><th scope="col">Action</th></tr></thead>
+    <tbody>{% for item in rows %}<tr class="is-clickable" data-href="/crm/drafts/{{ item.slug|urlencode }}">
+      <td><span class="pk-cell-title">{{ item.recipient_name or item.recipient_email }}</span><span class="pk-cell-sub">{{ item.recipient_email }}</span></td>
+      <td class="cmp-subject"><span class="pk-cell-title">{{ item.subject }}</span><span class="pk-cell-sub">{{ item.word_count }} words</span></td>
+      <td><span class="{{ item.pill.cls }}">{{ item.pill.label }}</span></td>
+      <td>{% if item.checks.ok %}<span class="cmp-check cmp-check--ok">OK</span>{% else %}<span class="cmp-check cmp-check--bad" title="{{ item.checks.hover }}">{{ item.checks.label }}</span>{% for raw in item.checks.raw %}<span class="sr-only"> {{ raw }}</span>{% endfor %}{% endif %}</td>
+      <td class="pk-col-actions"><a href="/crm/drafts/{{ item.slug|urlencode }}">{{ icon("pencil", 14) }}Open draft</a>{% if item.partner_id %}<a class="pk-cell-sub" href="/crm/{{ item.partner_id }}">Contact profile</a>{% endif %}</td>
+    </tr>{% else %}<tr><td colspan="5" class="crm-empty-row cmp-empty">{{ icon("mail", 20) }}{% if (total_draft_count|default(0)) > 0 %}<span>No drafts match these filters.</span>{% else %}<span>No drafts yet. <a href="/crm/new">Add a contact</a>, then use Write drafts above.</span>{% endif %}</td></tr>{% endfor %}</tbody>
+  </table></div>
+</section>
+{% endset %}
+
+<div class="crm-shell cmp-page">
+  <header class="pk-page-head">
+    <div class="pk-page-head__text">
+      {% if c.kind_chosen %}
+      <h1 class="pk-page-title">{{ k.hero_line }}</h1>
+      <p class="pk-page-sub">{{ k.hero_support }}</p>
+      {% else %}
+      <h1 class="pk-page-title">What is this campaign for?</h1>
+      <p class="pk-page-sub">Pick one. It sets the wording and the attachment on this page. You can change it later.</p>
+      {% endif %}
+    </div>
   </header>
-  <p class="svc-hint">This is our email template and pitch deck that has gotten 50+ meetings and $600K raised in funding.</p>
-  <section class="crm-panel" id="writeDrafts" aria-labelledby="writeDraftsHeading">
-    <div class="crm-panel-heading"><h2 id="writeDraftsHeading">Write drafts</h2></div>
-    <form method="post" action="/crm/drafts/write" class="crm-filters" data-busy="Writing drafts...">
+  {% if c.kind_chosen %}
+  <form method="post" action="/settings/campaign-kind" class="campaign-kind-switch cmp-kind" id="campaignKindSwitch">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="next" value="/crm/drafts">
+    <span class="campaign-kind-switch-label" id="campaignKindLabel">Campaign type:</span>
+    <span role="group" aria-labelledby="campaignKindLabel" class="campaign-kind-switch-options">{% for choice in c.choices %}<button type="submit" name="kind" value="{{ choice.kind }}" class="campaign-kind-opt{{ ' is-current' if choice.kind == c.kind }}"{% if choice.kind == c.kind %} aria-pressed="true"{% else %} aria-pressed="false" title="Change the campaign type to {{ short_kind[choice.kind]|lower }}"{% endif %}>{{ short_kind[choice.kind] }}</button>{% endfor %}</span>
+    <span class="campaign-kind-switch-hint">Change it any time.</span>
+  </form>
+  {% else %}
+  <div class="campaign-kind-choices cmp-kind-choices" role="group" aria-label="Campaign type">
+    {% for choice in c.choices %}<form method="post" action="/settings/campaign-kind"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="kind" value="{{ choice.kind }}"><button type="submit" class="pk-btn pk-btn--primary campaign-kind-button">{{ choice.label }}</button></form>{% endfor %}
+  </div>
+  {% endif %}
+
+  {% if st.table_first %}{{ drafts_card }}{% endif %}
+
+  <div class="pk-stepper cmp-stepper" role="group" aria-label="Campaign steps">
+    {% call step(1, 'campaignContacts', 'stage1Heading', 'Add contacts',
+                 ((c.contact_count ~ ' ' ~ ('contact' if c.contact_count == 1 else 'contacts')) if c.contact_count > 0 else 'Import a CSV or add one person by hand.'),
+                 st, ('Edit' if st.done[1] else 'Open'), '#campaignContacts') %}
+    <p class="svc-hint">{% if c.contact_count > 0 %}You have {{ c.contact_count }} {{ 'contact' if c.contact_count == 1 else 'contacts' }} in this workspace. Add more any time.{% else %}No contacts yet. Import a CSV of {{ k.audience_word_plural }}, or add one person by hand.{% endif %}</p>
+    <details class="crm-collapse" id="campaignImport"{% if c.contact_count == 0 %} open{% endif %}><summary>{{ icon("upload") }}Import contacts from a CSV{{ icon("chevron-down", 16, "icon-chevron") }}</summary>
+      <form method="post" action="/crm/import" enctype="multipart/form-data" class="settings-fields import-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="next" value="/crm/drafts">
+        <label for="campaignCsv">Choose a CSV file<input id="campaignCsv" type="file" name="file" accept=".csv,text/csv"></label>
+        <label for="campaignCsvText">Or paste CSV<textarea id="campaignCsvText" name="csv_text" rows="5" placeholder="name,email,org,role,facts&#10;Ada Lovelace,ada@example.com,Analytical Co,Founder,your essay on small teams | your talk on shipping weekly"></textarea></label>
+        <p class="crm-source-note">Name and email are required; org, role and facts are optional. Put several facts in the facts column separated by " | ". Drafts need at least one fact per contact.</p>
+        <button type="submit" class="pk-btn pk-btn--primary pk-btn--sm">{{ icon("upload") }}Import contacts</button>
+      </form>
+    </details>
+    <p class="campaign-actions"><a class="pk-btn pk-btn--secondary pk-btn--sm" href="/crm/new">{{ icon("plus") }}Add one contact</a></p>
+    {% if c.can_sample %}<form method="post" action="/sample/load" class="campaign-actions"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="next" value="/crm/drafts"><button type="submit" class="pk-btn pk-btn--secondary pk-btn--sm">{{ icon("upload") }}Or load the fictional sample</button></form>{% endif %}
+    {% endcall %}
+
+    {% call step(2, 'campaignPitch', 'stage2Heading', k.step2_heading,
+                 (('Note and resume attached' if c.kind == 'job_search' else 'Template and attachment ready') if st.done[2] else ('Add your template and attachment.' if c.kind_chosen else 'Choose a campaign type first.')),
+                 st, ('Edit' if st.done[2] else 'Open'), '#campaignPitch') %}
+    {% if c.kind_chosen %}
+    <p class="svc-hint">{{ k.step2_hint }}</p>
+    {% else %}
+    <p class="svc-hint" id="pitchChooseFirst">Choose what you are doing above to see an example.</p>
+    {% endif %}
+    {% set deck_collapsed = c.kind_chosen and (total_draft_count|default(draft_count)) > 0 %}{% include '_template_deck_panel.html' %}
+    {% if c.kind_chosen %}<p class="campaign-actions"><a class="pk-btn pk-btn--primary pk-btn--sm" href="/settings#sec-package">{{ 'Edit your note and resume' if c.kind == 'job_search' else 'Edit your template and deck' }}</a></p>{% endif %}
+    {% endcall %}
+
+    {% call step(3, 'writeDrafts', 'writeDraftsHeading', 'Write drafts',
+                 ((c.draft_count ~ ' ' ~ ('draft written' if c.draft_count == 1 else 'drafts written')) if c.draft_count > 0 else 'Write one draft for each contact.'),
+                 st, ('Edit' if st.done[3] else 'Open'), '#writeDrafts') %}
+    {% if c.draft_count > 0 %}<p class="svc-hint">{{ c.draft_count }} {{ 'draft is' if c.draft_count == 1 else 'drafts are' }} written. Open Advanced and tick Replace existing drafts to rewrite them.</p>{% endif %}
+    {% if c.contact_count == 0 %}<p class="svc-hint">Add contacts first (step 1), then write one draft for each.</p>{% endif %}
+    {% if not c.has_sender %}
+    <form method="post" action="/settings/sender" class="campaign-sender-form" id="campaignSenderForm">
+      <p class="svc-hint">Drafts are signed with your sender profile. Fill in these three fields to save it.</p>
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <label for="draftProvider">Provider</label>
-      <select id="draftProvider" name="provider">{% for provider in providers %}<option value="{{ provider }}">{{ provider|title }}</option>{% endfor %}</select>
-      <label><input type="checkbox" name="overwrite" value="1"> Replace existing drafts</label>
-      <button class="crm-button crm-button-small crm-button-primary" type="submit">Write drafts</button>
+      <input type="hidden" name="next" value="/crm/drafts">
+      <label for="senderName">Your name<input id="senderName" type="text" name="name" autocomplete="name" required></label>
+      <label for="senderEmail">Your email address<input id="senderEmail" type="email" name="sender_email" autocomplete="email" required></label>
+      <label for="senderSignature">Signature<textarea id="senderSignature" name="signature" rows="3" required placeholder="Your name&#10;Your role"></textarea></label>
+      <button type="submit" class="pk-btn pk-btn--secondary pk-btn--sm">Save sender profile</button>
+    </form>
+    {% endif %}
+    <form method="post" action="/crm/drafts/write" class="cmp-write" data-busy="Writing drafts..." data-existing="{{ c.draft_count }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div class="cmp-write__main">
+        <button class="pk-btn pk-btn--primary" type="submit">{{ icon("play") }}{{ wb.label }}</button>
+        <span class="pk-muted">Each draft uses your template plus one fact you saved about the person.</span>
+      </div>
+      <details class="cmp-advanced">
+        <summary>Advanced</summary>
+        <div class="cmp-advanced__body">
+          <label for="draftProvider">Writing method<select id="draftProvider" name="provider" class="pk-select">{% for provider in providers %}<option value="{{ provider }}">{{ provider|title }}</option>{% endfor %}</select></label>
+          <label class="cmp-check-row"><input type="checkbox" name="overwrite" value="1"> Replace existing drafts</label>
+        </div>
+      </details>
     </form>
     <p class="crm-source-note" id="draftingHow">Write drafts builds each email from your template. Generate hook on a contact page adds a researched opening line from enrichment facts, and creates a template draft first if none exists. Approve needs a grounded hook.</p>
-    <p class="crm-source-note">{{ provider_status }} Without a configured key, Auto uses a placeholder template.</p>
-  </section>
-  {% set deck_collapsed = (total_draft_count|default(draft_count)) > 0 %}{% include '_template_deck_panel.html' %}
-  <form class="crm-filters" method="get" action="/crm/drafts">
-    <label for="draftSearch">Search drafts<input id="draftSearch" type="search" name="q" value="{{ query }}"></label>
-    <label for="draftStatus">Status<select id="draftStatus" name="status"><option value="">All statuses</option>{% for status in ['pending','approved','rejected','blocked'] %}<option value="{{ status }}" {% if status_filter == status %}selected{% endif %}>{{ status|title }}</option>{% endfor %}</select></label>
-    <button type="submit" class="crm-button crm-button-small crm-button-secondary">Apply filters</button>
-  </form>
-  <section class="crm-panel">
-    <div class="crm-panel-heading"><h2>Review queue</h2><span>{{ draft_count }} drafts</span></div>
-    <div class="crm-table-wrap"><table class="crm-table">
-      <caption class="sr-only">Workspace drafts and lint results</caption>
-      <thead><tr><th>Contact</th><th>Subject</th><th>Status</th><th>Grounding</th><th>Issues</th><th>Words</th><th>Action</th></tr></thead>
-      <tbody>{% for item in drafts %}<tr>
-        <td>{{ item.recipient_name }}<span class="crm-table-subline">{{ item.recipient_email }}</span></td>
-        <td>{{ item.subject }}</td><td><span class="badge {{ 'badge-danger' if item.status == 'blocked' else 'badge-success' }}">{{ item.approval_state }}</span></td>
-        <td><span class="badge {{ 'badge-success' if item.grounding == 'grounded' else 'badge-warning' }}">{{ item.grounding }}</span></td>
-        <td>{% for issue in item.issues %}<span class="issue-chip">{{ issue.message|default(issue.code) }}</span>{% else %}No issues{% endfor %}</td>
-        <td>{{ item.word_count }}</td><td><a href="/crm/drafts/{{ item.slug|urlencode }}">Open draft</a>
-          {% if item.partner_id %}<a class="crm-table-subline" href="/crm/{{ item.partner_id }}">Contact profile</a>{% endif %}
-        </td>
-      </tr>{% else %}<tr><td colspan="7" class="crm-empty-row">{% if (total_draft_count|default(0)) > 0 %}No drafts match these filters.{% else %}No drafts yet. <a href="/crm/new">Add a contact</a>, then use Write drafts above.{% endif %}</td></tr>{% endfor %}</tbody>
-    </table></div>
-  </section>
+    <p class="crm-source-note">{{ provider_status }}</p>
+    {% endcall %}
+
+    {% call step(4, 'campaignReview', 'stage4Heading', 'Review and send a test',
+                 (st.step4_note if st.step4_note else ('Test sent' if st.done[4] else 'Check each draft, then send one to yourself.')),
+                 st, ('Send a test' if st.step4_note else ('Edit' if st.done[4] else 'Open')), '#campaignReview') %}
+    <p class="svc-hint">A test send goes only to your own test recipient, never to the {{ k.audience_word }}.</p>
+    {% include '_campaign_readiness.html' %}
+    <p class="campaign-actions">
+      {% if c.draft_count > 0 and not c.approved %}<a class="pk-btn pk-btn--primary pk-btn--sm" href="/crm/drafts/{{ c.first_slug|urlencode }}#approve">Review and approve a draft</a>{% endif %}
+      <a class="pk-btn pk-btn--secondary pk-btn--sm" href="/crm/send-plan">Check the send plan</a>
+    </p>
+    {% endcall %}
+
+    {% call step(5, 'campaignSend', 'stage5Heading', 'Send to contacts',
+                 ((approved_n ~ ' approved ' ~ ('draft is' if approved_n == 1 else 'drafts are') ~ ' ready to send.') if approved_n > 0 else 'Approve a draft to unlock sending.'),
+                 st, (st.send_label if approved_n > 0 else 'Send'), '/partners', false) %}
+    <p class="svc-hint">Send. You pick the contacts there and confirm by typing SEND TO. Nothing is sent from this page.</p>
+    <p class="campaign-actions">{% if approved_n > 0 %}<a class="pk-btn pk-btn--primary" href="/partners">{{ st.send_label }}</a>{% else %}<a class="pk-btn pk-btn--secondary" href="/partners">Send</a>{% endif %}</p>
+    {% endcall %}
+  </div>
+
+  <p class="campaign-more pk-faint">More: <a href="/crm/send-plan">Send plan</a>, <a href="/scheduled">Scheduled sends</a>, <a href="/enrichment">Enrichment</a></p>
+
+  {% if not st.table_first %}{{ drafts_card }}{% endif %}
 </div>
 {% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='pages/campaign.js') }}?v=20261024-cp1" defer></script>{% endblock %}

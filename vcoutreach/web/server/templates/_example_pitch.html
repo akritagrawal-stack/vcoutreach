@@ -1,0 +1,49 @@
+{# Read-only "Example pitch" block: the real Publik email, broken into labeled parts, with a Copy button.
+   INCLUDE INTERFACE (lane A):
+     {% include '_example_pitch.html' %}
+   Required context: none. The data comes from the Jinja global example_pitch_block(), registered in
+   create_app by example_pitch_web.register(app). Optional: set example_pitch_open=false before the
+   include to render it as a collapsed <details> (default is open). The Copy button script is loaded from
+   static/pages/example_pitch.js (inline scripts are blocked by the CSP).
+   The example data (parts, assembled email, copy text) contains no credibility line and no contact address.
+   The only credibility sentence ("50+ meetings ...") is panel copy from campaign_kind_copy(kind).panel_credibility,
+   rendered outside the email text and the Copy button, and only for the fundraising kind. Text is escaped by Jinja. #}
+{% set _ex = example_pitch_block() %}
+{% set _kind_copy = campaign_kind_copy(_ex.kind) %}
+<section class="example-pitch crm-panel" id="examplePitch" aria-labelledby="examplePitchTitle">
+  {% if example_pitch_open is not defined or example_pitch_open %}<div class="example-pitch-inner">{% else %}<details class="example-pitch-inner"><summary>Example pitch</summary>{% endif %}
+  <header class="example-pitch-head">
+    <div class="example-pitch-intro">
+      <h3 id="examplePitchTitle">Example pitch <span class="example-tag">Example, not yours</span></h3>
+      <p class="example-pitch-flag"><strong>{{ _ex.label }}.</strong> Read it, then change every part in <a href="/settings#sec-story">Settings</a> so it describes {{ 'your company' if _ex.kind == 'fundraising' else 'you' }}.</p>
+      {% if _kind_copy.panel_credibility and campaign_kind_info is defined and campaign_kind_info().chosen %}<p class="example-pitch-proof">{{ _kind_copy.panel_credibility }}</p>{% endif %}
+    </div>
+    <button type="button" class="crm-button crm-button-small crm-button-secondary" data-copy-target="examplePitchCopy" data-copy-label="Copy example">Copy example</button>
+  </header>
+  <div class="example-pitch-body">
+    <div class="example-sheet example-pitch-preview">
+      <dl class="example-meta">
+        <dt>From</dt><dd>You</dd>
+        <dt>To</dt><dd>{{ 'The hiring contact you researched' if _ex.kind == 'job_search' else 'One investor you researched' }}</dd>
+        <dt>Subject</dt><dd class="example-subject">{{ _ex.subject }}{% for part in _ex.parts %}{% if part.key == 'subject' %}<span class="example-mark"><span class="sr-only">note </span>{{ loop.index }}</span>{% endif %}{% endfor %}</dd>
+        <dt>Attachment</dt><dd><span class="example-pitch-attachment">{{ _ex.attachment }}</span></dd>
+      </dl>
+      <div class="example-sheet-body">
+        {% for paragraph in _ex.paragraphs %}<p>{{ paragraph }}{% for part in _ex.parts %}{% if part.key != 'subject' and part.text and part.text in paragraph %}<span class="example-mark"><span class="sr-only">note </span>{{ loop.index }}</span>{% endif %}{% endfor %}</p>
+        {% endfor %}
+      </div>
+    </div>
+    <ol class="example-notes" aria-label="Why each part works">
+      {% for part in _ex.parts %}
+      <li class="example-note" data-part="{{ part.key }}">
+        <span class="example-mark" aria-hidden="true">{{ loop.index }}</span>
+        <div><p class="example-note-label">{{ part.label }}</p><p class="example-note-why">Why this works: {{ part.why }}</p></div>
+      </li>
+      {% endfor %}
+    </ol>
+    <ul class="example-pitch-guidance">{% for tip in _ex.guidance %}<li>{{ tip }}</li>{% endfor %}</ul>
+  </div>
+  <textarea id="examplePitchCopy" class="example-pitch-copy" readonly rows="1" tabindex="-1" aria-hidden="true">{{ _ex.copy_text }}</textarea>
+  {% if example_pitch_open is not defined or example_pitch_open %}</div>{% else %}</details>{% endif %}
+</section>
+<script src="{{ url_for('static', filename='pages/example_pitch.js') }}?v=20261021-ex1" defer></script>

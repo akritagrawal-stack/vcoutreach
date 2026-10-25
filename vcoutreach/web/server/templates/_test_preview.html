@@ -1,0 +1,18 @@
+{# Preview of the one test email, then the single send button. Included only when every readiness row passes.
+   Needs `campaign.preview`. To is always the test recipient, never the contact. #}
+{% set _p = campaign.preview %}
+<section class="test-preview" id="testPreview" aria-label="Test email preview">
+  <dl>
+    <dt>To</dt><dd>{{ _p.to }}</dd>
+    <dt>From</dt><dd>{% if _p.from_name %}{{ _p.from_name }} {% endif %}&lt;{{ _p.from_email }}&gt;</dd>
+    <dt>Subject</dt><dd>{{ _p.subject }}</dd>
+  </dl>
+  <div class="test-preview-body">{{ _p.body }}</div>
+  {% if campaign.deck_file_name %}<p><span class="attachment-chip">Attachment: {{ campaign.deck_file_name }}</span></p>{% endif %}
+  <p class="svc-hint">This goes only to your test recipient.</p>
+  <form method="post" action="/partners/{{ campaign.first_approved_partner_id }}/send-test" class="campaign-actions">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="next" value="/crm/drafts">
+    <button type="submit" class="crm-button crm-button-small crm-button-primary">Send a test to {{ _p.to }}</button>
+  </form>
+</section>

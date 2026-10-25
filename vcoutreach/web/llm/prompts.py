@@ -13,7 +13,7 @@ def build_hook_prompt(partner: dict, enrichment_facts: list[dict] | None = None,
         "The hook must be a short opener only: 1 to 2 sentences, 25 to 50 words, ideally 30 to 40 words. "
         "Start with one personal observation supported by enrichment_facts and add at most one tie to the sender's product. "
         "The email body already describes the product and traction, so avoid repeating those lines. "
-        "Keep approved claim wording exactly, including about 10M organic views if supplied. "
+        "Keep approved claim wording exactly, including 25M+ views on our open source videos if supplied. "
         "Do not invent metrics, investments, quotes, company names, relationships, or prior conversations. "
         "Do not transfer sender achievements to the recipient or recipient achievements to the sender. A firm investment does not prove this person led it. "
         "Do not attribute firm taglines or generic firm website copy to the recipient as their writing or opinion. "

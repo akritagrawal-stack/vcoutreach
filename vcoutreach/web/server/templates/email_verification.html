@@ -1,174 +1,209 @@
 {% extends 'base.html' %}
+{% from "_icons.html" import icon %}
 {% block page_id %}email_verification{% endblock %}
 {% block title %}Email verification{% endblock %}
 
 {% block content %}
+{% set key_ready = namespace(apollo=false, enrow=false) %}
+{% for provider in data_providers %}{% if provider.id == 'apollo' and provider.configured %}{% set key_ready.apollo = true %}{% endif %}{% if provider.id == 'enrow' and provider.configured %}{% set key_ready.enrow = true %}{% endif %}{% endfor %}
+
 <div class="verification-shell">
-  <header class="verification-hero">
-    <div>
-      <span class="control-kicker"><span class="live-pixel"></span> CONTACT INTELLIGENCE LEDGER</span>
+  <header class="pk-page-head">
+    <div class="pk-page-head__text">
       <h1>Email verification</h1>
-      <p>Apollo enriches named contacts and Enrow finds or verifies business email. Every result is kept with its source, status, confidence and effect on the send gate.</p>
+      <p class="pk-page-sub">Apollo enriches named contacts and Enrow finds or verifies business email. Every result is kept with its source, status, confidence and effect on the send gate.</p>
     </div>
-    <div class="verification-guardrail">
-      <span>AUTHORITY BOUNDARY</span>
-      <strong>NO EMAIL DELIVERY</strong>
-      <p>Provider calls can use credits. They cannot draft, approve, connect a mailbox or send. Finder results need review before they replace an address.</p>
-      <a class="crm-button crm-button-small crm-button-secondary" href="/settings#svc-enrow">Manage provider keys</a>
+    <div class="pk-page-head__actions">
+      <a class="pk-btn pk-btn--secondary" href="/settings#svc-enrow">Manage provider keys</a>
     </div>
   </header>
 
-  {% set key_ready = namespace(apollo=false, enrow=false) %}
-  {% for provider in data_providers %}{% if provider.id == 'apollo' and provider.configured %}{% set key_ready.apollo = true %}{% endif %}{% if provider.id == 'enrow' and provider.configured %}{% set key_ready.enrow = true %}{% endif %}{% endfor %}
-  <section class="verification-provider-grid" aria-label="Provider status">
+  <p class="pk-note ver-boundary" role="note">Provider calls can use credits. They cannot draft, approve, connect a mailbox or send. Finder results need review before they replace an address.</p>
+
+  <section class="ver-providers" aria-label="Provider status">
     {% for provider in data_providers %}
     {% set health = data_provider_health.get(provider.id, {}) %}
     {% set totals = provider_summary.get(provider.id, {}) %}
-    <article class="verification-provider-card">
-      <div class="verification-provider-title">
-        <div><span>{{ provider.id|upper }}</span><h2>{{ provider.label }}</h2></div>
-        <span class="status-chip {{ 'active' if health.get('health_status') == 'connected' else 'working' if provider.configured else 'idle' }}">
-          {{ 'CONNECTED' if health.get('health_status') == 'connected' else 'KEY READY' if provider.configured else 'ADD KEY' }}
-        </span>
+    <article class="pk-card ver-provider">
+      <div class="ver-provider__head">
+        <div>
+          <span class="pk-faint ver-provider__id">{{ provider.id|upper }}</span>
+          <h2 class="ver-provider__name">{{ provider.label }}</h2>
+        </div>
+        {% if health.get('health_status') == 'connected' %}<span class="pk-pill pk-pill--dot pk-pill--success">Connected</span>
+        {% elif provider.configured %}<span class="pk-pill pk-pill--dot pk-pill--warning">Key ready</span>
+        {% else %}<span class="pk-pill pk-pill--dot pk-pill--neutral">Add key</span>{% endif %}
       </div>
-      <p>{{ provider.capability }}</p>
-      <div class="verification-provider-metrics">
-        <div><span>ATTEMPTS</span><strong>{{ totals.get('attempts', 0) }}</strong></div>
-        <div><span>FOUND</span><strong>{{ totals.get('found', 0) }}</strong></div>
-        <div><span>REVIEW</span><strong>{{ totals.get('needs_review', 0) }}</strong></div>
-        <div><span>{{ 'CREDITS' if provider.id == 'enrow' else 'LAST CHECK' }}</span><strong>{{ health.get('credits_remaining') if provider.id == 'enrow' and health.get('credits_remaining') is not none else (health.get('checked_at', 'NOT TESTED')[:10] if health.get('checked_at') else 'NOT TESTED') }}</strong></div>
-      </div>
+      <p class="pk-muted ver-provider__cap">{{ provider.capability }}</p>
+      <dl class="ver-metrics">
+        <div><dt>Attempts</dt><dd class="pk-num">{{ totals.get('attempts', 0) }}</dd></div>
+        <div><dt>Found</dt><dd class="pk-num">{{ totals.get('found', 0) }}</dd></div>
+        <div><dt>Review</dt><dd class="pk-num">{{ totals.get('needs_review', 0) }}</dd></div>
+        <div><dt>{{ 'Credits' if provider.id == 'enrow' else 'Last check' }}</dt><dd class="pk-num">{{ health.get('credits_remaining') if provider.id == 'enrow' and health.get('credits_remaining') is not none else (health.get('checked_at', 'Not tested')[:10] if health.get('checked_at') else 'Not tested') }}</dd></div>
+      </dl>
     </article>
     {% else %}
-    <div class="verification-empty">No data providers are configured. Add an Apollo or Enrow key in <a href="/settings#svc-enrow">settings</a>.</div>
+    <div class="pk-card ver-provider-empty">
+      <div class="pk-empty">
+        <div class="pk-empty__icon">{{ icon("database", 28) }}</div>
+        <h2 class="pk-empty__title">No data providers are configured</h2>
+        <p>Add an Apollo or Enrow key in <a href="/settings#svc-enrow">settings</a>.</p>
+      </div>
+    </div>
     {% endfor %}
   </section>
-  {% if not key_ready.apollo or not key_ready.enrow %}<p class="verification-key-hint" role="status">{% if not key_ready.apollo and not key_ready.enrow %}Add an <a href="/settings#svc-apollo">Apollo</a> or <a href="/settings#svc-enrow">Enrow</a> key in Settings to turn on the matching buttons.{% elif not key_ready.apollo %}Add an <a href="/settings#svc-apollo">Apollo key</a> in Settings to turn on Apollo enrich.{% else %}Add an <a href="/settings#svc-enrow">Enrow key</a> in Settings to turn on Enrow find and verify.{% endif %}</p>{% endif %}
+  {% if not key_ready.apollo or not key_ready.enrow %}<p class="pk-note verification-key-hint" role="status">{% if not key_ready.apollo and not key_ready.enrow %}Add an <a href="/settings#svc-apollo">Apollo</a> or <a href="/settings#svc-enrow">Enrow</a> key in Settings to turn on the matching buttons.{% elif not key_ready.apollo %}Add an <a href="/settings#svc-apollo">Apollo key</a> in Settings to turn on Apollo enrich.{% else %}Add an <a href="/settings#svc-enrow">Enrow key</a> in Settings to turn on Enrow find and verify.{% endif %}</p>{% endif %}
 
-  <section class="verification-workspace">
-    <div class="verification-workspace-head">
+  <section class="pk-card pk-card--flush ver-contacts">
+    <div class="pk-card__head">
       <div>
-        <span>01 / CONTACT DATABASE</span>
-        <h2>Current contacts and verification state</h2>
+        <h2 class="pk-card__title">Contacts</h2>
+        <p class="pk-card__sub">Current email and verification state for each contact.</p>
       </div>
-      <form class="verification-filters" method="get" action="/email-verification">
-        <input aria-label="Q" name="q" value="{{ filters.q }}" placeholder="Search name, firm, or email">
-        <select aria-label="Status" name="status">
+      <form class="pk-filterbar ver-filters" method="get" action="/email-verification">
+        <input class="pk-input" aria-label="Q" name="q" value="{{ filters.q }}" placeholder="Search name, firm, or email">
+        <select class="pk-select" aria-label="Status" name="status">
           <option value="" {% if not filters.status %}selected{% endif %}>All contacts</option>
           <option value="needs_review" {% if filters.status == 'needs_review' %}selected{% endif %}>Needs review</option>
           <option value="verified" {% if filters.status == 'verified' %}selected{% endif %}>Send-gate verified</option>
           <option value="unverified" {% if filters.status == 'unverified' %}selected{% endif %}>Not deliverability verified</option>
           <option value="never_checked" {% if filters.status == 'never_checked' %}selected{% endif %}>No provider history</option>
         </select>
-        <button type="submit" class="crm-button crm-button-small crm-button-primary">Filter</button>
+        <button type="submit" class="pk-btn pk-btn--primary">Filter</button>
       </form>
     </div>
 
-    <div class="verification-table-wrap">
-      <table class="verification-table"><caption class="sr-only">Email Verification records</caption>
+    <div class="pk-table-wrap verification-table-wrap">
+      <table class="pk-table ver-table"><caption class="sr-only">Email Verification records</caption>
         <thead>
-          <tr><th>CONTACT</th><th>CURRENT EMAIL</th><th>DELIVERABILITY</th><th>LATEST PROVIDER</th><th>PROVIDER ACTIONS</th></tr>
+          <tr><th scope="col">Contact</th><th scope="col">Current email</th><th scope="col">Deliverability</th><th scope="col">Latest provider</th><th scope="col">Provider actions</th></tr>
         </thead>
         <tbody>
           {% for contact in contacts %}
           {% set address_verified = contact.email_verification_status in ['valid', 'deliverable', 'pb_verified'] %}
           <tr>
             <td data-label="Contact">
-              <strong>{{ contact.partner_name }}</strong>
-              <span>{{ contact.firm or 'Firm not set' }}</span>
-              <small>{{ contact.firm_domain or 'DOMAIN REQUIRED FOR FINDER' }}</small>
+              <span class="pk-cell-title">{{ contact.partner_name }}</span>
+              <span class="pk-cell-sub">{{ contact.firm or 'Firm not set' }}</span>
+              <span class="pk-cell-sub pk-faint">{{ contact.firm_domain or 'Domain required for finder' }}</span>
             </td>
             <td data-label="Current email"><code>{{ contact.email }}</code></td>
             <td data-label="Deliverability">
-              <span class="verification-state {{ 'verified' if address_verified else 'held' }}">{{ contact.email_verification_status or 'UNVERIFIED' }}</span>
-              <small>{{ 'Verified; fit and history still required' if address_verified else 'Finder evidence is not enough' }}</small>
+              <span class="pk-pill pk-pill--dot pk-pill--{{ 'success' if address_verified else 'warning' }}">{{ contact.email_verification_status or 'Unverified' }}</span>
+              <span class="pk-cell-sub">{{ 'Verified; fit and history still required' if address_verified else 'Finder evidence is not enough' }}</span>
             </td>
             <td data-label="Latest provider">
               {% if contact.latest_provider %}
-              <strong>{{ contact.latest_provider|upper }} / {{ (contact.latest_provider_state or 'unknown')|upper }}</strong>
-              <span>{{ contact.provider_email_status or 'No provider email status' }}</span>
-              <small>{{ contact.provider_observed_at[:10] if contact.provider_observed_at else '' }}</small>
+              <span class="pk-cell-title">{{ contact.latest_provider|upper }} / {{ (contact.latest_provider_state or 'unknown')|upper }}</span>
+              <span class="pk-cell-sub">{{ contact.provider_email_status or 'No provider email status' }}</span>
+              <span class="pk-cell-sub pk-faint">{{ contact.provider_observed_at[:10] if contact.provider_observed_at else '' }}</span>
               {% else %}
-              <span>No provider history</span>
+              <span class="pk-muted">No provider history</span>
               {% endif %}
             </td>
             <td data-label="Provider actions">
-              <div class="verification-actions">
+              <div class="ver-actions">
                 <form method="post" action="/email-verification/{{ contact.id }}/run">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                   <input type="hidden" name="provider" value="apollo">
                   <input type="hidden" name="operation" value="person_enrich">
-                  <button type="submit" class="crm-button crm-button-small crm-button-secondary" {% if not key_ready.apollo or not contact.can_apollo_enrich %}disabled{% endif %}{% if not key_ready.apollo %} title="Add an Apollo key in Settings to use this."{% endif %}>Apollo enrich <small>0 to 1 credit</small></button>
+                  <button type="submit" class="pk-btn pk-btn--secondary pk-btn--sm" {% if not key_ready.apollo or not contact.can_apollo_enrich %}disabled{% endif %}{% if not key_ready.apollo %} title="Add an Apollo key in Settings to use this."{% endif %}>Apollo enrich <small class="pk-faint">0 to 1 credit</small></button>
                 </form>
                 <form method="post" action="/email-verification/{{ contact.id }}/run">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                   <input type="hidden" name="provider" value="enrow">
                   <input type="hidden" name="operation" value="email_find">
-                  <button type="submit" class="crm-button crm-button-small crm-button-secondary" {% if not key_ready.enrow or not contact.can_enrow_find %}disabled{% endif %}{% if not key_ready.enrow %} title="Add an Enrow key in Settings to use this."{% endif %}>Enrow find <small>up to 1 credit</small></button>
+                  <button type="submit" class="pk-btn pk-btn--secondary pk-btn--sm" {% if not key_ready.enrow or not contact.can_enrow_find %}disabled{% endif %}{% if not key_ready.enrow %} title="Add an Enrow key in Settings to use this."{% endif %}>Enrow find <small class="pk-faint">up to 1 credit</small></button>
                 </form>
                 <form method="post" action="/email-verification/{{ contact.id }}/run">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                   <input type="hidden" name="provider" value="enrow">
                   <input type="hidden" name="operation" value="email_verify">
-                  <button type="submit" class="crm-button crm-button-small crm-button-secondary" {% if not key_ready.enrow or not contact.can_verify %}disabled{% endif %}{% if not key_ready.enrow %} title="Add an Enrow key in Settings to use this."{% endif %}>Enrow verify <small>0.25 credit</small></button>
+                  <button type="submit" class="pk-btn pk-btn--secondary pk-btn--sm" {% if not key_ready.enrow or not contact.can_verify %}disabled{% endif %}{% if not key_ready.enrow %} title="Add an Enrow key in Settings to use this."{% endif %}>Enrow verify <small class="pk-faint">0.25 credit</small></button>
                 </form>
               </div>
             </td>
           </tr>
           {% else %}
-          <tr><td colspan="5" class="verification-empty">{% if filters.q or filters.status %}No contacts match this filter. <a href="/email-verification">Clear the filter</a>.{% else %}No contacts yet. <a href="/crm/new">Add a contact</a> to start verifying addresses.{% endif %}</td></tr>
+          <tr><td colspan="5">
+            <div class="pk-empty">
+              <div class="pk-empty__icon">{{ icon("mail", 28) }}</div>
+              {% if filters.q or filters.status %}
+              <h2 class="pk-empty__title">No contacts match this filter</h2>
+              <p><a href="/email-verification">Clear the filter</a></p>
+              {% else %}
+              <h2 class="pk-empty__title">No contacts yet</h2>
+              <p><a href="/crm/new">Add a contact</a> to start verifying addresses.</p>
+              {% endif %}
+            </div>
+          </td></tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
   </section>
 
-  <section class="verification-history">
-    <div class="verification-workspace-head">
-      <div><span>02 / PROVIDER HISTORY</span><h2>Durable lookup and verification evidence</h2></div>
-      <p>Applying a finder candidate changes the canonical address but leaves it non-send-ready. Run Enrow Verify against the applied address to establish deliverability.</p>
+  <section class="pk-card ver-history">
+    <div class="pk-card__head">
+      <div>
+        <h2 class="pk-card__title">Provider history</h2>
+        <p class="pk-card__sub">Durable lookup and verification evidence.</p>
+      </div>
     </div>
-    <div class="verification-attempts">
-      {% for attempt in attempts %}
-      <article class="verification-attempt">
-        <header>
-          <div><span>{{ attempt.provider|upper }} / {{ attempt.operation|replace('_', ' ')|upper }}</span><strong>{{ attempt.partner_name }} at {{ attempt.firm or 'unknown firm' }}</strong></div>
-          <span class="verification-state {{ 'verified' if attempt.send_gate_effect == 'eligible' else 'held' if attempt.send_gate_effect == 'blocked' else '' }}">{{ attempt.state|replace('_', ' ')|upper }}</span>
-        </header>
-        <div class="verification-attempt-grid">
-          <div><span>CANDIDATE</span><code>{{ attempt.candidate_email or 'NONE RETURNED' }}</code></div>
-          <div><span>PROVIDER STATUS</span><strong>{{ attempt.provider_email_status or 'N/A' }}</strong></div>
-          <div><span>CONFIDENCE</span><strong>{{ ((attempt.confidence or 0) * 100)|round|int }}%</strong></div>
-          <div><span>SEND GATE</span><strong>{{ attempt.send_gate_effect|upper }}</strong></div>
-        </div>
-        <details class="verification-more">
-          <summary>More detail</summary>
-          <div class="verification-attempt-grid">
-            <div><span>PROVIDER COST</span><strong>{{ '%.2f CREDITS'|format((attempt.provider_cost_microunits or 0) / 1000000) if attempt.provider_cost_microunits else 'NOT REPORTED' }}</strong></div>
-            <div><span>REQUESTS</span><strong>{{ attempt.request_count }} / {{ attempt.retry_count }} RETRIES</strong></div>
-            <div><span>HTTP</span><strong>{{ attempt.http_status or 'N/A' }}</strong></div>
-            <div><span>OBSERVED</span><strong>{{ attempt.observed_at[:19]|replace('T', ' ') }}</strong></div>
+    <div class="pk-card__body">
+      <p class="pk-note ver-history__note">Applying a finder candidate changes the canonical address but leaves it non-send-ready. Run Enrow Verify against the applied address to establish deliverability.</p>
+      <div class="ver-attempts">
+        {% for attempt in attempts %}
+        <article class="ver-attempt">
+          <header class="ver-attempt__head">
+            <div>
+              <span class="pk-faint">{{ attempt.provider|upper }} / {{ attempt.operation|replace('_', ' ')|upper }}</span>
+              <strong>{{ attempt.partner_name }} at {{ attempt.firm or 'unknown firm' }}</strong>
+            </div>
+            <span class="pk-pill pk-pill--dot pk-pill--{{ 'success' if attempt.send_gate_effect == 'eligible' else 'warning' if attempt.send_gate_effect == 'blocked' else 'neutral' }}">{{ attempt.state|replace('_', ' ')|upper }}</span>
+          </header>
+          <dl class="ver-grid">
+            <div><dt>Candidate</dt><dd><code>{{ attempt.candidate_email or 'None returned' }}</code></dd></div>
+            <div><dt>Provider status</dt><dd>{{ attempt.provider_email_status or 'N/A' }}</dd></div>
+            <div><dt>Confidence</dt><dd class="pk-num">{{ ((attempt.confidence or 0) * 100)|round|int }}%</dd></div>
+            <div><dt>Send gate</dt><dd>{{ attempt.send_gate_effect|upper }}</dd></div>
+          </dl>
+          <details class="ver-more">
+            <summary>More detail</summary>
+            <dl class="ver-grid">
+              <div><dt>Provider cost</dt><dd>{{ '%.2f credits'|format((attempt.provider_cost_microunits or 0) / 1000000) if attempt.provider_cost_microunits else 'Not reported' }}</dd></div>
+              <div><dt>Requests</dt><dd>{{ attempt.request_count }} / {{ attempt.retry_count }} retries</dd></div>
+              <div><dt>HTTP</dt><dd>{{ attempt.http_status or 'N/A' }}</dd></div>
+              <div><dt>Observed</dt><dd>{{ attempt.observed_at[:19]|replace('T', ' ') }}</dd></div>
+            </dl>
+          </details>
+          {% if attempt.candidate_disposition == 'review_required' %}
+          <div class="ver-review">
+            <form method="post" action="/email-verification/attempts/{{ attempt.id }}/apply" class="ver-review__apply">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <label for="email_verification-field-1-{{ attempt.id }}">Type the candidate email to apply it</label>
+              <div class="ver-review__row">
+                <input class="pk-input" id="email_verification-field-1-{{ attempt.id }}" name="confirmation" type="email" autocomplete="off" required placeholder="{{ attempt.candidate_email }}">
+                <button type="submit" class="pk-btn pk-btn--primary pk-btn--sm">Apply as unverified</button>
+              </div>
+            </form>
+            <form method="post" action="/email-verification/attempts/{{ attempt.id }}/dismiss">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <button type="submit" class="pk-btn pk-btn--secondary pk-btn--sm">Dismiss candidate</button>
+            </form>
           </div>
-        </details>
-        {% if attempt.candidate_disposition == 'review_required' %}
-        <div class="verification-review-actions">
-          <form method="post" action="/email-verification/attempts/{{ attempt.id }}/apply">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-            <label for="email_verification-field-1-{{ attempt.id }}"><span>TYPE THE CANDIDATE EMAIL TO APPLY IT</span><input id="email_verification-field-1-{{ attempt.id }}" name="confirmation" type="email" autocomplete="off" required placeholder="{{ attempt.candidate_email }}"></label>
-            <button type="submit" class="crm-button crm-button-small crm-button-primary">Apply as unverified</button>
-          </form>
-          <form method="post" action="/email-verification/attempts/{{ attempt.id }}/dismiss">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-            <button type="submit" class="crm-button crm-button-small crm-button-secondary">Dismiss candidate</button>
-          </form>
-        </div>
+          {% else %}
+          <footer class="ver-disposition"><span class="pk-faint">Disposition</span> <strong>{{ attempt.candidate_disposition|replace('_', ' ')|upper }}</strong></footer>
+          {% endif %}
+        </article>
         {% else %}
-        <footer><span>DISPOSITION</span><strong>{{ attempt.candidate_disposition|replace('_', ' ')|upper }}</strong></footer>
-        {% endif %}
-      </article>
-      {% else %}
-      <div class="verification-empty">No Apollo or Enrow attempts yet. Use a provider action on a contact above and the result is recorded here.</div>
-      {% endfor %}
+        <div class="pk-empty">
+          <div class="pk-empty__icon">{{ icon("clock", 28) }}</div>
+          <h2 class="pk-empty__title">No provider attempts yet</h2>
+          <p>Use a provider action on a contact above and the result is recorded here.</p>
+        </div>
+        {% endfor %}
+      </div>
     </div>
   </section>
 </div>

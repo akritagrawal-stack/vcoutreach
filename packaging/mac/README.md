@@ -14,8 +14,10 @@ Outputs `dist/Publikreach.app` and `dist/Publikreach.dmg`. Headless check:
 dist/Publikreach.app/Contents/MacOS/Publikreach --self-test
 ```
 
-First launch: the app is ad-hoc signed, not notarized. Right-click the app and choose Open. Its workspace is `~/Documents/Publikreach` and it starts in TEST mode every launch.
+Install: `curl -fsSL https://raw.githubusercontent.com/akritagrawal-stack/vcoutreach/main/packaging/install.sh | bash` (no Gatekeeper prompt). For a browser-downloaded dmg, right-click the app and choose Open once, or run `xattr -cr /Applications/Publikreach.app`. The app is ad hoc signed and open source.
 
-Gmail connects with your address and a Google app password (Settings > Connect Gmail). A Desktop OAuth client file is still available under Advanced.
+The app's workspace is `~/Documents/Publikreach` and it starts in TEST mode every launch.
+
+Gmail: the easy sender setup is a Gmail app password (Settings, Gmail card). Google OAuth sign-in (Choose OAuth client file, then Connect Gmail) is optional and advanced.
 
 Full documentation: [docs/mac-app.md](../../docs/mac-app.md). The older `install-mac.sh` developer installer is documented there too.

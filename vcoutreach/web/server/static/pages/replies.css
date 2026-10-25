@@ -1,29 +1,82 @@
-/* Publikreach replies lane styles: page-specific rules only. */
+/* Publikreach replies lane styles: Replies list, Reply detail and Scheduled sends. Page-specific rules only. */
+
+/* Replies list: header actions */
+.reply-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.reply-check { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.reply-check__form { margin: 0; }
+.reply-check__stamp { font-size: 12px; white-space: nowrap; }
+.reply-add-menu { width: 340px; max-width: calc(100vw - 32px); padding: 14px; }
+.reply-add-form { display: grid; gap: 6px; }
+.reply-add-form label { font-size: 12px; font-weight: 500; color: var(--text-muted); }
+.reply-add-form__title { margin: 0; font-size: 14px; font-weight: 600; }
+.reply-add-form__hint { margin: 0 0 6px; font-size: 12px; }
+.reply-add-form textarea { min-height: 96px; height: auto; resize: vertical; }
+.pk-kebab__menu.reply-add-menu button.pk-btn--primary { width: auto; justify-self: start; justify-content: center; margin-top: 8px; height: 32px; padding: 0 14px; background: var(--accent); color: var(--accent-contrast, #fff); }
+
+/* Replies list: tabs, filter chip, table */
+.reply-tabs { margin: 0 0 16px; overflow-x: auto; }
+.reply-filter { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; }
+.reply-table td { vertical-align: top; }
+.reply-sub { display: block; font-size: 12px; font-weight: 400; margin-top: 2px; overflow-wrap: anywhere; }
+.reply-contact { min-width: 160px; }
+.reply-contact__name { font-weight: inherit; }
+.reply-msg { min-width: 220px; max-width: 420px; }
+.reply-msg a { font-weight: inherit; }
+.reply-when { white-space: nowrap; }
+.reply-label { white-space: nowrap; }
+.reply-pill-form, .reply-read-form { margin: 0; display: inline-flex; align-items: center; gap: 6px; }
+.reply-pill-select {
+  appearance: none; -webkit-appearance: none; cursor: pointer; border: 0; font: inherit;
+  padding-right: 22px; background-repeat: no-repeat; background-position: right 7px center; background-size: 10px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%23888' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 4.5l4 4 4-4'/%3E%3C/svg%3E");
+}
+.reply-pill-select:focus-visible { outline: 2px solid var(--focus, var(--accent)); outline-offset: 2px; }
+.reply-pill-select:disabled { opacity: .6; cursor: progress; }
+.reply-error { color: var(--danger); }
+#bulkForm { position: sticky; top: 8px; z-index: 5; margin-bottom: 12px; }
+#bulkForm .pk-select { width: auto; min-width: 150px; }
+#bulkForm .pk-sticky-bar__actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 
 /* Reply detail */
-.reply-detail .crm-detail-main,
-.reply-detail .crm-detail-side { align-content: start; }
-.reply-review-state { display: inline-flex; align-items: center; gap: 8px; color: var(--text-muted); font-size: 12px; }
-.reply-led-open { background: var(--warning-dim); }
-.reply-label-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
-.reply-label-bounce { opacity: .75; }
-.reply-confidence { font-size: 12px; }
-.reply-block { margin-top: 14px; }
-.reply-field-label { margin-bottom: 4px; }
-.reply-text { font-size: 13px; }
-.reply-text-strong { font-size: 13px; font-weight: 500; }
-.reply-suggested { background: var(--info-dim); color: var(--info); }
-.reply-suggested .reply-field-label { color: var(--info); margin-bottom: 3px; }
-.reply-classified { margin-top: 14px; font-size: 11px; }
-.reply-meta-muted { font-size: 12px; }
-.reply-firm { margin-left: 6px; }
-.reply-fallback { font-size: 13px; font-style: italic; }
-.reply-label-select { flex: 1 1 200px; min-width: 0; }
-.reply-note { margin-top: 10px; font-size: 12px; }
+.reply-back { margin: 0 0 8px; }
+.reply-back a { color: var(--text-muted); text-decoration: none; }
+.reply-back a:hover { color: var(--text); text-decoration: underline; }
+.reply-detail .pk-page-head__actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.reply-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 360px); gap: 16px; align-items: start; }
+.reply-main, .reply-side { display: grid; gap: 16px; min-width: 0; align-content: start; }
+.reply-main > .pk-card, .reply-side > .pk-card { margin: 0; }
+.reply-card-title { margin: 0 0 12px; font-size: 14px; font-weight: 600; }
+.reply-meta { display: grid; gap: 10px; margin: 0; }
+.reply-meta > div { display: grid; grid-template-columns: 90px minmax(0, 1fr); gap: 10px; align-items: baseline; }
+.reply-meta dt { font-size: 12px; color: var(--text-muted); font-weight: 500; }
+.reply-meta dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.reply-body { white-space: pre-wrap; overflow-wrap: anywhere; }
+.reply-fallback { font-style: italic; }
+.reply-label-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.reply-block { margin-top: 12px; }
+.reply-field-label { margin-bottom: 4px; font-size: 12px; font-weight: 500; color: var(--text-muted); }
+.reply-block p { margin: 0; font-size: 13px; }
+.reply-suggested { padding: 10px 12px; border-radius: var(--radius, 6px); background: var(--surface-tint, var(--bg-hover)); }
+.reply-classified { margin: 12px 0 0; font-size: 12px; }
+.reply-override { display: flex; gap: 8px; flex-wrap: wrap; }
+.reply-label-select { flex: 1 1 180px; min-width: 0; }
+.reply-note { margin: 10px 0 0; font-size: 12px; }
 
 /* Scheduled sends */
+.sched-tabs { margin: 0 0 16px; overflow-x: auto; }
 .sched-when { white-space: nowrap; }
+.sched-sub { display: block; font-size: 12px; margin-top: 2px; }
 .sched-failed { color: var(--danger); font-weight: 600; }
 .sched-cancel-form { display: inline; margin: 0; }
-.sched-cancel { color: var(--danger); border-color: var(--danger); background: var(--surface); }
-.sched-cancel:hover { color: var(--danger); background: var(--danger-dim); border-color: var(--danger); }
+.sched-empty-links { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+
+@media (max-width: 900px) {
+  .reply-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  .reply-actions { position: relative; width: 100%; }
+  #addReply { position: static; }
+  #addReply .reply-add-menu { left: 0; right: 0; width: auto; max-width: none; }
+  .reply-check { width: 100%; }
+  .reply-meta > div { grid-template-columns: 1fr; gap: 2px; }
+}

@@ -1,33 +1,41 @@
-<!doctype html>
+{% from "_icons.html" import icon %}<!doctype html>
 <html lang="en" data-theme="">
 <head>
 <meta charset="utf-8">
 <meta name="csrf-token" content="{{ csrf_token }}">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" type="image/svg+xml" href="/favicon.ico">
 <title>{% block title %}{{ g_workspace.workspace_name }}{% endblock %} | Publikreach</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=20261021-ux4">
-<link rel="stylesheet" href="{{ url_for('static', filename='pages/partners.css') }}?v=20261021-ux4">
-<link rel="stylesheet" href="{{ url_for('static', filename='pages/crm.css') }}?v=20261021-ux4">
-<link rel="stylesheet" href="{{ url_for('static', filename='pages/replies.css') }}?v=20261021-ux4">
-<link rel="stylesheet" href="{{ url_for('static', filename='pages/misc.css') }}?v=20261021-ux4">
-<link rel="stylesheet" href="{{ url_for('static', filename='pages/nextstep.css') }}?v=20261021-ux4">
-<script src="{{ url_for('static', filename='app.js') }}?v=20261021-ux4"></script>
-<script src="{{ url_for('static', filename='pages/partners.js') }}?v=20261021-ux4" defer></script>
-<script src="{{ url_for('static', filename='pages/crm.js') }}?v=20261021-ux4" defer></script>
-<script src="{{ url_for('static', filename='pages/replies.js') }}?v=20261021-ux4" defer></script>
-<script src="{{ url_for('static', filename='pages/misc.js') }}?v=20261021-ux4" defer></script>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=20261024-ux7">
+<link rel="stylesheet" href="{{ url_for('static', filename='pages/components.css') }}?v=20261024-ux7">
+<link rel="stylesheet" href="{{ url_for('static', filename='pages/analytics.css') }}?v=20261024-ux7">
+<link rel="stylesheet" href="{{ url_for('static', filename='pages/dashboard.css') }}?v=20261024-ux7">
+<link rel="stylesheet" href="{{ url_for('static', filename='pages/campaign.css') }}?v=20261024-ux7">
+<link rel="stylesheet" href="{{ url_for('static', filename='pages/partners.css') }}?v=20261024-ux7">
+<link rel="stylesheet" href="{{ url_for('static', filename='pages/crm.css') }}?v=20261024-ux7">
+<link rel="stylesheet" href="{{ url_for('static', filename='pages/replies.css') }}?v=20261024-ux7">
+<link rel="stylesheet" href="{{ url_for('static', filename='pages/misc.css') }}?v=20261024-ux7">
+<link rel="stylesheet" href="{{ url_for('static', filename='pages/nextstep.css') }}?v=20261024-ux7">
+<script src="{{ url_for('static', filename='app.js') }}?v=20261024-ux7"></script>
+<script src="{{ url_for('static', filename='pages/components.js') }}?v=20261024-ux7" defer></script>
+<script src="{{ url_for('static', filename='pages/partners.js') }}?v=20261024-ux7" defer></script>
+<script src="{{ url_for('static', filename='pages/crm.js') }}?v=20261024-ux7" defer></script>
+<script src="{{ url_for('static', filename='pages/replies.js') }}?v=20261024-ux7" defer></script>
+<script src="{{ url_for('static', filename='pages/misc.js') }}?v=20261024-ux7" defer></script>
+<script src="{{ url_for('static', filename='pages/shell.js') }}?v=20261024-ux7" defer></script>
 </head>
 <body data-page="{% block page_id %}{% endblock %}">
-<a class="skip-link" href="#main-content">Skip to content</a>
+<a class="skip-link" href="#main">Skip to content</a>
 
 <!-- Send-mode banner (always first) -->
 {% if g_send_mode == 'test' %}
 <div class="send-banner mode-test">
-  <span><strong>TEST MODE</strong> Sends go to your test mailbox only.</span>
-  {% if g_test_recipient %}<span class="send-banner-recipient">Test mailbox: {{ g_test_recipient }}</span>{% else %}<a class="send-banner-link" href="/settings#svc-test-recipient">Set test recipient</a>{% endif %}
+  <span><strong>TEST MODE</strong> Sends go to your test recipient only.</span>
+  {% if g_test_recipient %}<span class="send-banner-recipient">Test recipient: {{ g_test_recipient }}</span>{% else %}<a class="send-banner-link" href="/settings#svc-test-recipient">Set test recipient</a>{% endif %}
   <span class="banner-toggle-wrap">
-    <button class="btn-banner-toggle" id="bannerGoLiveToggle" data-toggle="goLiveForm" aria-controls="goLiveForm" aria-expanded="false">Switch to LIVE mode</button>
-    <form id="goLiveForm" method="POST" action="/toggle-send-mode" class="banner-confirm-form" hidden>
+    {% if not g_next_step %}<button class="btn-banner-toggle" id="bannerGoLiveToggle" data-toggle="goLiveForm" aria-controls="goLiveForm" aria-expanded="false">Switch to LIVE mode</button>
+    {% endif %}<form id="goLiveForm" method="POST" action="/toggle-send-mode" class="banner-confirm-form" hidden>
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <label class="sr-only" for="goLiveConfirmation">Type GO LIVE to confirm live delivery</label>
       <input id="goLiveConfirmation" type="text" name="confirm_text" class="banner-confirm-input" placeholder='Type "GO LIVE" to confirm' required pattern="GO LIVE" autocomplete="off">
@@ -54,53 +62,44 @@
       <span class="brand-word">Publikreach</span>
     </a>
 
-    <ul class="nav-links">
-      <li class="nav-group" role="group" aria-labelledby="navgroup-pipeline">
-        <span class="nav-group-label" id="navgroup-pipeline">Pipeline</span>
-        <ul class="nav-group-links">
-          <li><a class="nav-link{% if active_page == 'crm' %} active{% endif %}" href="/crm"{% if active_page == 'crm' %} aria-current="page"{% endif %}><svg class="nav-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg><span>Overview</span></a></li>
-          <li><a class="nav-link{% if active_page == 'partners' %} active{% endif %}" href="/partners"{% if active_page == 'partners' %} aria-current="page"{% endif %}><svg class="nav-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>Partners</span></a></li>
-          <li><a class="nav-link{% if active_page == 'enrichment' %} active{% endif %}" href="/enrichment"{% if active_page == 'enrichment' %} aria-current="page"{% endif %}><svg class="nav-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg><span>Enrichment</span></a></li>
-        </ul>
-      </li>
-      <li class="nav-group" role="group" aria-labelledby="navgroup-send">
-        <span class="nav-group-label" id="navgroup-send">Send</span>
-        <ul class="nav-group-links">
-          <li><a class="nav-link{% if active_page == 'drafts' %} active{% endif %}" href="/crm/drafts"{% if active_page == 'drafts' %} aria-current="page"{% endif %}><svg class="nav-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg><span>Drafts</span></a></li>
-          <li><a class="nav-link{% if active_page == 'send_plan' %} active{% endif %}" href="/crm/send-plan"{% if active_page == 'send_plan' %} aria-current="page"{% endif %}><svg class="nav-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg><span>Send plan</span></a></li>
-          <li><a class="nav-link{% if active_page == 'scheduled' %} active{% endif %}" href="/scheduled"{% if active_page == 'scheduled' %} aria-current="page"{% endif %}><svg class="nav-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg><span>Scheduled</span></a></li>
-        </ul>
-      </li>
-      <li class="nav-group" role="group" aria-labelledby="navgroup-followup">
-        <span class="nav-group-label" id="navgroup-followup">Follow-up</span>
-        <ul class="nav-group-links">
-          <li><a class="nav-link{% if active_page == 'replies' %} active{% endif %}" href="/replies"{% if active_page == 'replies' %} aria-current="page"{% endif %}><svg class="nav-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>Replies</span>
-            {% if unread_replies > 0 %}<span class="nav-badge{% if unread_interested > 0 %} nav-badge-hot{% endif %}">{{ unread_replies }}</span>{% endif %}</a></li>
-          <li><a class="nav-link{% if active_page == 'analytics' %} active{% endif %}" href="/crm/analytics"{% if active_page == 'analytics' %} aria-current="page"{% endif %}><svg class="nav-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg><span>Analytics</span></a></li>
-        </ul>
-      </li>
+    <button type="button" class="nav-toggle" aria-expanded="false" aria-controls="navLinks">Menu</button>
+
+    <ul class="nav-links" id="navLinks">
+      {#- Flat primary nav (glossary: Contacts, Campaign, Drafts, Send, Replies, Analytics). active_page keys:
+          crm -> Contacts; drafts -> Campaign (or Drafts when a page sets active_page='draft_list'
+          or lives under /crm/drafts/); partners/send_plan/scheduled/candidates/verification/enrichment -> Send; analytics/tracking -> Analytics. -#}
+      {% set _drafts_active = active_page == 'draft_list' or request.path.startswith('/crm/drafts/') %}
+      {% set _campaign_active = active_page in ('drafts', 'campaign') and not _drafts_active %}
+      {% set _send_active = active_page in ('partners', 'send_plan', 'scheduled', 'candidates', 'verification', 'enrichment') %}
+      {% set _analytics_active = active_page in ('analytics', 'tracking') %}
+      <li class="nav-solo-item"><a class="nav-link nav-link-solo nav-link-contacts{% if active_page == 'crm' %} active{% endif %}" href="/crm"{% if active_page == 'crm' %} aria-current="page"{% endif %}>{{ icon("users", 16, "nav-icon") }}<span>Contacts</span></a></li>
+      <li class="nav-solo-item"><a class="nav-link nav-link-solo nav-link-campaign{% if _campaign_active %} active{% endif %}" href="/crm/drafts"{% if _campaign_active %} aria-current="page"{% endif %}>{{ icon("pencil", 16, "nav-icon") }}<span>Campaign</span></a></li>
+      <li class="nav-solo-item"><a class="nav-link nav-link-solo nav-link-drafts{% if _drafts_active %} active{% endif %}" href="/crm/drafts#drafts"{% if _drafts_active %} aria-current="page"{% endif %}>{{ icon("list", 16, "nav-icon") }}<span>Drafts</span></a></li>
+      <li class="nav-solo-item"><a class="nav-link nav-link-solo nav-link-send{% if _send_active %} active{% endif %}" href="/partners"{% if _send_active %} aria-current="page"{% endif %}>{{ icon("play", 16, "nav-icon") }}<span>Send</span></a></li>
+      <li class="nav-solo-item"><a class="nav-link nav-link-solo nav-link-replies{% if active_page == 'replies' %} active{% endif %}" href="/replies"{% if active_page == 'replies' %} aria-current="page"{% endif %}>{{ icon("message", 16, "nav-icon") }}<span>Replies</span>
+        {% if unread_replies > 0 %}<span class="nav-badge{% if unread_interested > 0 %} nav-badge-hot{% endif %}">{{ unread_replies }}</span>{% endif %}</a></li>
+      <li class="nav-solo-item"><a class="nav-link nav-link-solo nav-link-analytics{% if _analytics_active %} active{% endif %}" href="/crm/analytics"{% if _analytics_active %} aria-current="page"{% endif %}>{{ icon("bar-chart", 16, "nav-icon") }}<span>Analytics</span></a></li>
     </ul>
 
     <div class="nav-right">
-      <a class="nav-link nav-link-solo{% if active_page == 'settings' %} active{% endif %}" href="/settings"{% if active_page == 'settings' %} aria-current="page"{% endif %}><svg class="nav-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span>Settings</span></a>
+      <details class="nav-more pk-kebab">
+        <summary class="nav-link nav-link-solo"><span>More</span>{{ icon("chevron-down", 14, "nav-icon") }}</summary>
+        <ul class="nav-more-menu pk-kebab__menu">
+          <li><a class="nav-link" href="/crm/send-plan"{% if active_page == 'send_plan' %} aria-current="page"{% endif %}>Send plan</a></li>
+          <li><a class="nav-link" href="/scheduled"{% if active_page == 'scheduled' %} aria-current="page"{% endif %}>Scheduled</a></li>
+          <li><a class="nav-link" href="/enrichment"{% if active_page == 'enrichment' %} aria-current="page"{% endif %}>Enrichment</a></li>
+        </ul>
+      </details>
+      <a class="nav-link nav-link-solo{% if active_page == 'settings' %} active{% endif %}" href="/settings"{% if active_page == 'settings' %} aria-current="page"{% endif %}>{{ icon("settings", 16, "nav-icon") }}<span>Settings</span></a>
       <button class="theme-toggle" id="themeToggle" title="Toggle dark/light mode" aria-label="Toggle theme">
-        <!-- Sun icon (shown in dark mode) -->
-        <svg class="icon-sun" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
-          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
-          <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
-          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
-        </svg>
-        <!-- Moon icon (shown in light mode) -->
-        <svg class="icon-moon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-        </svg>
+        {{ icon("sun", 16, "icon-sun") }}
+        {{ icon("moon", 16, "icon-moon") }}
       </button>
     </div>
   </div>
 </nav>
 
-<main class="main" id="main-content">
+<main class="main" id="main" tabindex="-1">
   <!-- Flash messages -->
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}
@@ -117,9 +116,7 @@
 
   {% block next_step_banner %}
   {% if g_next_step and not (active_page == 'settings' and g_next_step.key in ('gmail', 'test_recipient', 'publik_api')) %}
-  <section class="next-step" id="nextStep" aria-label="Next step"><span class="next-step-count">Step {{ g_next_step.index }} of {{ g_next_step.total }}</span> <strong>{{ g_next_step.label }}</strong> <a class="crm-button crm-button-small crm-button-primary" href="{{ g_next_step.href }}" data-next-step="{{ g_next_step.key }}">Go</a>
-    {%- if g_next_step.key == 'publik_api' %} <form class="next-step-skip" method="post" action="/settings/publik-recommendation"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="state" value="skipped"><input type="hidden" name="next" value="{{ request.path }}"><button type="submit" class="next-step-link" data-next-step-skip="publik_api">Skip, use my own key or the offline template</button></form>{% endif %}
-    {%- if request.path != '/setup/ai' %} <a class="next-step-link" href="/setup/ai" data-next-step-ai>or set up with AI</a>{% endif %}</section>
+  <section class="next-step" id="nextStep" aria-label="Next step"><span class="next-step-count">Step {{ g_next_step.index }} of {{ g_next_step.total }}</span> <strong>{{ g_next_step.label }}</strong> <a class="crm-button crm-button-small crm-button-primary" href="{{ g_next_step.href }}" data-next-step="{{ g_next_step.key }}">{{ icon("play", 14) }}Go{{ icon("chevron-right", 14) }}</a></section>
   {% endif %}
   {% endblock %}
 

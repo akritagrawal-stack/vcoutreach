@@ -507,9 +507,16 @@ def first_run_next_step(app) -> dict | None:
 
 _SERVICE_MARKS = {'pitchbook': 'Pb', 'apollo': 'Ap', 'enrow': 'En', 'gemini': 'Ge', 'openai': 'Oa', 'anthropic': 'An', 'openrouter': 'Or', 'tracking': 'Tr'}
 
+FAVICON_SVG = (
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">'
+    '<rect width="32" height="32" rx="7" fill="#17181a"/>'
+    '<path d="M11 8h6.5a5.5 5.5 0 0 1 0 11H15v5h-4z M15 12v3.5h2.3a1.75 1.75 0 0 0 0-3.5z" fill="#f6f6f3" fill-rule="evenodd"/>'
+    '</svg>'
+)
 _TRACKING_URL_NAMES = ('TRACKING_WORKER_URL', 'CLOUDFLARE_TRACKING_URL', 'TRACKER_PUBLIC_URL', 'TRACKING_ORIGIN')
 _TRACKING_TOKEN_NAMES = ('TRACKING_WORKER_TOKEN', 'CLOUDFLARE_TRACKING_TOKEN', 'TRACKING_API_TOKEN')
-_CARD_ALIASES = frozenset(_TRACKING_URL_NAMES + _TRACKING_TOKEN_NAMES) | {'GOOGLE_API_KEY'}
+# PUBLIK_API_KEY is entered in the Publik API card (/api/model-provider/key), so it is not repeated under More settings.
+_CARD_ALIASES = frozenset(_TRACKING_URL_NAMES + _TRACKING_TOKEN_NAMES) | {'GOOGLE_API_KEY', 'PUBLIK_API_KEY'}
 
 def _settings_services(gemini_status: dict, health: dict) -> list:
     """One dict per Connections card (not Gmail, which has its own state machine). Never includes a key value."""
@@ -606,6 +613,56 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
     register_setup_routes(app, _gmail_connection_state)
     drafts_service.register_routes(app)
 
+    from vcoutreach.web.server import deck_upload
+
+    def _deck_job_search() -> bool:
+        info = drafts_service.campaign_kind()
+        return bool(info['chosen'] and info['kind'] == 'job_search')
+
+    def _deck_back():
+        return redirect(deck_upload.back_path(request.form.get('next')))
+
+    @app.post('/crm/deck/upload')
+    def crm_deck_upload():
+        job = _deck_job_search()
+        try:
+            deck_upload.save_uploaded_deck(request.files.get('deck'), job_search=job)
+        except deck_upload.DeckUploadError as exc:
+            flash(str(exc), 'error')
+        except OSError:
+            flash("We couldn't save that file. Try again.", 'error')
+        else:
+            flash(f'{deck_upload.noun(job)} attached.', 'success')
+        return _deck_back()
+
+    @app.post('/crm/deck/remove')
+    def crm_deck_remove():
+        job = _deck_job_search()
+        try:
+            had = deck_upload.remove_deck()
+        except OSError:
+            flash("We couldn't remove that file. Try again.", 'error')
+        else:
+            flash(f'{deck_upload.noun(job)} removed.' if had else f'No {deck_upload.noun(job).lower()} was attached.', 'success')
+        return _deck_back()
+
+    @app.post('/crm/deck/example')
+    def crm_deck_example():
+        if _deck_job_search():
+            flash('The example deck is for fundraising. Upload your resume instead.', 'error')
+            return _deck_back()
+        try:
+            deck_upload.use_example_deck()
+        except deck_upload.DeckUploadError as exc:
+            flash(str(exc), 'error')
+        except OSError:
+            flash("We couldn't add the example deck. Try again.", 'error')
+        else:
+            flash('Example deck attached. Replace it with your own any time.', 'success')
+        return _deck_back()
+    from vcoutreach.web.server import example_pitch_web
+    example_pitch_web.register(app)
+
     @app.before_request
     def confine_ids_and_flashes():
         if any(isinstance(value,int) and value > 9223372036854775807 for value in (request.view_args or {}).values()):
@@ -641,6 +698,11 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
     @app.get('/healthz')
     def healthz():
         return {'ok': True}
+
+    @app.get('/favicon.ico')
+    def favicon():
+        # Tiny static SVG icon. Served under the same security headers as every other route (X-Frame-Options DENY, CSP).
+        return Response(FAVICON_SVG, mimetype='image/svg+xml')
 
     # ── CSRF: ensure a per-session token exists ───────────────────────────────
 
@@ -747,6 +809,12 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
                 'pitchbook_enabled': False,
             }
 
+    # ── Context processor - Campaign/draft view helpers (pure, read-only) ───
+    @app.context_processor
+    def inject_campaign_vm():
+        from vcoutreach.web.server import view_models_campaign as campaign_vm
+        return {'campaign_vm': campaign_vm}
+
     # ── Dashboard ─────────────────────────────────────────────────────────────
 
 
@@ -758,8 +826,10 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
 
     @app.get('/crm')
     def crm_dashboard():
-        view = request.args.get('view', 'current').strip()
-        if view not in {'current', 'all', 'warm', 'hot', 'due', 'follow_up_candidates', 'investor_list', 'unreplied', 'new_outreach', 'sent', 'sent_emails', 'best_fit', 'best_fit_awaiting', 'reviewed_fit', 'followup_watchlist', 'followup_next', 'new_research'}:
+        from vcoutreach.web.server import view_models_dashboard as dash_vm
+        # The tab buttons and the "More views" select share the name "view"; the first non-empty value wins.
+        view = next((v.strip() for v in request.args.getlist('view') if v.strip()), 'current')
+        if view not in dash_vm.ALL_VIEWS:
             view = 'current'
         stage = request.args.get('stage', '').strip()
         if stage not in CRM_STAGES:
@@ -770,34 +840,17 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
         draft = request.args.get('draft', '')
         if draft not in {'ok', 'blocked', 'none'}:
             draft = ''
-        conn = get_conn(app.config['CRM_DB_PATH'])
-        try:
-            batches = [dict(row) for row in conn.execute('SELECT name, created_at FROM batches ORDER BY id DESC')]
-        finally:
-            conn.close()
-        rows, counts = crm_list_contacts(
-            q=query, view=view, stage=stage, page=page, tag=tag, draft=draft,
-            db_path=app.config['CRM_DB_PATH'],
+        dash = dash_vm.dashboard_context(
+            app.config['CRM_DB_PATH'], view=view, q=query, stage=stage, page=page, tag=tag, draft=draft,
         )
+        counts = dash['counts']
         if page > counts['pages']:
             flash('That page is beyond the last page. Showing the last page.','info')
-            return redirect(url_for('crm_dashboard',**{**request.args.to_dict(),'page':counts['pages']}))
-        try:
-            leads = crm_lead_scores(app.config['CRM_DB_PATH'])
-            hot_leads_preview = [row for row in leads if row['bucket'] == 'hot'][:5]
-            replied_count = sum(1 for row in leads if row['bucket'] == 'replied')
-        except Exception:
-            app.logger.warning('Hot leads preview unavailable', exc_info=False)
-            hot_leads_preview, replied_count = [], 0
+            return redirect(url_for('crm_dashboard',**{**request.args.to_dict(),'view':view,'page':counts['pages']}))
         return render_template(
-            'crm_dashboard.html', rows=rows, counts=counts,
-            filters={'q': query, 'view': view, 'stage': stage, 'tag': tag, 'draft': draft}, batches=batches,
+            'crm_dashboard.html', dash=dash, rows=dash['rows'], counts=counts,
+            filters={'q': query, 'view': view, 'stage': stage, 'tag': tag, 'draft': draft},
             stages=CRM_STAGES,
-            confirmed_send_count=_crm_confirmed_send_count(app.config['CRM_DB_PATH']),
-            inbound_match_count=_crm_inbound_match_count(app.config['CRM_DB_PATH']),
-            inbox_sync_status=crm_sync_status(app.config['CRM_DB_PATH']),
-            hot_leads_preview=hot_leads_preview,
-            replied_count=replied_count,
             active_page='crm',
         )
 
@@ -814,6 +867,15 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
                   f"{result['inserted']} new exact-address matches.", 'success')
         return redirect(url_for('crm_dashboard'))
 
+    def _provider_status_line(providers):
+        labels={'publik':'Publik','openai':'OpenAI','anthropic':'Anthropic'}
+        keyed=[labels.get(name,name.capitalize()) for name in providers if name!='template']
+        if not keyed:
+            return 'No AI provider key is configured. Auto uses a placeholder template.'
+        if len(keyed)==1:
+            return keyed[0]+' is configured. Auto uses it, and falls back to a placeholder template if it fails.'
+        return ', '.join(keyed[:-1])+' and '+keyed[-1]+' are configured. Auto tries them in that order, then falls back to a placeholder template.'
+
     @app.get('/drafts')
     @app.get('/crm/drafts')
     def crm_drafts():
@@ -824,9 +886,9 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
               and (not query or query.casefold() in (row['recipient_name']+' '+row['subject']+' '+row['firm']).casefold())]
         from vcoutreach.providers import configured_providers
         providers=configured_providers(drafts_service.engine_settings())
-        return render_template('crm_drafts.html',drafts=rows,draft_count=len(rows),total_draft_count=len(drafts),
-            status_filter=status,query=query,deck_panel=drafts_service.template_deck_panel(),providers=['auto','template','publik','openai','anthropic'],
-            provider_status=', '.join(providers) + ' configured; no key uses a placeholder template',active_page='drafts')
+        return render_template('crm_drafts.html',drafts=rows,all_drafts=drafts,draft_count=len(rows),total_draft_count=len(drafts),
+            status_filter=status,query=query,deck_panel=drafts_service.template_deck_panel(),campaign=drafts_service.campaign_state(drafts),example_pitch=drafts_service.example_pitch_available(),providers=['auto','template','publik','openai','anthropic'],
+            provider_status=_provider_status_line(providers),active_page='drafts')
 
     @app.get('/crm/tracking')
     def crm_tracking():
@@ -869,8 +931,11 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
         draft_rows = drafts_service.list_drafts()
         quality = Counter(row['status'] for row in draft_rows)
         lint_codes = Counter(issue['code'] for row in draft_rows for issue in row['issues'])
+        from vcoutreach.web.server.view_models_analytics import build_analytics_view
+        view = build_analytics_view(db_path, request.args.get('range'), now, buckets=buckets, segments=segments,
+                                    coverage=coverage, snapshot=get_workspace().read_json('data/tracking-snapshot.json'))
         return render_template(
-            'crm_analytics.html',
+            'crm_analytics.html', view=view,
             hot=buckets['hot'], warm=buckets['warm'], engaged=buckets['engaged'], cold=buckets['cold'],
             untracked=buckets['untracked'], replied=buckets['replied'],
             funnel=funnel, segments=segments, coverage=coverage, insights=insight_lists,
@@ -897,6 +962,7 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
 
     @app.get('/crm/<int:partner_id>')
     def crm_contact(partner_id: int):
+        from vcoutreach.web.server import view_models_dashboard as dash_vm
         detail = crm_get_contact(partner_id, db_path=app.config['CRM_DB_PATH'])
         if detail is None:
             abort(404)
@@ -911,12 +977,13 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
             conn.close()
         from vcoutreach.web.pipeline.loader import get_draft_for_partner
         has_draft = get_draft_for_partner(partner_id) is not None
-        response = app.make_response(render_template('crm_contact.html', **detail, uncertain_sends=uncertain_sends, has_draft=has_draft, stages=CRM_STAGES, active_page='crm'))
+        response = app.make_response(render_template('crm_contact.html', **detail, uncertain_sends=uncertain_sends, has_draft=has_draft, stages=CRM_STAGES, active_page='crm', words=dash_vm.campaign_words(), time_tag=dash_vm.time_tag))
         response.headers['Cache-Control'] = 'no-store'
         return response
 
     @app.get('/crm/<int:partner_id>/alternate-investors')
     def crm_alternate_investors(partner_id: int):
+        from vcoutreach.web.server import view_models_dashboard as dash_vm
         if crm_get_contact(partner_id, db_path=app.config['CRM_DB_PATH']) is None:
             abort(404)
         try:
@@ -929,7 +996,7 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
             result['official_status'] = 'scan_unavailable'
         return render_template(
             'crm_alternate_investors.html', result=result,
-            active_page='crm',
+            active_page='crm', words=dash_vm.campaign_words(), time_tag=dash_vm.time_tag,
         )
 
     @app.post('/partners/<int:partner_id>/verify-email-manually')
@@ -1068,13 +1135,22 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
         gmail=_gmail_view(app)
         services=_settings_services(load_gemini_status(configured=bool(_env('GEMINI_API_KEY'))),connection_health())
         deck_ready=bool(settings.get('pitch_deck_path') and Path(settings['pitch_deck_path']).is_file())
+        if deck_ready and settings.get('campaign_kind')=='job_search':
+            from vcoutreach.web.server.workspace_settings import is_bundled_example_deck
+            deck_ready=not is_bundled_example_deck(settings['pitch_deck_path'])
         recipient=bool(_env('TEST_RECIPIENT_EMAIL'))
         tiles=[('Gmail',gmail['state'],{'ok':'Connected','fail':'Failed','unset':'Not set'}.get(gmail['state'],'Key saved'),'svc-gmail'),
                ('Test recipient','ok' if recipient else 'unset','Set' if recipient else 'Not set','svc-test-recipient'),
-               ('Pitch deck','ok' if deck_ready else 'unset','Ready' if deck_ready else 'Missing','sec-package'),
+               ('Resume' if settings.get('campaign_kind')=='job_search' else 'Pitch deck','ok' if deck_ready else 'unset','Ready' if deck_ready else 'Missing','sec-package'),
                ('Database','ok','Ready','sec-identity'),('PitchBook','unset','Not set','svc-pitchbook'),
                ('Calendar','unset','Manual','sec-snapshot')]
-        return render_template('settings.html',settings=settings,audiences=AUDIENCE_TYPES,discovery_sources=DISCOVERY_SOURCES,
+        job_view=settings.get('campaign_kind')=='job_search'
+        if job_view:
+            from vcoutreach.web.server import example_pitch as _ex
+            from vcoutreach.web.server.workspace_settings import blurb_for_kind
+            settings={**settings,'outreach_blurb_template':blurb_for_kind(settings.get('outreach_blurb_template'),'job_search'),
+                      'pitch_deck_label':'Resume' if str(settings.get('pitch_deck_label') or '').strip() in ('',_ex.EXAMPLE_DECK_LABEL) else settings.get('pitch_deck_label')}
+        return render_template('settings.html',job_view=job_view,settings=settings,audiences=AUDIENCE_TYPES,discovery_sources=DISCOVERY_SOURCES,
             sample_email=build_sample_email(settings),gmail=gmail,services=services,more_settings=_more_settings(services),tiles=tiles,
             sender=drafts_service.sender_dict(),searxng_url=_env('SEARXNG_URL'),active_page='settings')
 
@@ -1797,16 +1873,17 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
         from vcoutreach.web.pipeline.loader import get_draft_for_partner
         if get_partner(partner_id) is not None and get_draft_for_partner(partner_id) is None:
             flash('Write a draft first, then send a test.','warning')
-            return redirect(url_for('partner_detail',partner_id=partner_id))
+            return redirect(drafts_service.safe_next_url(request.form) or url_for('partner_detail',partner_id=partner_id))
         try:
             send_one_test(partner_id)
-            flash('Test email sent to the configured test recipient.','success')
+            recipient=_env('TEST_RECIPIENT_EMAIL').strip()
+            flash('Test email sent to '+recipient+'. Check that inbox.' if recipient else 'Test email sent to the configured test recipient.','success')
         except SendRefused as exc:
             flash(str(exc),'error')
         except Exception:
             flash(Markup('Test sending is unavailable. Check the ') + _settings_card_link('svc-gmail', 'Gmail card')
                   + Markup(' and the ') + _settings_card_link('svc-test-recipient', 'Test recipient card') + Markup(' in Settings.'),'error')
-        return redirect(url_for('partner_detail',partner_id=partner_id))
+        return redirect(drafts_service.safe_next_url(request.form) or url_for('partner_detail',partner_id=partner_id))
 
     # ── Send (single partner, respects SEND_MODE) ────────────────────────────
 
@@ -1917,9 +1994,47 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
     def replies_list():
         from vcoutreach.web.replies.loader import list_replies
         from vcoutreach.web.replies.classifier import VALID_LABELS
+        from vcoutreach.web.server.view_models_replies import build_replies_view, get_last_checked
         label=request.args.get('label','')
-        rows=[dict(row) for row in list_replies(label=label or None)]
-        return render_template('replies_list.html',replies=rows,rows=rows,label_filter=label,labels=sorted(VALID_LABELS),all_labels=sorted(VALID_LABELS),active_page='replies')
+        labels=sorted(VALID_LABELS)
+        if label and label not in VALID_LABELS:
+            label=''
+        rows=[dict(row) for row in list_replies()]
+        view=build_replies_view(rows,request.args.get('tab'),label,labels)
+        return render_template('replies_list.html',view=view,replies=view['rows'],rows=view['rows'],label_filter=label,labels=labels,all_labels=labels,last_checked=get_last_checked(),active_page='replies')
+
+    @app.route('/replies/bulk', methods=['POST'])
+    def replies_bulk():
+        from vcoutreach.web.replies.loader import update_reply_user_label
+        from vcoutreach.web.server.view_models_replies import safe_replies_next, set_reviewed
+        target=safe_replies_next(request.form.get('next')) or url_for('replies_list')
+        ids=[v for v in request.form.getlist('reply_id') if v.isdigit()]
+        action=request.form.get('action','')
+        if not ids:
+            flash('Select at least one reply first.', 'warning')
+            return redirect(target)
+        noun='reply' if len(ids)==1 else 'replies'
+        if action=='mark_read':
+            set_reviewed(ids, True)
+            flash(f'Marked {len(ids)} {noun} as read.', 'success')
+        elif action=='mark_unread':
+            set_reviewed(ids, False)
+            flash(f'Marked {len(ids)} {noun} as unread.', 'success')
+        elif action=='set_label':
+            label=request.form.get('label','').strip()
+            if not label:
+                flash('Choose a label to apply.', 'warning')
+            else:
+                try:
+                    for rid in ids:
+                        update_reply_user_label(int(rid), label)
+                except ValueError as exc:
+                    flash(str(exc), 'error')
+                else:
+                    flash(f'Updated the label on {len(ids)} {noun}.', 'success')
+        else:
+            flash('Choose an action for the selected replies.', 'warning')
+        return redirect(target)
 
     # ── Reply detail ──────────────────────────────────────────────────────────
 
@@ -1931,6 +2046,10 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
         if row is None:
             flash(f'Reply {reply_id} not found.', 'error')
             return redirect(url_for('replies_list'))
+        if request.args.get('auto') != '0' and not row['user_reviewed']:
+            from vcoutreach.web.server.view_models_replies import set_reviewed
+            set_reviewed([reply_id], True)
+            row = get_reply(reply_id) or row
         return render_template('reply_detail.html',
                                reply=row,
                                all_labels=sorted(ALL_LABELS),
@@ -1939,7 +2058,25 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
     @app.route('/replies/<int:reply_id>/update-label', methods=['POST'])
     def reply_update_label(reply_id: int):
         from vcoutreach.web.replies.loader import update_reply_user_label
+        from vcoutreach.web.replies.loader import get_reply, list_replies
+        from vcoutreach.web.replies.classifier import VALID_LABELS as _LABELS
+        from vcoutreach.web.server.view_models_replies import (effective_label, label_meta, safe_replies_next,
+                                                               tab_counts, wants_json)
         user_label = request.form.get('user_label', '').strip()
+        if wants_json(request):
+            try:
+                if not user_label:
+                    raise ValueError('Choose a label first.')
+                update_reply_user_label(reply_id, user_label)
+            except ValueError as exc:
+                return Response(json.dumps({'ok': False, 'error': str(exc)}), status=400, mimetype='application/json')
+            row = dict(get_reply(reply_id) or {})
+            current = effective_label(row)
+            meta = label_meta(current)
+            counts = tab_counts([dict(r) for r in list_replies()], sorted(_LABELS))
+            return Response(json.dumps({'ok': True, 'label': current, 'text': meta['text'], 'tone': meta['tone'],
+                                        'bucket': meta['bucket'], 'counts': counts['counts'], 'unread': counts['unread']}),
+                            mimetype='application/json')
         if user_label:
             try:
                 update_reply_user_label(reply_id, user_label)
@@ -1947,14 +2084,21 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
                 flash(str(exc), 'error')
             else:
                 flash('Label updated.', 'success')
-        return redirect(url_for('reply_detail', reply_id=reply_id))
+        target = safe_replies_next(request.form.get('next'))
+        if target:
+            return redirect(target)
+        return redirect(url_for('reply_detail', reply_id=reply_id, auto=0))
 
     @app.route('/replies/<int:reply_id>/mark-reviewed', methods=['POST'])
     def reply_mark_reviewed(reply_id: int):
         from vcoutreach.web.replies.loader import mark_reply_reviewed
+        from vcoutreach.web.server.view_models_replies import safe_replies_next
         mark_reply_reviewed(reply_id)
         flash('Reply review state updated.', 'success')
-        return redirect(url_for('reply_detail', reply_id=reply_id))
+        target = safe_replies_next(request.form.get('next'))
+        if target:
+            return redirect(target)
+        return redirect(url_for('reply_detail', reply_id=reply_id, auto=0))
 
     # ── Poll replies (manual trigger) ─────────────────────────────────────────
 
@@ -1980,6 +2124,9 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
         flash(msg, 'success' if not errs else 'warning')
         if errs:
             flash(Markup('Gmail returned an error while polling. Check the ') + gmail_card + Markup('.'), 'error')
+        else:
+            from vcoutreach.web.server.view_models_replies import record_last_checked
+            record_last_checked()
         return redirect(url_for('replies_list'))
 
     # ── Regenerate hook with LLM ──────────────────────────────────────────────
@@ -2525,8 +2672,11 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
                 'result': result,
             })
 
+        from vcoutreach.web.server.view_models_replies import build_scheduled_view
+        sched_view = build_scheduled_view(schedule_rows, request.args.get('tab'))
         return render_template('scheduled_list.html',
-                               schedule_rows=schedule_rows,
+                               schedule_rows=sched_view['rows'],
+                               sched=sched_view,
                                active_page='scheduled')
 
     @app.route('/scheduled/<int:sched_id>/cancel', methods=['POST'])

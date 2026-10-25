@@ -1,14 +1,22 @@
 # Publikreach.app
 
-The end-user deliverable is `dist/Publikreach.dmg`. Open it, drag **Publikreach.app** onto **Applications**, eject the image, and double-click the app. The target Mac needs no Python installation. This is a native Cocoa WKWebView window hosting the existing Flask application, with a bundled Python runtime, Flask and Gmail libraries. The source checkout does not contain a prebuilt release or promise an available download.
+The end-user deliverable is `dist/Publikreach.dmg`. Or open it, drag **Publikreach.app** onto **Applications**, eject the image, and double-click the app. The target Mac needs no Python installation. This is a native Cocoa WKWebView window hosting the existing Flask application, with a bundled Python runtime, Flask and Gmail libraries. The source checkout does not contain a prebuilt release or promise an available download.
 
 Apple Silicon (arm64) only. The bundle declares macOS 12.0 as its minimum and supports high resolution displays. Actual macOS 12 compatibility still requires a run on that OS: the build host's Python and binary wheels must also support it. Intel Macs are not supported by this build.
 
-## First launch and signing
+## Install and signing
 
-The build uses `codesign --force --deep -s -`: an ad-hoc signature without an Apple Developer ID. The app is not notarized. On first launch, right-click Publikreach.app and choose Open. If macOS still blocks it, attempt to open it once, then go to System Settings > Privacy and Security > Open Anyway. Older macOS versions use System Preferences > Security and Privacy. Exact wording varies with macOS version and policy.
+Recommended one-line install:
 
-Notarization requires a paid Apple Developer account and signing credentials. It has not been done, and this build does not claim Gatekeeper approval.
+```sh
+curl -fsSL https://raw.githubusercontent.com/akritagrawal-stack/vcoutreach/main/packaging/install.sh | bash
+```
+
+The script checks for macOS on Apple Silicon, downloads the latest Publikreach.dmg, copies the app to /Applications (or ~/Applications if not writable), runs `xattr -cr`, verifies `codesign --verify --deep`, and opens it. It uses no sudo and no telemetry. Re-running it updates the app and keeps the workspace. `PUBLIKREACH_DMG=/path/to.dmg` skips the download and `PUBLIKREACH_INSTALL_DIR=DIR` changes the target.
+
+Manual install: download Publikreach.dmg in a browser and drag the app to Applications. Browser downloads are quarantined, so the first launch shows an "unidentified developer" prompt. Once, right-click Publikreach.app and choose Open; or go to System Settings > Privacy and Security > Open Anyway; or run `xattr -cr /Applications/Publikreach.app`. Wording varies with macOS version.
+
+The build uses `codesign --force --deep -s -`, an ad hoc signature without an Apple Developer ID. The app is open source: read [install.sh](../packaging/install.sh) and build from source below.
 
 The app creates `~/Documents/Publikreach`, with `.env`, `data/`, `drafts/` and `outputs/`. Allow access to Documents if macOS requests it. Replacing the app does not remove this workspace. To uninstall, quit and move the app to Trash; remove the workspace separately only if you want to delete its data and credentials.
 
@@ -21,6 +29,8 @@ Every user needs their own Google Cloud **Desktop app** OAuth client JSON until 
 3. Settings shows connected when a local refresh token is saved. Gmail access is verified when used. Consent permits `gmail.modify` for reading, labeling, drafting and sending; the app's existing send gates still apply.
 
 The app validates the Desktop client format, nonempty client_id and client_secret, Google's authorization and token endpoints, and loopback redirect URIs. Web clients, service accounts, token files and endpoint substitutions are rejected. The JSON is copied server-side to `data/.gmail_credentials.json`; the token is saved at `data/.gmail_token.json`. Both files have mode 0600. Their contents are never shown or logged. Replacing a client invalidates the old saved token and requires consent again.
+
+If you cannot create an OAuth client, the Gmail card also has a collapsed "Alternative: use a Gmail app password instead" section. It needs 2-Step Verification and, on Workspace, an admin who allows app passwords. The password is saved at `data/.gmail_app_password.json` with mode 0600.
 
 The same Settings actions work in `vcoutreach ui`: the browser file chooser uploads through an authenticated, same-origin, CSRF-protected route. Connecting uses the same installed-app OAuth flow. The CLI remains available as `vcoutreach auth gmail-web --workspace DIR` after saving the client JSON in that workspace's data folder.
 

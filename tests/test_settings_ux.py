@@ -585,8 +585,8 @@ def test_8_add_reply_submit_has_no_banned_class(web, bad):
 @pytest.mark.parametrize("bad", ["btn-full", "square-button"])
 def test_8_poll_control_has_no_banned_class(web, bad):
     root = page(web, "/replies")
-    polls = [n for n in root.walk() if n.tag in ("button", "a", "input") and "poll gmail now" in (n.all_text() + " " + n.attrs.get("value", "")).lower()]
-    assert polls, "no Poll Gmail now control"
+    polls = [n for n in root.walk() if n.tag in ("button", "a", "input") and "check for new replies" in (n.all_text() + " " + n.attrs.get("value", "")).lower()]
+    assert polls, "no Check for new replies control"
     for p in polls:
         assert bad not in p.classes
 

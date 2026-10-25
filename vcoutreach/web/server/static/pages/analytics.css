@@ -1,0 +1,55 @@
+/* Publikreach analytics page styles. Page-specific rules only; shared kit lives in components.css (pk- classes). */
+.an-page { display: flex; flex-direction: column; gap: 16px; max-width: 1200px; }
+.an-block { margin: 0; }
+.an-page .pk-page-head__actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.an-page .pk-page-head__actions form { margin: 0; }
+
+.an-delta--bad { color: var(--danger, #b42318); }
+.pk-kpi .pk-kpi__caption + .pk-kpi__caption { margin-top: 2px; }
+
+.an-tabs { padding: 0 16px; overflow-x: auto; }
+.an-contacts tr.is-clickable { cursor: pointer; }
+.an-contacts tr.is-clickable:hover td { background: var(--surface-hover, rgba(127, 127, 127, 0.08)); }
+.an-contacts tr.an-empty:hover td { background: transparent; }
+.an-link { color: var(--text); font-weight: 600; text-decoration: none; }
+.an-link:hover, .an-link:focus-visible { color: var(--accent); text-decoration: underline; }
+
+.an-page [hidden] { display: none !important; }
+.pk-card__body .pk-bars { margin: 0; }
+.pk-bars__val .pk-funnel__pct { margin-left: 8px; }
+
+.an-detail { border-top: 1px solid var(--border-muted); }
+.an-detail > summary,
+.an-summary { cursor: pointer; list-style: none; padding: 12px 16px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.an-detail > summary { color: var(--text-muted, inherit); font-size: 0.875rem; }
+.an-detail > summary::-webkit-details-marker,
+.an-summary::-webkit-details-marker { display: none; }
+.an-detail > summary::before,
+.an-summary::before { content: ""; display: inline-block; width: 6px; height: 6px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg); margin-right: 4px; transition: transform 0.12s ease; align-self: center; }
+.an-detail[open] > summary::before,
+.an-collapse[open] > .an-summary::before { transform: rotate(45deg); }
+.an-collapse[open] > .an-summary { border-bottom: 1px solid var(--border-muted); }
+.an-detail__note { padding: 8px 16px 12px; margin: 0; }
+
+.an-insights { padding: 16px; }
+.an-insights__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 24px; margin-top: 8px; }
+.an-sub { font-size: 0.8125rem; font-weight: 600; margin: 0 0 6px; color: var(--text-muted, inherit); }
+.an-list { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+
+.an-lede { margin: 0 0 12px; }
+.an-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin: 0 0 12px; }
+.an-facts div { padding: 10px 12px; border: 1px solid var(--border-muted); border-radius: 8px; }
+.an-facts dt { font-size: 0.75rem; color: var(--text-muted, inherit); }
+.an-facts dd { margin: 2px 0 0; font-size: 1.25rem; font-weight: 600; }
+.an-collapse .pk-card__body .pk-note { margin: 8px 0; }
+
+.an-counts { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px 24px; }
+.an-dl { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; margin: 0 0 8px; }
+.an-dl dt { color: var(--text-muted, inherit); }
+.an-dl dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+
+@media (max-width: 640px) {
+  .an-insights__grid { grid-template-columns: 1fr; }
+  .an-page .pk-page-head__actions { width: 100%; }
+  .an-page .pk-seg { max-width: 100%; overflow-x: auto; }
+}

@@ -1,14 +1,30 @@
 # Publikreach for Mac
 
-The Mac distribution is **Publikreach.dmg**, containing **Publikreach.app** for Apple Silicon (arm64), with macOS 12 or later declared as the minimum. Open the DMG, drag Publikreach into Applications, then double-click it. The app bundles Python, Flask and the Gmail libraries and opens its own native WKWebView window. No Python installation or Terminal launcher is needed on the target Mac. Release binaries are not included in this source checkout; a maintainer must [build the app and DMG](packaging/mac/README.md) before distributing them.
+The Mac distribution is **Publikreach.dmg**, containing **Publikreach.app** for Apple Silicon (arm64), with macOS 12 or later declared as the minimum. The app bundles Python, Flask and the Gmail libraries and opens its own native WKWebView window. No Python installation or Terminal launcher is needed on the target Mac. Release binaries are not included in this source checkout; a maintainer must [build the app and DMG](packaging/mac/README.md) before distributing them.
 
 The app stores `.env`, `data/`, `drafts/` and `outputs/` in `~/Documents/Publikreach`. Every launch starts in TEST mode. Closing its window quits the local server. Keep this workspace when replacing the app to update it.
 
-The app is **ad-hoc signed**, without an Apple Developer ID, and **not notarized**. On first launch, right-click Publikreach.app and choose Open. If macOS still blocks it, try opening it once, then use System Settings > Privacy and Security > Open Anyway. Notarization needs a paid Apple Developer account and has not been done. On older macOS versions these controls may be in System Preferences > Security and Privacy.
+## Install
 
-In Settings, enter your **Gmail address** and **App password**, then click **Connect Gmail**. Turn on 2-Step Verification and [create a 16-character app password](https://myaccount.google.com/apppasswords) first. Spaces in the password are stripped. The app verifies IMAP and SMTP logins before saving `data/.gmail_app_password.json` privately in the workspace with mode 0600. No Google Cloud client file or optional Google libraries are needed for this mode. The connection persists until revoked; Google also revokes app passwords when you change your Google password. See [Google's app-password guide](https://support.google.com/accounts/answer/185833). Workspace admins may disable app passwords. Disconnect removes the saved secret. A saved connection does not bypass send confirmations or TEST mode.
+Recommended, one line in Terminal (needs an Apple Silicon Mac):
 
-**Advanced: use a Google OAuth client instead** in the Gmail card retains the Desktop client flow. Follow Google's [Desktop OAuth client setup steps](https://developers.google.com/workspace/gmail/api/quickstart/python#authorize_credentials_for_a_desktop_application), enable the Gmail API, configure consent and test users, import the client JSON, then connect. Consent requests `gmail.modify` and saves the private client and refresh token with mode 0600. An existing OAuth connection continues to work.
+```sh
+curl -fsSL https://raw.githubusercontent.com/akritagrawal-stack/vcoutreach/main/packaging/install.sh | bash
+```
+
+It downloads the latest Publikreach.dmg, copies Publikreach.app to /Applications (or ~/Applications if that is not writable), checks the signature and opens the app. Files fetched with curl are not quarantined, so macOS shows no warning. Run it again to update. Your workspace is kept.
+
+Or download Publikreach.dmg in a browser, drag the app to Applications and open it. A browser download is quarantined, so the first launch shows an "unidentified developer" prompt. Do one of these once:
+
+- Right-click Publikreach.app and choose Open, then Open again.
+- Or open System Settings > Privacy and Security and click Open Anyway.
+- Or run `xattr -cr /Applications/Publikreach.app` in Terminal.
+
+The app is ad hoc signed and open source, with no Apple Developer ID. You can read [install.sh](packaging/install.sh) before running it and [build the app from source](packaging/mac/README.md).
+
+The easy sender setup is a Gmail app password, described below. Google OAuth is optional and advanced. To use OAuth, in Settings, in the Gmail card: (1) download a Google OAuth client file of type Desktop app from your own Google Cloud project (Google's [Desktop OAuth client setup steps](https://developers.google.com/workspace/gmail/api/quickstart/python#authorize_credentials_for_a_desktop_application); enable the Gmail API and add yourself as a test user on the consent screen), (2) choose that file with **Choose OAuth client file**, then (3) click **Connect Gmail**. Google opens a sign-in in your system browser and this app never sees your Google password. Consent expires locally after three minutes if left unfinished. Consent requests `gmail.modify`, and the client file and refresh token are saved privately in the workspace with mode 0600. Disconnect removes them. A saved connection does not bypass send confirmations or TEST mode.
+
+The **Gmail app password** option on the Gmail card is the simpler, recommended path and needs no Google Cloud project. Turn on 2-Step Verification and [create a 16-character app password](https://myaccount.google.com/apppasswords) first, then enter your Gmail address and the password. Spaces are stripped. The app verifies IMAP and SMTP logins before saving `data/.gmail_app_password.json` with mode 0600, and no Google Cloud client file is needed for this mode. Google revokes app passwords when you change your Google password, and Workspace admins may disable them. See [Google's app-password guide](https://support.google.com/accounts/answer/185833). An existing app-password connection continues to work.
 
 The existing `install-mac.sh` is the developer option for a Python installation and browser launcher. The CLI and browser documentation follows.
 
@@ -269,10 +285,13 @@ used or old link is refused; stop the app and start it again to get a new one.
 
 ### What each page does
 
-The top bar links to every page.
+The top bar links to every page. On a phone-width window the links collapse behind a
+**Menu** button at the top left; tap it to open or close the list. Wide tables turn
+into stacked cards under about 900 pixels so nothing needs sideways scrolling.
 
 | Page | What it does |
 | --- | --- |
+| Campaign (`/crm/drafts`) | The guided path, in four steps: add contacts, set your pitch (the email template and the attachment), write drafts, then review and send a test. The first visit asks what the campaign is for, **Fundraising** or **Job search**; that sets the wording and the attachment label (pitch deck or resume), and you can change it later. Step 4 shows a four-row readiness checklist (Gmail connected, test recipient set, sender profile saved, one draft approved). When every row passes it shows a preview of the one test email, addressed to your test recipient, and a single **Send a test** button. A test to the same address as the contact is refused. |
 | Overview (`/crm`) | Your contacts as a pipeline, with filters, import and export of the contacts CSV, a form to add a contact, and a contact page with notes, tasks and its draft. The first screen offers the sample when the workspace is empty. |
 | Drafts (lint) | Lists the drafts in your workspace `drafts/` folder with word counts and issue chips from the engine's linter. Open one to edit the subject and body, save, and see the draft re-checked. "Write drafts" runs the engine with the provider you pick. |
 | Analytics | Counts from your own records: contacts by stage, drafts, sends, replies. Tracking numbers appear only if you connected a tracking Worker. |
@@ -283,8 +302,23 @@ The top bar links to every page.
 | Enrichment | Status of the enrichment sources, and results per contact (web search, PitchBook when enabled). |
 | Scheduled | Sends you scheduled for later, with a cancel button. Nothing runs from this list unless the scheduler is turned on (see below). |
 | Send plan | A read-only preview from the engine's send gate: who would be sent, who is held and why. Nothing is sent from this screen. |
+| Example pitch | A worked example of the Publik cold email, broken into labeled parts with a Copy button. New workspaces start with it as the default pitch, flagged "Example from Publik, replace with your own". The send plan and draft editor warn while a draft still carries it. |
 | Settings (`/settings`) | Your sender profile (including the first-touch subject), workspace identity, a write-only form for keys and connection settings, the PitchBook browser session, and the Gmail connection state. |
 | Tracking | Read-only open, click and deck-view counts from your own Cloudflare tracking Worker, if you deployed one. Empty otherwise. |
+
+### Setup order
+
+The first-run banner and the assistant's `setup_status` tool use the same seven steps, in this order:
+
+1. Connect Gmail (the OAuth client file, as above).
+2. Set your test recipient (an inbox you own, not one of your contacts).
+3. Add contacts.
+4. Write drafts.
+5. Review and approve a draft.
+6. Send a test email to your test recipient.
+7. Optional, last: connect the Publik API for AI drafts. You can skip it and use your own OpenAI or Anthropic key, or the offline template.
+
+Steps 3 to 6 happen on the Campaign page. Nothing here needs LIVE mode, and the Publik API is never required for a test send.
 
 ### TEST mode and LIVE mode
 
@@ -675,10 +709,12 @@ fact the sender actually supplied and reacts to it honestly.
 You do not need this to use the tool: copy the drafts into your own mail client
 and send them from there. Sending is off the quickstart path and guarded.
 
-For the browser app, use Settings > Gmail > **Connect Gmail** with an app password,
-as described above. This is the primary connection path. IMAP/SMTP support uses
-only the Python standard library, including reply polling and CRM inbox refresh.
-The same TEST routing and LIVE confirmation gates apply with either auth mode.
+For the browser app, use Settings > Gmail: choose your Google OAuth client file,
+then **Connect Gmail**, as described above. A collapsed "use a Gmail app password
+instead" option exists for people who cannot create an OAuth client; it uses only
+the Python standard library for IMAP and SMTP, including reply polling and CRM
+inbox refresh. The same TEST routing and LIVE confirmation gates apply with either
+auth mode.
 
 The standalone CLI retains its advanced OAuth setup. Its prerequisites are the optional Google libraries installed, a Google
 Cloud OAuth client file (desktop app) at `GMAIL_CLIENT_SECRETS_PATH`,

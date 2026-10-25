@@ -37,4 +37,4 @@ ditto "$APP" "$BUILD_TEMP/image/Publikreach.app"
 ln -s /Applications "$BUILD_TEMP/image/Applications"
 hdiutil create -volname 'Publikreach' -srcfolder "$BUILD_TEMP/image" \
     -format UDZO -ov "$REPO_ROOT/dist/Publikreach.dmg"
-printf '%s\n' 'Built dist/Publikreach.app and dist/Publikreach.dmg (ad-hoc signed, not notarized).'
+printf '%s\n' 'Built dist/Publikreach.app and dist/Publikreach.dmg (ad-hoc signed).'

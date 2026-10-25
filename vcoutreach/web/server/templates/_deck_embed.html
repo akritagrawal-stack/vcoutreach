@@ -1,0 +1,15 @@
+{# Inline pitch deck preview. Needs deck_panel. The PDF is served same-origin from /crm/deck and may be framed only by this app. #}
+{% set _al = campaign_kind_info().words.attachment_label if campaign_kind_info is defined else 'Pitch deck' %}
+{% set _ck = campaign_kind_info() if campaign_kind_info is defined else none %}
+{% set _job = _ck and _ck.chosen and _ck.kind == 'job_search' %}
+{% set _noun = 'file' if _job else 'deck' %}
+{% if deck_panel.deck_file_name %}
+<div class="deck-embed">
+  <iframe class="deck-embed-frame" src="/crm/deck#navpanes=0&view=FitH" title="{{ _al }} preview: {{ deck_panel.deck_file_name }}" loading="lazy"></iframe>
+  <p class="deck-embed-fallback svc-hint">Preview not showing? <a href="/crm/deck#navpanes=0&view=FitH" target="_blank" rel="noopener">Open {{ _noun }}</a> in a new tab.</p>
+</div>
+{% elif deck_panel.deck_url %}
+<p class="deck-embed-fallback svc-hint">This {{ _noun }} is a link, so it cannot be previewed here. <a href="{{ deck_panel.deck_url }}" target="_blank" rel="noopener noreferrer">Open {{ _noun }} link</a>.</p>
+{% else %}
+<p class="deck-embed-empty svc-hint">No {{ _al|lower }} attached yet, so your emails go out without an attachment. <a href="/settings#sec-package">Attach one in Settings</a>.</p>
+{% endif %}

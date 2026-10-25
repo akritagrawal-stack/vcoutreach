@@ -1,50 +1,117 @@
 {% extends 'base.html' %}
-{% from '_partner_macros.html' import label_badge %}
+{% from "_icons.html" import icon %}
 {% block page_id %}replies_list{% endblock %}
 {% block title %}Replies{% endblock %}
 {% block content %}
-{% set rows = replies|default(rows|default([])) %}
-<div class="crm-shell">
-  <header class="crm-hero">
-    <div><div class="crm-eyebrow">CONVERSATIONS / ALL CONTACTS</div><h1>Replies.</h1><p>Review incoming conversations, set a label, and record which replies you have read.</p></div>
-    <form action="/poll-replies" method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit" class="crm-button crm-button-primary">Poll Gmail now</button></form>
-  </header>
-  <details class="crm-panel crm-collapse" id="addReply"><summary class="crm-button crm-button-secondary">Add a reply</summary>
-    <form method="post" action="/replies/add" class="crm-form">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <label for="replyFrom">From email<input id="replyFrom" type="email" name="from_email" required></label>
-      <label for="replySubject">Subject<input id="replySubject" name="subject"></label>
-      <label class="crm-field-wide" for="replyBody">Body<textarea id="replyBody" name="body" rows="4"></textarea></label>
-      <button type="submit" class="crm-button crm-button-primary">Add a reply</button>
-    </form>
-  </details>
-  <nav class="crm-segments" aria-label="Reply labels">
-    <a class="crm-segment {% if not label_filter %}active{% endif %}" href="/replies">All replies</a>
-    {% for label in labels|default(['interested','needs_more_info','pass','out_of_office','bounce','auto_reply','other','unclassified']) %}<a class="crm-segment {% if label_filter == label %}active{% endif %}" href="/replies?label={{ label|urlencode }}">{{ label|replace('_',' ')|title }}</a>{% endfor %}
-  </nav>
-  <section class="crm-panel">
-    <div class="crm-panel-heading"><h2>Reply inbox</h2><span>{{ rows|length }} {{ 'reply' if rows|length == 1 else 'replies' }}</span></div>
-    <div class="crm-table-wrap"><table class="crm-table">
-      <caption class="sr-only">Incoming replies, classification and review state</caption>
-      <thead><tr><th>Contact</th><th>Subject and message</th><th>Received</th><th>Label</th><th>Review</th></tr></thead>
-      <tbody>{% for row in rows %}
-        {% set effective_label = row.get('user_label') or row.get('label') %}
-        <tr class="{% if not row.get('user_reviewed') %}row-unreviewed{% endif %}">
-          <td>{% if row.get('partner_id') %}<a class="crm-contact-link" href="/crm/{{ row.partner_id }}">{{ row.get('partner_name') or row.get('from_name') or row.get('from_email') or 'Unknown contact' }}</a>{% else %}<strong>{{ row.get('from_name') or row.get('from_email') or 'Unknown contact' }}</strong>{% endif %}<span class="crm-table-subline">{{ row.get('from_email') or '' }}</span></td>
-          <td><a href="/replies/{{ row.id }}">{{ row.get('subject') or 'No subject' }}</a><span class="crm-table-subline">{{ (row.get('snippet') or '')[:160] }}</span></td>
-          <td><time>{{ (row.get('received_at') or row.get('discovered_at') or '')[:16]|replace('T',' ') }}</time></td>
-          <td>{{ label_badge(effective_label, false) }}
-            <form method="post" action="/replies/{{ row.id }}/update-label" class="reply-label-form">
+{% set rows = view.rows if view is defined else (replies|default(rows|default([]))) %}
+<header class="pk-page-head">
+  <div class="pk-page-head__text">
+    <h1>Replies</h1>
+    <p class="pk-page-sub">Review incoming conversations, set a label, and keep track of what you have read.</p>
+  </div>
+  <div class="pk-page-head__actions reply-actions">
+    <div class="reply-check">
+      <form action="/poll-replies" method="post" class="reply-check__form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit" class="pk-btn pk-btn--primary">{{ icon("refresh") }}Check for new replies</button>
+      </form>
+      <span class="pk-faint reply-check__stamp">{% if last_checked %}Last checked <time datetime="{{ last_checked }}" data-rel>{{ last_checked[:16]|replace('T',' ') }} UTC</time>{% else %}Not checked yet{% endif %}</span>
+    </div>
+    <details class="pk-kebab" id="addReply">
+      <summary aria-label="More actions"><span class="sr-only">More actions</span></summary>
+      <div class="pk-kebab__menu reply-add-menu">
+        <form method="post" action="/replies/add" class="reply-add-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <h2 class="reply-add-form__title">Add a reply</h2>
+          <p class="pk-faint reply-add-form__hint">Paste a reply you received outside Gmail so it shows up here.</p>
+          <label for="replyFrom">From email</label>
+          <input id="replyFrom" class="pk-input" type="email" name="from_email" required>
+          <label for="replySubject">Subject</label>
+          <input id="replySubject" class="pk-input" name="subject">
+          <label for="replyBody">Body</label>
+          <textarea id="replyBody" class="pk-input" name="body" rows="4"></textarea>
+          <button type="submit" class="pk-btn pk-btn--primary">Add a reply</button>
+        </form>
+      </div>
+    </details>
+  </div>
+</header>
+
+<nav class="pk-tabs reply-tabs" aria-label="Reply tabs">
+  {% for t in view.tabs %}<a href="/replies?tab={{ t.key }}" {% if t.active and not view.label_filter %}class="is-active" aria-current="page"{% endif %} data-tab="{{ t.key }}">{{ t.text }} <span class="pk-count" data-count-for="{{ t.key }}">{{ t.count }}</span></a>{% endfor %}
+</nav>
+{% if view.total %}<p class="pk-faint reply-summary">{{ view.total }} {{ 'reply' if view.total == 1 else 'replies' }} in total, {{ view.unread }} unread.</p>{% endif %}
+
+{% if view.label_filter %}
+<p class="reply-filter">
+  <span class="pk-pill pk-pill--outline">Label: {{ view.label_filter_text }}</span>
+  <a class="pk-btn pk-btn--ghost pk-btn--sm" href="/replies">{{ icon("x", 14) }}Clear filter</a>
+</p>
+{% endif %}
+
+<form id="bulkForm" class="pk-sticky-bar" method="post" action="/replies/bulk" hidden>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <input type="hidden" name="next" value="{{ view.return_to }}">
+  <span class="pk-sticky-bar__count"><span data-bulk-count>0</span> selected</span>
+  <div class="pk-sticky-bar__actions">
+    <button type="submit" name="action" value="mark_read" class="pk-btn pk-btn--secondary pk-btn--sm">{{ icon("check", 14) }}Mark read</button>
+    <button type="submit" name="action" value="mark_unread" class="pk-btn pk-btn--ghost pk-btn--sm">Mark unread</button>
+    <label class="sr-only" for="bulkLabel">Label for selected replies</label>
+    <select id="bulkLabel" name="label" class="pk-select">
+      <option value="">Set label to...</option>
+      {% for value in all_labels|default(labels|default([])) %}<option value="{{ value }}">{{ value|replace('_',' ')|title }}</option>{% endfor %}
+    </select>
+    <button type="submit" name="action" value="set_label" class="pk-btn pk-btn--secondary pk-btn--sm">Set label</button>
+  </div>
+</form>
+
+{% if rows %}
+<section class="pk-card pk-card--flush">
+  <div class="pk-table-wrap crm-table-wrap">
+    <table class="pk-table reply-table" id="replyTable">
+      <caption class="sr-only">Incoming replies, classification and read state</caption>
+      <thead><tr>
+        <th class="pk-col-check"><input type="checkbox" id="replySelectAll" aria-label="Select all replies on this tab"></th>
+        <th>Contact</th><th>Subject and message</th><th>Received</th><th>Label</th><th class="pk-col-actions"><span class="sr-only">Read state</span></th>
+      </tr></thead>
+      <tbody>
+      {% for row in rows %}
+        <tr class="{% if row.unread %}is-unread{% endif %}" data-href="/replies/{{ row.id }}" data-reply-id="{{ row.id }}" data-bucket="{{ row.bucket }}">
+          <td class="pk-col-check"><input type="checkbox" name="reply_id" value="{{ row.id }}" form="bulkForm" aria-label="Select reply from {{ row.get('from_email') or 'unknown contact' }}"></td>
+          <td class="reply-contact">{% if row.get('partner_id') %}<a href="/crm/{{ row.partner_id }}">{{ row.display_name }}</a>{% else %}<span class="reply-contact__name">{{ row.display_name }}</span>{% endif %}<span class="pk-faint reply-sub">{{ row.get('from_email') or '' }}</span></td>
+          <td class="reply-msg"><a href="/replies/{{ row.id }}">{{ row.get('subject') or 'No subject' }}</a><span class="pk-faint reply-sub">{{ (row.get('snippet') or '')[:160] }}</span></td>
+          <td class="reply-when">{% if row.received_iso %}<time datetime="{{ row.received_iso }}" data-rel>{{ row.received_text }}</time>{% else %}<span class="pk-faint">Not set</span>{% endif %}</td>
+          <td class="reply-label">
+            <form method="post" action="/replies/{{ row.id }}/update-label" class="reply-pill-form">
               <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <input type="hidden" name="next" value="{{ view.return_to }}">
               <label class="sr-only" for="reply-label-{{ row.id }}">Label for reply from {{ row.get('from_email') or 'unknown contact' }}</label>
-              <select id="reply-label-{{ row.id }}" name="user_label" class="form-control"><option value="">Use automatic label</option>{% for label in labels|default(['interested','needs_more_info','pass','out_of_office','bounce','auto_reply','other','unclassified']) %}<option value="{{ label }}" {% if row.get('user_label') == label %}selected{% endif %}>{{ label|replace('_',' ')|title }}</option>{% endfor %}</select>
-              <button type="submit" class="crm-button crm-button-small crm-button-secondary">Save label</button>
+              <select id="reply-label-{{ row.id }}" name="user_label" class="pk-pill pk-pill--{{ row.pill.tone }} reply-pill-select" data-initial="{{ row.effective_label }}">
+                {% for o in row.options %}<option value="{{ o.value }}" {% if o.selected %}selected{% endif %} {% if o.disabled %}disabled{% endif %}>{{ o.text }}</option>{% endfor %}
+              </select>
+              <noscript><button type="submit" class="pk-btn pk-btn--secondary pk-btn--sm">Save label</button></noscript>
             </form>
           </td>
-          <td>{% if row.get('user_reviewed') %}<span class="badge badge-default">Reviewed</span><form method="post" action="/replies/{{ row.id }}/mark-reviewed"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit" class="crm-button crm-button-small crm-button-secondary">Mark unread</button></form>{% else %}<form method="post" action="/replies/{{ row.id }}/mark-reviewed"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit" class="crm-button crm-button-small crm-button-secondary">Mark reviewed</button></form>{% endif %}</td>
+          <td class="pk-col-actions">
+            <form method="post" action="/replies/{{ row.id }}/mark-reviewed" class="reply-read-form">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <input type="hidden" name="next" value="{{ view.return_to }}">
+              <button type="submit" class="pk-btn pk-btn--ghost pk-btn--sm">{% if row.unread %}Mark read{% else %}Mark unread{% endif %}</button>
+            </form>
+          </td>
         </tr>
-      {% else %}<tr><td colspan="5" class="crm-empty-row">{% if label_filter %}No replies match this label. <a href="/replies">Show all replies</a>.{% else %}No replies recorded yet. Poll Gmail to load conversations.{% endif %}</td></tr>{% endfor %}</tbody>
-    </table></div>
-  </section>
-</div>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% else %}
+<section class="pk-card">
+  <div class="pk-empty">
+    <div class="pk-empty__icon">{{ icon("mail", 28) }}</div>
+    <h2 class="pk-empty__title">{% if view.label_filter %}No replies match this label{% else %}{{ view.empty_title }}{% endif %}</h2>
+    <p>{% if view.label_filter %}Try another label or <a href="/replies">show all replies</a>.{% else %}{{ view.empty_text }}{% endif %}</p>
+  </div>
+</section>
+{% endif %}
 {% endblock %}

@@ -564,21 +564,121 @@ def attachment_deck_file():
     return None
 
 def template_deck_panel():
-    """Read-only view model for the Template and deck panel (blurb plus deck link)."""
-    from vcoutreach.web.server.workspace_settings import load_settings
+    """Read-only view model for the Template and deck panel (blurb plus deck or resume link).
+
+    For the job search kind the seeded Publik investor example deck is never shown as the user's resume, and an
+    untouched investor default note is swapped for the job search default note (placeholders only).
+    """
+    from vcoutreach.web.server import example_pitch as _example
+    from vcoutreach.web.server.workspace_settings import blurb_for_kind, is_bundled_example_deck, load_settings
     settings = load_settings()
+    info = campaign_kind()
+    job = info['chosen'] and info['kind'] == 'job_search'
     blurb = str(settings.get('outreach_blurb_template') or '').strip()
+    if job:
+        blurb = blurb_for_kind(blurb, 'job_search').strip()
     url = str(settings.get('pitch_deck_url') or '').strip()
     configured_path = str(settings.get('pitch_deck_path') or '').strip()
     deck_file = attachment_deck_file()
+    example_deck = bool(deck_file and is_bundled_example_deck(deck_file))
     label = str(settings.get('pitch_deck_label') or '').strip()
-    return {'blurb': blurb, 'deck_url': url, 'deck_path_set': bool(configured_path),
+    if job and example_deck:
+        deck_file = None
+    if job and (not label or label == _example.EXAMPLE_DECK_LABEL):
+        label = 'Resume'
+    return {'blurb': blurb, 'deck_url': url, 'deck_path_set': bool(configured_path) and not (job and example_deck),
             'deck_file_name': deck_file.name if deck_file else '',
-            'deck_label': label or (deck_file.name if deck_file else 'Pitch deck'),
-            'has_deck': bool(url or deck_file)}
+            'deck_label': label or (deck_file.name if deck_file else ('Resume' if job else 'Pitch deck')),
+            'has_deck': bool(url or deck_file), 'example_deck_hidden': bool(job and example_deck)}
+
+def example_pitch_available():
+    """True when lane A's read-only ``_example_pitch.html`` partial ships with this build."""
+    from flask import current_app
+    from jinja2 import TemplateNotFound
+    try:
+        current_app.jinja_env.get_template('_example_pitch.html')
+    except TemplateNotFound:
+        return False
+    return True
+
+def safe_next_url(form):
+    """Return a same-site return path from a posted ``next`` value, or None. Only the Campaign page and Settings are allowed."""
+    value = str((form.get('next') if form is not None else '') or '').strip()
+    return value if value in ('/crm/drafts', '/settings') else None
+
+def campaign_state(all_drafts):
+    """Real workspace state for the Campaign page stages. Reads local files and the database only."""
+    from vcoutreach.web.setup_steps import _progress as setup_progress
+    conn = get_conn()
+    try:
+        contact_count = conn.execute('SELECT COUNT(*) FROM partners').fetchone()[0]
+    finally:
+        conn.close()
+    sender_name = ''
+    try:
+        sender_name = str(getattr(_sender(), 'name', '') or '')
+        has_sender = True
+    except Exception:
+        has_sender = False
+    workspace = get_workspace()
+    progress = setup_progress(workspace)
+    panel = template_deck_panel()
+    drafts_total = len(all_drafts)
+    first = next((row['slug'] for row in all_drafts if row.get('approval_state') != 'approved'), None) or (all_drafts[0]['slug'] if all_drafts else '')
+    first_approved = next((row for row in all_drafts if row.get('approval_state') == 'approved'), None)
+    try:
+        from vcoutreach.web.setup_steps import gmail_connection_state
+        gmail = gmail_connection_state(workspace)
+    except Exception:
+        gmail = 'not connected'
+    test_recipient = str(workspace.value('TEST_RECIPIENT_EMAIL') or '').strip()
+    sender_email = str(workspace.value('SENDER_EMAIL') or '').strip() or test_recipient
+    preview = None
+    if first_approved is not None and first_approved.get('partner_id'):
+        preview = {'to': test_recipient, 'from_name': sender_name, 'from_email': sender_email,
+                   'subject': first_approved.get('subject', ''), 'body': first_approved.get('body', ''),
+                   'contact_email': first_approved.get('recipient_email', ''),
+                   'same_as_contact': bool(test_recipient) and test_recipient.lower() == str(first_approved.get('recipient_email') or '').strip().lower()}
+    kind = campaign_kind()
+    return {'contact_count': contact_count, 'draft_count': drafts_total, 'first_slug': first, 'has_sender': has_sender,
+            'has_blurb': bool(panel['blurb']), 'has_deck': panel['has_deck'],
+            'approved': bool(progress['approved']), 'test_sent': bool(progress['send_test']),
+            'can_sample': contact_count == 0 and drafts_total == 0 and not has_sender,
+            'gmail': gmail, 'test_recipient': test_recipient, 'sender_name': sender_name,
+            'first_approved_slug': first_approved['slug'] if first_approved else '',
+            'first_approved_partner_id': first_approved.get('partner_id') if first_approved else None,
+            'preview': preview, 'deck_file_name': panel['deck_file_name'],
+            'kind': kind['kind'], 'kind_chosen': kind['chosen'], 'words': kind['words'], 'choices': kind['choices']}
+
+_FALLBACK_KINDS = {
+    'fundraising': {'label': 'Fundraising', 'choice_label': 'I am raising money', 'hero_line': 'Set up your fundraising campaign.',
+                    'hero_support': 'Add investors, check your pitch, write the drafts, then review one and send yourself a test.',
+                    'step2_heading': 'Your pitch', 'step2_hint': 'Your pitch is the email template plus the pitch deck attached to it. Read the example, then make it yours in Settings.',
+                    'attachment_label': 'Pitch deck', 'audience_word': 'investor', 'audience_word_plural': 'investors',
+                    'panel_credibility': 'This is our email template and pitch deck that has gotten 50+ meetings and $600K raised in funding.'},
+    'job_search': {'label': 'Job search', 'choice_label': 'I am looking for a role', 'hero_line': 'Set up your job search campaign.',
+                   'hero_support': 'Add hiring managers, check your note, write the drafts, then review one and send yourself a test.',
+                   'step2_heading': 'Your note and resume', 'step2_hint': 'Your note is the email template plus the resume attached to it. Read the example, then make it yours in Settings.',
+                   'attachment_label': 'Resume', 'audience_word': 'hiring manager', 'audience_word_plural': 'hiring managers',
+                   'panel_credibility': ''},
+}
+
+def campaign_kind():
+    """Stored campaign kind plus its copy. ``chosen`` is False until the owner picks one (copy then defaults to fundraising)."""
+    try:
+        from vcoutreach.web.server import workspace_settings as ws
+        kinds = getattr(ws, 'CAMPAIGN_KINDS', None) or _FALLBACK_KINDS
+        stored = str(ws.load_settings().get('campaign_kind') or '').strip()
+    except Exception:
+        kinds, stored = _FALLBACK_KINDS, ''
+    chosen = stored in kinds
+    key = stored if chosen else 'fundraising'
+    choices = [{'kind': name, 'label': kinds[name].get('choice_label', name)} for name in ('fundraising', 'job_search') if name in kinds]
+    return {'kind': key, 'chosen': chosen, 'words': dict(kinds[key]), 'choices': choices}
 
 def register_routes(app):
     from flask import request,render_template,redirect,url_for,flash,abort,Response,send_file
+    app.jinja_env.globals['campaign_kind_info']=campaign_kind
 
     @app.get('/crm/deck')
     def crm_deck_file():
@@ -597,10 +697,18 @@ def register_routes(app):
         selected=request.form.getlist('slugs') or request.form.getlist('slug')
         selected=[slug.strip() for raw in selected for slug in raw.split(',') if slug.strip()]
         try:
+            conn=get_conn()
+            try:
+                has_contacts=conn.execute('SELECT 1 FROM partners LIMIT 1').fetchone() is not None
+            finally:
+                conn.close()
+            if not has_contacts:
+                flash(Markup('There are no contacts to write drafts for yet. <a href="'+url_for('crm_drafts')+'#campaignContacts">Add contacts first</a>.'),'warning')
+                return redirect(url_for('crm_drafts'))
             try:
                 _sender()
             except OutreachError:
-                flash(Markup('Add your sender profile first. <a href="'+url_for('workspace_settings')+'#sec-sender">Open the sender profile card in Settings</a>.'),'error')
+                flash(Markup('Add your sender profile first. <a href="'+url_for('workspace_settings')+'#sec-sender">Fill in the sender profile in Settings</a>, then come back to <a href="'+url_for('crm_drafts')+'#writeDrafts">Write drafts</a>.'),'error')
                 return redirect(url_for('crm_drafts'))
             overwrite=request.form.get('overwrite')=='1'
             skipped=sum(1 for row in list_drafts() if not selected or row['slug'] in selected) if not overwrite else 0
@@ -696,7 +804,7 @@ def register_routes(app):
         if row is None:
             abort(404)
         lanes=[(lane.value,lane.value.replace('_',' ').title()) for lane in Lane]
-        return render_template('crm_draft.html',draft=row,drafts=rows,lanes=lanes,deck_panel=template_deck_panel(),active_page='drafts')
+        return render_template('crm_draft.html',draft=row,drafts=rows,lanes=lanes,deck_panel=template_deck_panel(),example_pitch=example_pitch_available(),active_page='drafts')
 
     @app.get('/crm/send-plan')
     def crm_send_plan():
@@ -756,7 +864,7 @@ def register_routes(app):
             # CSV errors identify the user's input and retain its row numbers.
             for message in str(exc).splitlines()[:25]:
                 flash(message,'error')
-        return redirect(url_for('crm_dashboard'))
+        return redirect(safe_next_url(request.form) or url_for('crm_dashboard'))
 
     @app.get('/crm/export.csv')
     def crm_export():
@@ -792,12 +900,35 @@ def register_routes(app):
 
     @app.post('/settings/sender')
     def save_sender_profile():
+        target = safe_next_url(request.form)
         try:
             save_sender(request.form)
+            email = (request.form.get('sender_email') or '').strip()
+            if email:
+                if '@' not in email or any(ch.isspace() for ch in email):
+                    raise ValueError('Enter a valid sender email address, or leave it blank.')
+                from vcoutreach.web.server.workspace_settings import save_connection_settings
+                save_connection_settings({'SENDER_EMAIL': email})
             flash('Sender profile saved.','success')
         except (ValueError,OutreachError) as exc:
             flash(str(exc).splitlines()[0], 'error')
-        return redirect(url_for('workspace_settings'))
+        return redirect(target or url_for('workspace_settings'))
+
+    @app.post('/settings/campaign-kind')
+    def save_campaign_kind():
+        from vcoutreach.web.server import workspace_settings as ws
+        kind = str(request.form.get('kind') or '').strip()
+        kinds = getattr(ws, 'CAMPAIGN_KINDS', None) or _FALLBACK_KINDS
+        target = safe_next_url(request.form) or url_for('crm_drafts')
+        if kind not in kinds:
+            flash('Choose one of the two campaign types.','error')
+            return redirect(target)
+        try:
+            ws.save_settings({**ws.load_settings(), 'campaign_kind': kind})
+            flash('Campaign type saved: ' + str(kinds[kind].get('label', kind)) + '.','success')
+        except (ValueError, OutreachError) as exc:
+            flash(str(exc).splitlines()[0], 'error')
+        return redirect(target)
 
     @app.post('/settings/keys')
     def save_keys():
@@ -838,7 +969,7 @@ def register_routes(app):
         workspace=get_workspace()
         if contacts() or workspace.path('sender.json').exists() or _draft_paths():
             flash('Load the sample only into an empty workspace. Existing data was kept.','error')
-            return redirect(url_for('crm_dashboard'))
+            return redirect(safe_next_url(request.form) or url_for('crm_dashboard'))
         sample=Path(__file__).parent/'sample'
         save_sender(json.loads((sample/'sender.json').read_text(encoding='utf-8')))
         count=import_contacts(load_contacts(sample/'contacts.sample.csv'),batch_name='Sample first touch')
@@ -861,7 +992,7 @@ def register_routes(app):
         workspace.path('facts.json').write_text(json.dumps({'approved_claims':{},'forbidden_phrases':[]},indent=2)+'\n',encoding='utf-8')
         write_drafts(provider='template')
         flash(f'Loaded {count} fictional sample contacts, a sender profile, drafts and a reply.','success')
-        return redirect(url_for('crm_dashboard'))
+        return redirect(safe_next_url(request.form) or url_for('crm_dashboard'))
 
     @app.post('/replies/add')
     def reply_add():

@@ -1,0 +1,43 @@
+{# Four-row readiness checklist for Campaign step 4. Needs `campaign` (drafts_service.campaign_state).
+   Renders the checklist and status pill first; the send preview (and its single button) appears only when every row passes. #}
+{% from "_icons.html" import icon %}
+{% set _c = campaign %}
+{% set _gmail_ok = _c.gmail == 'connected' %}
+{% set _recipient_ok = _c.test_recipient|length > 0 %}
+{% set _sender_ok = _c.has_sender %}
+{% set _approved_ok = _c.first_approved_partner_id is not none and _c.first_approved_slug|length > 0 %}
+{% set _todo = [not _gmail_ok, not _recipient_ok, not _sender_ok, not _approved_ok]|select|list|length %}
+{% set _ready = _todo == 0 and _c.preview and not _c.preview.same_as_contact %}
+<div class="campaign-readiness cmp-readiness" id="campaignReadiness">
+  <p class="readiness-summary"><strong id="readinessHeading">Before you send a test</strong>
+    <span class="pk-pill pk-pill--dot {{ 'pk-pill--success' if _ready else 'pk-pill--warning' }}" role="status">{% if _ready %}Ready to send a test{% elif _todo == 0 %}Fix the test recipient{% else %}To do: {{ _todo }} {{ 'item' if _todo == 1 else 'items' }}{% endif %}</span></p>
+  <ul class="readiness-list" aria-labelledby="readinessHeading">
+    <li class="readiness-row {{ 'is-ok' if _gmail_ok }}">
+      <span class="readiness-mark" aria-hidden="true">{% if _gmail_ok %}{{ icon("check", 14) }}{% endif %}</span>
+      <span class="readiness-name"><a href="/settings#svc-gmail">Gmail connected</a></span>
+      <span class="readiness-state">{% if _gmail_ok %}Connected{% elif _c.gmail == 'OAuth required' %}OAuth required: choose Connect Gmail{% else %}Not connected{% endif %}</span>
+    </li>
+    <li class="readiness-row {{ 'is-ok' if _recipient_ok }}">
+      <span class="readiness-mark" aria-hidden="true">{% if _recipient_ok %}{{ icon("check", 14) }}{% endif %}</span>
+      <span class="readiness-name"><a href="/settings#svc-test-recipient">Test recipient set</a></span>
+      <span class="readiness-state">{% if _recipient_ok %}{{ _c.test_recipient }}{% else %}Not set. Test emails go only to this address.{% endif %}</span>
+    </li>
+    <li class="readiness-row {{ 'is-ok' if _sender_ok }}">
+      <span class="readiness-mark" aria-hidden="true">{% if _sender_ok %}{{ icon("check", 14) }}{% endif %}</span>
+      <span class="readiness-name"><a href="#writeDrafts">Sender profile saved</a></span>
+      <span class="readiness-state">{% if _sender_ok %}{{ _c.sender_name or 'Saved' }}{% else %}Not saved. Fill it in under step 3.{% endif %}</span>
+    </li>
+    <li class="readiness-row {{ 'is-ok' if _approved_ok }}">
+      <span class="readiness-mark" aria-hidden="true">{% if _approved_ok %}{{ icon("check", 14) }}{% endif %}</span>
+      <span class="readiness-name">{% if _approved_ok %}One draft approved{% elif _c.first_slug %}<a href="/crm/drafts/{{ _c.first_slug|urlencode }}#approve">One draft approved</a>{% else %}<a href="#writeDrafts">One draft approved</a>{% endif %}</span>
+      <span class="readiness-state">{% if _approved_ok %}Approved{% elif _c.first_slug %}None approved yet. Open the first draft to review it.{% else %}No drafts yet. Write drafts in step 3.{% endif %}</span>
+    </li>
+  </ul>
+  {% if _todo == 0 and _c.preview %}
+    {% if _c.preview.same_as_contact %}
+      <p class="svc-hint" role="alert">Your test recipient is the same address as the contact on this draft, so a test send is refused. <a href="/settings#svc-test-recipient">Change the test recipient</a> to your own inbox.</p>
+    {% else %}
+      {% include '_test_preview.html' %}
+    {% endif %}
+  {% endif %}
+</div>

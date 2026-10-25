@@ -56,17 +56,13 @@ AUDIENCE_TYPES = {
 
 SAMPLE_BLURB = 'Describe your product using approved sender facts.'
 
-DEFAULT_OUTREACH_BLURB = (
-    'Hi {first_name},\n\n'
-    '{hook}\n\n'
-    '{founder_line} {traction_line}\n\n'
-    '{problem_statement} {solution_statement}\n\n'
-    '{ask_line}\n\n'
-    'Our deck is attached. {call_to_action}\n\n'
-    '{operator_name}, {operator_role}, {company_name}'
-)
+from vcoutreach.web.server import example_pitch as _example
 
-DEFAULT_SETTINGS = {'workspace_name': 'Publikreach', 'workspace_short_name': 'REACH', 'company_name': '', 'product_name': '', 'operator_name': '', 'operator_role': '', 'contact_label_singular': 'contact', 'contact_label_plural': 'contacts', 'campaign_goal': 'Build a grounded outreach pipeline', 'hero_primary': 'Your outreach workspace for', 'hero_emphasis': 'thoughtful conversations.', 'hero_support': 'Research, review, and send from one local workspace.', 'meeting_label': 'meetings', 'meeting_source': 'manual snapshot', 'email_subject_rule': 'A quick introduction', 'personalization_rule': 'Use one verified fact and explain its relevance.', 'one_liner': '', 'company_background': '', 'problem_statement': '', 'solution_statement': '', 'target_customer': '', 'business_model': '', 'competitive_advantage': '', 'founder_background': '', 'company_thesis': '', 'founder_line': '', 'traction_line': '', 'ask_line': '', 'call_to_action': 'Would you be open to a short conversation?', 'pitch_deck_path': '', 'pitch_deck_label': 'Pitch deck', 'outreach_blurb_template': DEFAULT_OUTREACH_BLURB, 'proof_library': '', 'claim_guardrails': '', 'attachment_notes': '', 'schema_version': 2, 'initialized': False, 'website': '', 'audience_type': 'investors', 'discovery_source': 'manual_csv', 'meeting_count': 0, 'pitch_deck_url': '', 'publik_recommendation': 'pending', 'provider_preference': 'auto', 'mcp_last_self_test_ok': ''}
+# The default configuration is a complete worked example (a redacted real Publik email), so a new
+# user edits a believable pitch instead of filling blank boxes. See example_pitch.py.
+DEFAULT_OUTREACH_BLURB = _example.EXAMPLE_BLURB_TEMPLATE
+
+DEFAULT_SETTINGS = {'workspace_name': 'Publikreach', 'workspace_short_name': 'REACH', 'company_name': '', 'product_name': '', 'operator_name': '', 'operator_role': '', 'contact_label_singular': 'contact', 'contact_label_plural': 'contacts', 'campaign_goal': 'Build a grounded outreach pipeline', 'hero_primary': 'Your outreach workspace for', 'hero_emphasis': 'thoughtful conversations.', 'hero_support': 'Research, review, and send from one local workspace.', 'meeting_label': 'meetings', 'meeting_source': 'manual snapshot', 'email_subject_rule': _example.EXAMPLE_SUBJECT, 'personalization_rule': 'Use one verified fact and explain its relevance.', 'one_liner': _example.EXAMPLE_ONE_LINER, 'company_background': '', 'problem_statement': _example.EXAMPLE_PROBLEM, 'solution_statement': _example.EXAMPLE_SOLUTION, 'target_customer': '', 'business_model': '', 'competitive_advantage': '', 'founder_background': '', 'company_thesis': '', 'founder_line': _example.EXAMPLE_FOUNDER_LINE, 'traction_line': _example.EXAMPLE_TRACTION, 'ask_line': _example.EXAMPLE_ASK, 'call_to_action': 'Would you be open to a short conversation?', 'pitch_deck_path': '', 'pitch_deck_label': _example.EXAMPLE_DECK_LABEL, 'outreach_blurb_template': DEFAULT_OUTREACH_BLURB, 'proof_library': '', 'claim_guardrails': '', 'attachment_notes': '', 'schema_version': 2, 'initialized': False, 'website': '', 'audience_type': 'investors', 'discovery_source': 'manual_csv', 'meeting_count': 0, 'pitch_deck_url': '', 'publik_recommendation': 'pending', 'provider_preference': 'auto', 'mcp_last_self_test_ok': '', 'campaign_kind': ''}
 
 _FIELD_LIMITS = {
     "workspace_name": 60,
@@ -106,6 +102,9 @@ _FIELD_LIMITS = {
     "attachment_notes": 1200,
 }
 
+# Example story fields may be cleared by the user. Blank must stay blank, not snap back to the example.
+_BLANKABLE = {"one_liner", "problem_statement", "solution_statement", "founder_line", "traction_line", "ask_line"}
+
 _SPACE_PATTERN = re.compile(r"[ \t]+")
 _MULTILINE_FIELDS = {
     "company_background",
@@ -142,9 +141,65 @@ def _clean_url(value: object, fallback: str) -> str:
     return fallback
 
 
+# Campaign kind: who the owner is writing to and what they attach. '' means not chosen yet (Campaign
+# then offers the two choices). Copy per kind is plain text; the credibility line is app-panel copy
+# only and must never be put into text that can be pasted into an email or returned by MCP.
+CAMPAIGN_KIND_VALUES = ("fundraising", "job_search")
+DEFAULT_CAMPAIGN_KIND = "fundraising"
+CAMPAIGN_KINDS = {
+    "fundraising": {
+        "label": "Fundraising",
+        "choice_label": "I am raising money",
+        "hero_line": "Set up your fundraising campaign.",
+        "hero_support": ("Add investors, check your pitch, write the drafts, then review one and send "
+                         "yourself a test."),
+        "step2_heading": "Your pitch",
+        "step2_hint": ("Your pitch is the email template plus the pitch deck attached to it. Read the "
+                       "example, then make it yours in Settings."),
+        "attachment_label": "Pitch deck",
+        "audience_word": "investor",
+        "audience_word_plural": "investors",
+        "panel_credibility": ("This is our email template and pitch deck that has gotten 50+ meetings "
+                              "and $600K raised in funding."),
+    },
+    "job_search": {
+        "label": "Job search",
+        "choice_label": "I am looking for a role",
+        "hero_line": "Set up your job search campaign.",
+        "hero_support": ("Add hiring managers, check your note, write the drafts, then review one and "
+                         "send yourself a test."),
+        "step2_heading": "Your note and resume",
+        "step2_hint": ("Your note is the email template plus the resume attached to it. Read the "
+                       "example, then make it yours in Settings."),
+        "attachment_label": "Resume",
+        "audience_word": "hiring manager",
+        "audience_word_plural": "hiring managers",
+        "panel_credibility": "",
+    },
+}
+
+
+def normalize_campaign_kind(value: object) -> str:
+    """'' (not chosen) or one of CAMPAIGN_KIND_VALUES; anything else becomes ''."""
+    text = str(value or "").strip()
+    return text if text in CAMPAIGN_KIND_VALUES else ""
+
+
+def effective_campaign_kind(settings: dict | None = None) -> str:
+    """The kind to render with: the stored choice, else 'fundraising' (the default example)."""
+    stored = normalize_campaign_kind((settings if settings is not None else load_settings()).get("campaign_kind"))
+    return stored or DEFAULT_CAMPAIGN_KIND
+
+
+def campaign_kind_copy(kind: object = None) -> dict:
+    """Copy for one kind. ``None`` uses the workspace's effective kind; unknown values use fundraising."""
+    key = effective_campaign_kind() if kind is None else (normalize_campaign_kind(kind) or DEFAULT_CAMPAIGN_KIND)
+    return dict(CAMPAIGN_KINDS[key], kind=key)
+
+
 RECOMMENDATION_VALUES = ("pending", "skipped")
 PROVIDER_PREFERENCES = ("auto", "template", "publik", "openai", "anthropic")
-_PERSISTED_KEYS = ("publik_recommendation", "provider_preference", "mcp_last_self_test_ok")
+_PERSISTED_KEYS = ("publik_recommendation", "provider_preference", "mcp_last_self_test_ok", "campaign_kind")
 
 
 def normalize_settings(payload: dict | None) -> dict:
@@ -152,11 +207,8 @@ def normalize_settings(payload: dict | None) -> dict:
     normalized = deepcopy(DEFAULT_SETTINGS)
     for field, maximum in _FIELD_LIMITS.items():
         cleaner = _clean_multiline if field in _MULTILINE_FIELDS else _clean_text
-        normalized[field] = cleaner(
-            source.get(field),
-            maximum=maximum,
-            fallback=str(DEFAULT_SETTINGS[field]),
-        )
+        fallback = "" if field in _BLANKABLE and field in source else str(DEFAULT_SETTINGS[field])
+        normalized[field] = cleaner(source.get(field), maximum=maximum, fallback=fallback)
     normalized["website"] = _clean_url(source.get("website"), DEFAULT_SETTINGS["website"])
     pitch_deck_url = str(source.get("pitch_deck_url") or "").strip()
     normalized["pitch_deck_url"] = (
@@ -185,6 +237,7 @@ def normalize_settings(payload: dict | None) -> dict:
     normalized["provider_preference"] = preference if preference in PROVIDER_PREFERENCES else DEFAULT_SETTINGS["provider_preference"]
     normalized["mcp_last_self_test_ok"] = _clean_text(
         source.get("mcp_last_self_test_ok"), maximum=40, fallback=DEFAULT_SETTINGS["mcp_last_self_test_ok"])
+    normalized["campaign_kind"] = normalize_campaign_kind(source.get("campaign_kind"))
     normalized["initialized"] = bool(source.get("initialized", False))
     normalized["schema_version"] = 2
     return normalized
@@ -199,6 +252,8 @@ def load_settings() -> dict:
 
 
 def save_settings(payload: dict) -> dict:
+    if payload.get('campaign_kind') and normalize_campaign_kind(payload['campaign_kind']) == '':
+        raise ValueError('Campaign kind must be fundraising or job_search.')
     for name in ('website','pitch_deck_url'):
         if payload.get(name):
             validate_http_url(payload[name])
@@ -233,17 +288,55 @@ def bundled_example_deck() -> Path:
     return Path(str(files('vcoutreach').joinpath('data', 'examples', 'Publik_Pitch_Deck_Example.pdf')))
 
 
+#: md5 of every previously bundled example deck. A workspace copy that still matches one of these is an
+#: untouched seed from an older release, so it is refreshed in place. Any other file is the user's own.
+KNOWN_OLD_EXAMPLE_DECK_MD5 = ('558bb3abc414862536936ef6329d1aad',)
+
+
+def _file_md5(path) -> str:
+    import hashlib
+    digest = hashlib.md5(usedforsecurity=False)
+    with open(path, 'rb') as handle:
+        for chunk in iter(lambda: handle.read(65536), b''):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _refresh_old_example_deck(workspace, source: Path) -> bool:
+    """Replace the workspace example deck with the bundled one when it is a known old bundled version."""
+    target = workspace.path('attachments', EXAMPLE_DECK_NAME)
+    try:
+        if not target.is_file() or not source.is_file():
+            return False
+        if _file_md5(target) not in KNOWN_OLD_EXAMPLE_DECK_MD5:
+            return False
+        if _file_md5(source) in KNOWN_OLD_EXAMPLE_DECK_MD5:
+            return False
+        temporary = target.with_name(target.name + '.refresh.tmp')
+        try:
+            shutil.copyfile(source, temporary)
+            temporary.replace(target)
+        finally:
+            temporary.unlink(missing_ok=True)
+        return True
+    except OSError:
+        return False
+
+
 def ensure_example_deck() -> bool:
     """Seed the bundled example deck once per workspace. Never overwrites a user path.
 
     Returns True only when the deck was copied and saved as pitch_deck_path.
     A marker file stops re-seeding after the user clears or replaces the path.
+    A seeded copy that still matches a known older bundled deck (KNOWN_OLD_EXAMPLE_DECK_MD5) is
+    refreshed to the current bundled deck; a file with any other content is never touched.
     """
     workspace = get_workspace()
     marker = workspace.path(*_EXAMPLE_DECK_MARKER)
+    source = bundled_example_deck()
+    _refresh_old_example_deck(workspace, source)
     if marker.exists():
         return False
-    source = bundled_example_deck()
     if not source.is_file():
         return False
     settings = load_settings()
@@ -259,6 +352,28 @@ def ensure_example_deck() -> bool:
     marker.parent.mkdir(parents=True, exist_ok=True)
     marker.write_text('example deck seeded\n', encoding='utf-8')
     return True
+
+
+def is_bundled_example_deck(path) -> bool:
+    """True when ``path`` is the seeded copy of the bundled Publik investor example deck (same name and bytes)."""
+    import filecmp
+    try:
+        candidate = Path(str(path))
+        if candidate.name != EXAMPLE_DECK_NAME or not candidate.is_file():
+            return False
+        source = bundled_example_deck()
+        return filecmp.cmp(str(candidate), str(source), shallow=False) if source.is_file() else True
+    except (OSError, ValueError):
+        return False
+
+
+def blurb_for_kind(blurb: object, kind: object = None) -> str:
+    """The email note to show. Job search with the untouched investor default gets the job search default."""
+    text = str(blurb or "").strip()
+    key = effective_campaign_kind() if kind is None else (normalize_campaign_kind(kind) or DEFAULT_CAMPAIGN_KIND)
+    if key == "job_search" and text in ("", DEFAULT_OUTREACH_BLURB.strip()):
+        return _example.JOB_BLURB_TEMPLATE
+    return text
 
 
 def reset_settings() -> dict:

@@ -5,9 +5,9 @@
   "website": "https://example.com",
   "signature": "Example Founder\nCo-founder, Publik\nexample.com",
   "first_touch_subject": "Building Publik",
-  "product_lines": ["My cofounder and I started by open-sourcing alternatives to paid software. Our videos reached 25M+ views, but people still struggled to install, maintain and customize the software.", "Publik makes those apps accessible through Iris, which handles setup, fixes bugs and adds features around each user's needs. We are building a marketplace where software adapts to people."],
-  "traction_lines": ["We have crossed 7,500 registered users in under two months and have 2,100 Discord members."],
+  "product_lines": ["My cofounder and I started by open-sourcing alternatives to Cluely, Wispr Flow and Perplexity. Our videos reached 25M+ views, but people still struggled to install, maintain and customize the software.", "Publik makes those apps accessible through our product Iris, which handles setup, fixes bugs and adds features around each user's needs. We're building a marketplace where software adapts to people, rather than people adapting to fixed subscriptions."],
+  "traction_lines": ["We've crossed 10K users and have 2,400 Discord members."],
   "ask_line": "Open to a quick chat? https://calendly.com/your-handle/30min",
-  "approved_claims": {"users": "7,500 registered users in under two months", "discord": "2,100 Discord members", "views": "25M+ views"},
+  "approved_claims": {"users": "10K users", "discord": "2,400 Discord members", "views": "25M+ views on our open source videos"},
   "forbidden_phrases": ["game changer", "revolutionary"]
 }

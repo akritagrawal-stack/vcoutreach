@@ -4,24 +4,24 @@
 .send-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 20px; }
 .send-stats .crm-metric { min-height: 96px; }
 .send-plan-page .crm-panel { margin-top: 16px; }
-.send-plan-table td:first-child { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 11px; }
+.send-plan-table td:first-child { font-family: var(--font-mono); font-size: 12px; }
 .send-plan-table td .badge { vertical-align: middle; }
 
 /* Draft editor: header, form, action row */
 .draft-page .crm-hero h1 { overflow-wrap: anywhere; }
 .draft-page .draft-editor-layout { margin-top: 20px; }
 .draft-form { display: grid; gap: 18px; min-width: 0; }
-.draft-form label { display: grid; gap: 7px; min-width: 0; font-size: 11px; color: var(--text-muted); }
+.draft-form label { display: grid; gap: 7px; min-width: 0; font: 500 13px var(--font-sans); text-transform: none; letter-spacing: 0; color: var(--text-muted); }
 .draft-form input, .draft-form select, .draft-form textarea {
   width: 100%; min-width: 0; min-height: 39px; padding: 9px 12px;
   border: 1px solid var(--border); border-radius: 0; background: var(--surface-raised); color: var(--text);
   font: inherit; font-size: 12px;
 }
 .draft-form input:focus, .draft-form select:focus, .draft-form textarea:focus { outline: 0; border-color: var(--accent); }
-.draft-form textarea { min-height: 360px; font-family: 'IBM Plex Mono', ui-monospace, monospace; line-height: 1.6; resize: vertical; }
+.draft-form textarea { min-height: 360px; font-family: var(--font-mono); line-height: 1.6; resize: vertical; }
 .draft-meta { display: grid; grid-template-columns: minmax(180px, 240px) minmax(0, 1fr); gap: 18px; align-items: start; }
 .draft-thread { min-width: 0; }
-.draft-thread summary { min-height: 39px; display: flex; align-items: center; cursor: pointer; color: var(--text-muted); font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 10px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+.draft-thread summary { min-height: 39px; display: flex; align-items: center; cursor: pointer; color: var(--text-muted); font: 500 13px var(--font-sans); text-transform: none; letter-spacing: 0; }
 .draft-thread[open] summary { color: var(--text); }
 .draft-thread label { margin-top: 12px; }
 .draft-clear { margin: 0 0 16px; color: var(--text-muted); font-size: 12px; }
@@ -49,4 +49,142 @@
 }
 @media (min-width: 1600px) {
   .draft-form textarea { min-height: 460px; }
+}
+
+/* Settings page: compact connection cards and workspace accordions. */
+.settings-page { gap: 0; }
+.settings-page > .svc-grid, .settings-page > .acc, .settings-page > #workspaceSettingsForm { margin-bottom: var(--space-4); }
+.settings-shell .settings-head { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-4); }
+.settings-shell .settings-head h1 { font-size: var(--fs-22); line-height: var(--lh-tight); font-weight: var(--fw-semibold); }
+.settings-shell .svc-summary { font-size: var(--fs-12); color: var(--text-muted); }
+.settings-shell .svc-tiles { gap: 6px; }
+.settings-shell .svc-tile { height: var(--ctl-sm); min-height: var(--ctl-sm); padding: 0 10px; font-size: var(--fs-12); border-color: var(--border); border-radius: var(--radius-full); }
+.settings-shell .svc-grid { gap: var(--space-3); }
+.settings-shell .svc-card { padding: 14px var(--space-4); gap: 10px; border-color: var(--border); border-radius: var(--radius-lg); }
+.settings-shell .svc-grid .svc-card { margin-bottom: 0; }
+.settings-shell .svc-head h2 { font-size: var(--fs-14); }
+.settings-shell .svc-mark { width: 24px; height: 24px; }
+.settings-shell .svc-hint { max-width: 60ch; font-size: var(--fs-13); }
+.settings-shell .fld { gap: var(--space-1); }
+.settings-shell .fld > span, .settings-shell .fld > label { margin-bottom: 0; font-size: var(--fs-12); font-weight: var(--fw-medium); }
+.settings-shell .fld input, .settings-shell .fld select, .settings-shell .settings-fields input { height: var(--ctl-md); min-height: var(--ctl-md); padding: 0 10px; border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); color: var(--text); font-size: var(--fs-13); }
+.settings-shell .fld select { padding-right: 28px; }
+.settings-shell .fld textarea { min-height: 96px; padding: var(--space-2) 10px; border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); color: var(--text); font-size: var(--fs-13); }
+.settings-shell .fld input:focus-visible, .settings-shell .fld select:focus-visible, .settings-shell .fld textarea:focus-visible { border-color: var(--accent); outline: 2px solid var(--focus); outline-offset: 2px; }
+.settings-shell .secret-toggle { height: var(--ctl-md); }
+.settings-shell .fields { gap: 10px var(--space-3); padding: var(--space-3) var(--space-4); }
+.settings-shell .acc { border-color: var(--border); border-radius: var(--radius-lg); }
+.settings-shell .acc > summary { align-items: center; padding: 10px var(--space-4); font-size: var(--fs-13); }
+.settings-shell .acc > summary b { font-size: var(--fs-13); }
+.settings-shell .acc > summary::before { content: none; }
+.settings-shell details > summary { list-style: none; cursor: pointer; }
+.settings-shell details > summary::-webkit-details-marker { display: none; }
+.settings-shell details > summary .icon-chevron { flex: none; transition: transform var(--transition); }
+.settings-shell details[open] > summary .icon-chevron { transform: rotate(180deg); }
+.settings-shell .svc-actions { gap: var(--space-2); }
+.settings-shell .svc-actions.save-bar { position: sticky; bottom: 0; z-index: 3; margin-top: var(--space-3); padding: var(--space-3) 0; background: var(--surface); border-top: 1px solid var(--border); }
+.settings-shell .svc-link { display: inline-flex; align-items: center; gap: 6px; color: var(--text-muted); border-radius: var(--radius); text-decoration: none; }
+.settings-shell .svc-link:hover { background: var(--bg-hover); color: var(--text); }
+.settings-shell .svc-link:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.settings-page #workspaceSettingsForm { display: grid; gap: var(--space-4); }
+.settings-page .settings-sub { margin: 0 0 var(--space-3); font-size: var(--fs-16); }
+
+@media (max-width: 768px) {
+  .settings-shell .svc-tile { height: auto; min-height: 40px; flex-wrap: wrap; padding: var(--space-1) 10px; }
+}
+
+/* Settings: align controls with the pk- kit (heights, radii, type) without changing markup hooks. */
+.settings-shell .svc-btn { min-height: var(--pk-ctl-h, 32px); height: var(--pk-ctl-h, 32px); padding: 0 12px; border-radius: var(--pk-r-ctl, 6px); font: 500 14px/20px var(--font-sans); }
+.settings-shell .svc-btn:not(.primary):not(.danger) { border-color: var(--border-strong); }
+.settings-shell .svc-btn svg { width: 16px; height: 16px; flex: none; }
+.settings-shell .svc-card, .settings-shell .acc { border-radius: var(--pk-r-card, 8px); border-color: var(--border); }
+.settings-shell .settings-head { flex-wrap: wrap; }
+.settings-shell .svc-tiles { flex-wrap: wrap; }
+.settings-shell .svc-actions { flex-wrap: wrap; }
+
+/* Candidates */
+.cand-count { vertical-align: middle; margin-left: 6px; }
+.cand-bar { position: sticky; top: 8px; z-index: 5; margin-bottom: 12px; }
+.cand-table td { vertical-align: top; }
+.cand-name { min-width: 160px; }
+.cand-name .pk-cell-sub { display: block; }
+.cand-email { overflow-wrap: anywhere; }
+.cand-why { min-width: 200px; max-width: 360px; color: var(--text-muted); }
+
+/* Error page */
+.err-card { max-width: 560px; margin: 48px auto; }
+.err-card .pk-empty__title { margin: 0; font-size: 18px; font-weight: 600; }
+.err-card p { margin: 0; color: var(--text-muted); overflow-wrap: anywhere; }
+.err-card .pk-btn { margin-top: 8px; }
+
+/* Enrichment status */
+.en-filters { align-items: center; row-gap: 8px; }
+.en-filter-label { font-size: 12px; font-weight: 500; color: var(--text-muted); }
+.en-sep { width: 1px; height: 18px; background: var(--border); margin: 0 4px; }
+.pk-chip.chip { padding: 0 10px; border-radius: 999px; }
+.pk-chip.chip:hover { border-color: var(--border-strong); background: var(--pk-surface-2, var(--bg-hover)); color: var(--text); }
+.pk-chip.active, .pk-chip.chip.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+.pk-chip.chip-clear { border-style: dashed; color: var(--text-muted); }
+.en-legend { margin: 0 0 12px; line-height: 22px; }
+.en-dot { display: inline-block; margin: 0 4px 0 10px; color: var(--text-faint); }
+.en-table td, .en-table th { vertical-align: middle; }
+.en-table th .table-sort { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; }
+.en-c { text-align: center; white-space: nowrap; }
+.en-when { white-space: nowrap; color: var(--text-muted); }
+.en-stats { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+
+/* Email verification */
+.verification-shell { display: grid; gap: 16px; min-width: 0; }
+.ver-boundary { margin: 0; }
+.ver-providers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; min-width: 0; }
+.ver-providers > .ver-provider-empty { grid-column: 1 / -1; }
+.ver-provider { margin: 0; display: grid; gap: 10px; align-content: start; }
+.ver-provider + .ver-provider { margin-top: 0; }
+.ver-provider__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.ver-provider__id { display: block; font-size: 11px; font-weight: 500; letter-spacing: .04em; }
+.ver-provider__name { margin: 2px 0 0; font-size: 16px; font-weight: 600; }
+.ver-provider__cap { margin: 0; font-size: 13px; }
+.ver-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 0; }
+.ver-metrics > div { padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--pk-r-ctl, 6px); background: var(--surface); min-width: 0; }
+.ver-metrics dt { font-size: 11px; color: var(--text-muted); font-weight: 500; }
+.ver-metrics dd { margin: 2px 0 0; font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.verification-key-hint { margin: 0; }
+.ver-contacts .pk-card__head { align-items: flex-end; flex-wrap: wrap; gap: 12px; padding: 16px; }
+.ver-filters { margin: 0; flex-wrap: wrap; }
+.ver-filters .pk-input { min-width: 220px; }
+.ver-table td { vertical-align: top; }
+.ver-table code { font-size: 12px; overflow-wrap: anywhere; }
+.ver-actions { display: grid; gap: 6px; justify-items: start; }
+.ver-actions form { margin: 0; }
+.ver-actions .pk-btn small { font-size: 11px; font-weight: 400; }
+.ver-history .pk-card__head { padding: 0 0 12px; }
+.ver-history__note { margin: 0 0 12px; }
+.ver-attempts { display: grid; gap: 12px; }
+.ver-attempt { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--border); border-radius: var(--pk-r-ctl, 6px); background: var(--surface); min-width: 0; }
+.ver-attempt__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.ver-attempt__head > div { display: grid; gap: 2px; min-width: 0; }
+.ver-attempt__head span { font-size: 11px; letter-spacing: .03em; }
+.ver-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px 12px; margin: 0; }
+.ver-grid dt { font-size: 11px; color: var(--text-muted); font-weight: 500; }
+.ver-grid dd { margin: 2px 0 0; font-size: 13px; overflow-wrap: anywhere; }
+.ver-more > summary { cursor: pointer; font-size: 12px; color: var(--text-muted); }
+.ver-more[open] > summary { margin-bottom: 8px; }
+.ver-review { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+.ver-review form { margin: 0; }
+.ver-review__apply { display: grid; gap: 4px; flex: 1 1 320px; }
+.ver-review__apply label { font-size: 12px; font-weight: 500; color: var(--text-muted); }
+.ver-review__row { display: flex; gap: 8px; flex-wrap: wrap; }
+.ver-review__row .pk-input { flex: 1 1 220px; min-width: 0; }
+.ver-disposition { font-size: 12px; padding-top: 8px; border-top: 1px solid var(--border); }
+
+@media (max-width: 900px) {
+  .ver-providers { grid-template-columns: minmax(0, 1fr); }
+  .ver-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  .ver-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ver-filters, .ver-filters .pk-input, .ver-filters .pk-select { width: 100%; min-width: 0; }
+  .ver-contacts .pk-card__head { padding: 12px; }
+  .err-card { margin: 24px auto; }
+  .en-sep { display: none; }
 }

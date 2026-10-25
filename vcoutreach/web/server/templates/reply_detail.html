@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% from "_icons.html" import icon %}
 {% from '_partner_macros.html' import label_badge %}
 {% block page_id %}reply_detail{% endblock %}
 {% block title %}Reply detail{% endblock %}
@@ -11,141 +12,94 @@
 {% set sender = reply['from_name'] or reply['from_email'] or 'Unknown sender' %}
 {% set received = reply['received_at'] or reply['discovered_at'] %}
 
-<div class="crm-shell reply-detail">
-  <nav class="breadcrumb" aria-label="Breadcrumb">
+<div class="reply-detail">
+  <nav class="pk-note reply-back" aria-label="Breadcrumb">
     <a href="/replies">Back to replies</a>
   </nav>
 
-  <header class="crm-hero">
-    <div>
-      <div class="crm-eyebrow">REPLY DETAIL</div>
+  <header class="pk-page-head">
+    <div class="pk-page-head__text">
       <h1>{{ sender }}</h1>
+      <p class="pk-page-sub">{{ reply['subject'] or 'No subject' }}</p>
     </div>
-    <div class="crm-hero-meta">
-      {% if reply['user_reviewed'] %}
-        <span class="reply-review-state"><span class="crm-led" aria-hidden="true"></span>Reviewed</span>
-      {% else %}
-        <span class="reply-review-state"><span class="crm-led reply-led-open" aria-hidden="true"></span>Unreviewed</span>
-      {% endif %}
+    <div class="pk-page-head__actions">
+      {% if reply['user_reviewed'] %}<span class="pk-pill pk-pill--neutral">Read</span>{% else %}<span class="pk-pill pk-pill--info">Unread</span>{% endif %}
+      <form action="/replies/{{ reply['id'] }}/mark-reviewed" method="post" class="reply-read-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit" class="pk-btn pk-btn--secondary">{% if reply['user_reviewed'] %}Mark as unread{% else %}Mark as reviewed{% endif %}</button>
+      </form>
     </div>
   </header>
 
-  <div class="crm-detail-grid">
-
-    <!-- Left: email metadata and body -->
-    <div class="crm-detail-main">
-      <section class="crm-panel">
-        <div class="crm-panel-heading"><h2>Email details</h2></div>
-        <div class="meta-list">
-          <div class="meta-row">
-            <span class="meta-key">From</span>
-            <span class="meta-val">
-              {{ reply['from_name'] or '' }}
-              <span class="text-muted reply-meta-muted">&lt;{{ reply['from_email'] or 'Not set' }}&gt;</span>
-            </span>
-          </div>
-          <div class="meta-row">
-            <span class="meta-key">Subject</span>
-            <span class="meta-val">{{ reply['subject'] or 'Not set' }}</span>
-          </div>
-          <div class="meta-row">
-            <span class="meta-key">Received</span>
-            <span class="meta-val text-muted">{{ utc_time(received) }}</span>
-          </div>
+  <div class="reply-grid">
+    <div class="reply-main">
+      <section class="pk-card">
+        <h2 class="reply-card-title">Email details</h2>
+        <dl class="reply-meta">
+          <div><dt>From</dt><dd>{{ reply['from_name'] or '' }} <span class="pk-faint">&lt;{{ reply['from_email'] or 'Not set' }}&gt;</span></dd></div>
+          <div><dt>Subject</dt><dd>{{ reply['subject'] or 'Not set' }}</dd></div>
+          <div><dt>Received</dt><dd>{% set rcv = received %}{% if rcv %}{{ utc_time(rcv) }}{% else %}Not set{% endif %}</dd></div>
           {% if reply['partner_name'] %}
-          <div class="meta-row">
-            <span class="meta-key">Partner</span>
-            <span class="meta-val">
-              <a href="/partners/{{ reply['partner_id'] }}">{{ reply['partner_name'] }}</a>
-              {% if reply['firm'] %}<span class="text-muted reply-firm">{{ reply['firm'] }}</span>{% endif %}
-            </span>
-          </div>
+          <div><dt>Partner</dt><dd><a href="/partners/{{ reply['partner_id'] }}">{{ reply['partner_name'] }}</a>{% if reply['firm'] %} <span class="pk-faint">{{ reply['firm'] }}</span>{% endif %}</dd></div>
           {% endif %}
-          <div class="meta-row">
-            <span class="meta-key">Thread</span>
-            <span class="meta-val"><code>{{ reply['gmail_thread_id'] or 'Not set' }}</code></span>
-          </div>
-        </div>
+          <div><dt>Thread</dt><dd><code>{{ reply['gmail_thread_id'] or 'Not set' }}</code></dd></div>
+        </dl>
       </section>
 
-      <section class="crm-panel">
-        <div class="crm-panel-heading"><h2>Email body</h2></div>
-        <div class="inset">
-          {% if reply['body_text'] %}
-            <div class="convo-body">{{ reply['body_text'] }}</div>
-          {% else %}
-            <p class="text-muted reply-fallback">No plain-text body. Snippet: {{ reply['snippet'] or 'Not set' }}</p>
-          {% endif %}
-        </div>
+      <section class="pk-card">
+        <h2 class="reply-card-title">Email body</h2>
+        {% if reply['body_text'] %}
+          <div class="convo-body reply-body">{{ reply['body_text'] }}</div>
+        {% else %}
+          <p class="pk-muted reply-fallback">No plain-text body. Snippet: {{ reply['snippet'] or 'Not set' }}</p>
+        {% endif %}
       </section>
     </div>
 
-    <!-- Right: classification, label override, review -->
-    <div class="crm-detail-side">
-      <section class="crm-panel">
-        <div class="crm-panel-heading"><h2>AI classification</h2></div>
-
+    <div class="reply-side">
+      <section class="pk-card">
+        <h2 class="reply-card-title">AI classification</h2>
         <div class="reply-label-row">
           {{ label_badge(reply['label']) }}
           {% if reply['classification_confidence'] %}
-            <span class="text-faint reply-confidence">
-              {{ "%.0f"|format(reply['classification_confidence'] * 100) }}% confidence
-            </span>
+            <span class="pk-faint">{{ "%.0f"|format(reply['classification_confidence'] * 100) }}% confidence</span>
           {% endif %}
         </div>
-
         {% if reply['classification_summary'] %}
         <div class="reply-block">
-          <div class="form-label reply-field-label">Summary</div>
-          <p class="reply-text">{{ reply['classification_summary'] }}</p>
+          <div class="reply-field-label">Summary</div>
+          <p>{{ reply['classification_summary'] }}</p>
         </div>
         {% endif %}
-
         {% if reply['suggested_action'] %}
-        <div class="inset reply-suggested">
-          <div class="form-label reply-field-label">Suggested action</div>
-          <p class="reply-text-strong">{{ reply['suggested_action'] }}</p>
+        <div class="reply-block reply-suggested">
+          <div class="reply-field-label">Suggested action</div>
+          <p>{{ reply['suggested_action'] }}</p>
         </div>
         {% endif %}
-
         {% if reply['classified_at'] %}
-        <p class="text-faint reply-classified">Classified {{ utc_time(reply['classified_at']) }}</p>
+        <p class="pk-faint reply-classified">Classified {{ utc_time(reply['classified_at']) }}</p>
         {% endif %}
       </section>
 
-      <section class="crm-panel">
-        <div class="crm-panel-heading"><h2>Override label</h2></div>
+      <section class="pk-card">
+        <h2 class="reply-card-title">Your label</h2>
         {% if reply['user_label'] %}
-          <p class="text-muted reply-text">Current override: <strong>{{ reply['user_label'] }}</strong></p>
+          <p class="pk-muted">Current override: <strong>{{ reply['user_label'] }}</strong></p>
         {% endif %}
-        <form action="/replies/{{ reply['id'] }}/update-label" method="post">
+        <form action="/replies/{{ reply['id'] }}/update-label" method="post" class="reply-override">
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-          <div class="form-row">
-            <select aria-label="User Label" name="user_label" class="form-control reply-label-select">
-              <option value="">Choose a label</option>
-              {% for lbl in all_labels %}
-              <option value="{{ lbl }}" {% if reply['user_label'] == lbl %}selected{% endif %}>{{ lbl }}</option>
-              {% endfor %}
-            </select>
-            <button type="submit" class="crm-button crm-button-secondary">Save label</button>
-          </div>
+          <select aria-label="User Label" name="user_label" class="pk-select reply-label-select">
+            <option value="">Choose a label</option>
+            {% for lbl in all_labels %}
+            <option value="{{ lbl }}" {% if reply['user_label'] == lbl %}selected{% endif %}>{{ lbl }}</option>
+            {% endfor %}
+          </select>
+          <button type="submit" class="pk-btn pk-btn--secondary">Save label</button>
         </form>
-        <p class="text-faint reply-note">Saving a label also marks this reply reviewed.</p>
-      </section>
-
-      <section class="crm-panel">
-        {% if not reply['user_reviewed'] %}
-        <form action="/replies/{{ reply['id'] }}/mark-reviewed" method="post">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-          <button type="submit" class="crm-button crm-button-primary">Mark as reviewed</button>
-        </form>
-        {% else %}
-        <p class="text-faint reply-note">Already reviewed.</p>
-        {% endif %}
+        <p class="pk-faint reply-note">Saving a label also marks this reply reviewed.</p>
       </section>
     </div>
-
   </div>
 </div>
-
 {% endblock %}

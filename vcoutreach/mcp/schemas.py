@@ -111,7 +111,8 @@ TOOLS: tuple = (
     _tool(
         "setup_status",
         "Report setup progress for this workspace: the seven setup steps, which one is next, "
-        "connection state as booleans (never key values), send mode (read only), and counts. "
+        "connection state as booleans (never key values), send mode (read only), counts, and an "
+        "example_pitch (a worked example email, its labeled parts and short writing guidance, to use as a model). "
         "Call this first and follow next_step. Re-call it after the user finishes a step in Settings.",
         _object(),
         _annotations(True),

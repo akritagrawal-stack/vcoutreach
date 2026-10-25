@@ -1,12 +1,13 @@
 {% extends 'base.html' %}
+{% from "_icons.html" import icon %}
 {% block page_id %}setup_ai{% endblock %}
 {% block title %}Set up with AI{% endblock %}
 
-{% macro snippet(key, title, where, text) %}
+{% macro snippet(key, title, where, text, snippet_key) %}
 <section class="ai-snippet" aria-labelledby="ai-h-{{ key }}">
   <header class="ai-snippet-head">
     <div class="ai-snippet-title"><h3 id="ai-h-{{ key }}">{{ title }}</h3><span class="ai-where">{{ where }}</span></div>
-    <button type="button" class="svc-btn" data-copy="ai-code-{{ key }}" hidden>Copy</button>
+    <button type="button" class="svc-btn" data-copy="ai-code-{{ key }}" data-snippet="{{ snippet_key }}" hidden>{{ icon("copy") }} Copy</button>
   </header>
   <pre class="ai-code" id="ai-code-{{ key }}" tabindex="0" aria-label="{{ title }} configuration, select to copy"><code>{{ text }}</code></pre>
   <p class="svc-hint ai-copy-note" data-copy-note role="status" aria-live="polite"></p>
@@ -23,21 +24,22 @@
   <p class="ai-intro">Let an AI assistant (Claude, Codex or any MCP client) walk you through setup and run the safe parts for you: it can check connections, import contacts, research, write and edit drafts, and send a copy to your own test inbox; it cannot see or enter your keys, and it cannot send a real email.</p>
 
   <section id="publik" class="ai-block" aria-label="Publik API">
+    {% set pk_variant = 'setup' %}
     {% include '_publik_card.html' %}
   </section>
 
   <section class="ai-block" aria-labelledby="ai-connect-h">
     <h2 id="ai-connect-h">Connect your assistant</h2>
-    <p class="svc-hint ai-lede">Pick your assistant, copy its snippet, and add it to the assistant's config. The snippets already hold this app's launch command and workspace folder.</p>
-    {% if launch_hint %}<p class="ai-warn" role="note">{{ launch_hint }}</p>{% endif %}
+    <p class="svc-hint ai-lede">Pick your assistant, copy its snippet, and add it to the assistant's config. The snippets hold this app's launch command and workspace folder. Your home folder shows as ~ here, and Copy puts the full path on your clipboard.</p>
+    {% if launch_hint %}<p class="ai-warn" role="note">{{ icon("alert-triangle") }} {{ launch_hint }}</p>{% endif %}
     <div class="ai-snippets">
-      {{ snippet('desktop', 'Claude Desktop', 'claude_desktop_config.json', snippets.claude_desktop) }}
-      {{ snippet('code', 'Claude Code', 'Run in a terminal', snippets.claude_code) }}
-      {{ snippet('codex', 'Codex', '~/.codex/config.toml', snippets.codex) }}
+      {{ snippet('desktop', 'Claude Desktop', 'claude_desktop_config.json', snippets.claude_desktop, 'claude_desktop') }}
+      {{ snippet('code', 'Claude Code', 'Run in a terminal', snippets.claude_code, 'claude_code') }}
+      {{ snippet('codex', 'Codex', '~/.codex/config.toml', snippets.codex, 'codex') }}
     </div>
     <div class="ai-restart">
       <p data-copy-source>Restart the assistant after saving its config. Then ask it: 'Run setup_status and walk me through the remaining steps.'</p>
-      <button type="button" class="svc-btn" data-copy-text="Run setup_status and walk me through the remaining steps." hidden>Copy the question</button>
+      <button type="button" class="svc-btn" data-copy-text="Run setup_status and walk me through the remaining steps." hidden>{{ icon("copy") }} Copy the question</button>
       <span class="svc-hint ai-copy-note" data-copy-note role="status" aria-live="polite"></span>
     </div>
   </section>
@@ -50,7 +52,7 @@
       </header>
       <p class="svc-hint">Starts the same command locally, asks for its tool list, and checks that it looks right. It does not call any outside service.</p>
       <div class="svc-actions">
-        <button type="button" class="svc-btn primary" data-ai-test hidden>Test MCP</button>
+        <button type="button" class="svc-btn primary" data-ai-test hidden>{{ icon("play") }} Test MCP</button>
       </div>
       <p class="svc-busy" data-ai-busy hidden><i class="svc-spin" aria-hidden="true"></i><span>Testing...</span></p>
       <p class="svc-hint ai-test-msg" data-ai-test-msg role="status" aria-live="polite">{% if last_self_test %}Last passed: <time datetime="{{ last_self_test }}">{{ last_self_test }}</time>{% endif %}</p>

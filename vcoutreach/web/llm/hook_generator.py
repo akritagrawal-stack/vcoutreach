@@ -44,7 +44,7 @@ def generate_hook(partner: dict, enrichment_facts: list[dict] | None = None, max
     base += (
         '\nNever invent traction numbers, user counts, revenue or view counts. '
         'Only numbers appearing in approved claims or provided facts may be used. '
-        'Keep about in about 10M organic views when that claim is supplied. '
+        'Keep approved claim wording exactly, for example 25M+ views stays 25M+ views. '
         'When the supplied profile and facts have no metric, the hook must contain no number at all. '
         'IDs, source URLs, confidence scores and list indexes are not metric evidence.'
     )

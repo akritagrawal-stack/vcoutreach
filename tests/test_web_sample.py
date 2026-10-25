@@ -109,8 +109,10 @@ def test_the_sample_sender_is_publiks_and_passes_the_engine_loader(sample_web):
     assert sample_subject(sample_web) == sender.first_touch_subject
     assert sender.org == "Publik"
     text = (sample_web.ws / "sender.json").read_text(encoding="utf-8")
-    for needle in ("25M+ views", "7,500", "2,100"):
+    for needle in ("25M+ views on our open source videos", "10K users", "2,400 Discord members"):
         assert needle in text, needle
+    for stale in ("7,500", "2,100", "1,592", "1,500", "10,000 registered"):
+        assert stale not in text, stale
     assert "https://calendly.com/your-handle/30min" in sender.ask_line
 
 

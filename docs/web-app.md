@@ -28,7 +28,7 @@ works once.
 | `drafts/` | One Markdown draft per contact, in the engine's format. `drafts/blocked/` holds blocked drafts. `drafts/removed/` holds drafts archived when you delete a contact. |
 | `contacts.csv` | Not required. Contacts live in the database; import a CSV from Overview and export one at any time. |
 | `data/outreach.db` | The local SQLite database: contacts, review state, replies, enrichment results, the send journal and scheduled sends. |
-| `data/.gmail_credentials.json`, `data/.gmail_token.json` | The browser app's Gmail OAuth client and token (see integrations.md). |
+| `data/.gmail_credentials.json`, `data/.gmail_token.json` | The browser app's Gmail OAuth client and token (see integrations.md). `data/.gmail_app_password.json` holds the app-password alternative if you chose it. |
 | `outputs/` | Reports and tracking journals the app writes. |
 | `.vcoutreach/journal.jsonl` | The duplicate-send journal shared with the command line. Keep it: deleting it removes the protection. |
 
@@ -61,8 +61,9 @@ refused so they cannot add extra lines to `.env`.
    is linted and grounded by the engine, and blocked drafts never send.
 2. Open Partners. Review, edit the hook, then approve or reject.
 3. Read the Send plan page. It shows who would be sent and who is held, and why.
-4. Connect Gmail with `vcoutreach auth gmail-web --workspace DIR` and set
-   `TEST_RECIPIENT_EMAIL` in Settings, on the Test recipient card. Missing
+4. Connect Gmail in Settings (Google sign-in; an app password is a collapsed
+   alternative; `vcoutreach auth gmail-web --workspace DIR` also works) and set
+   `TEST_RECIPIENT_EMAIL` on the Test recipient card. Missing
    authorization refuses the send before any journal row is reserved. In TEST
    mode, send a test to that inbox and read it.
 5. Only then switch to LIVE (`GO LIVE`) and send one contact (`SEND TO <email>`) or a
@@ -74,7 +75,24 @@ go out, open its contact page and click "I checked Sent, it did not go out, allo
 retry". This records an activity and keeps the attempt in history as retryable.
 A successful send receipt still blocks duplicates.
 
+## Setup order
+
+Settings lists the steps in this order: connect Gmail, set your test recipient, add
+a contact, write a draft, approve it, send one test to yourself, and last,
+optionally, connect the Publik API (recommended for AI drafts, not needed for a test
+send). Chips on each card read "Required for a test send" or "Optional".
+
 ## Page notes
+
+- **Campaign** (`/crm/drafts`) is a guided path in four steps. The first visit asks
+  whether the campaign is for fundraising or a job search; that sets the wording and
+  the attachment label, and you can change it later. Step 4 shows a four-row
+  readiness checklist (Gmail connected, test recipient set, sender profile saved, one
+  draft approved). When every row passes it previews the exact test message, addressed
+  to your own test recipient, with one **Send a test** button. Nothing is sent from
+  the preview.
+- **Menu**: on a narrow screen the navigation collapses behind a **Menu** button at
+  the top left. Tap it to open or close the list. Wide tables stack into cards.
 
 - **Overview** lists contacts by stage. "Add contact", CSV import (the whole file is
   checked before anything is written) and `export.csv` use the engine's contact

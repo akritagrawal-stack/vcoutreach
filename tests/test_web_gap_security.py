@@ -14,6 +14,7 @@ from web_helpers import (
 )
 
 DENIED_MESSAGE = "Open the newest link printed in the Terminal window."
+USED_LINK_MESSAGE = "This one-time link was already used"
 
 
 def anon(w: Web) -> Web:
@@ -128,7 +129,7 @@ def test_the_launch_token_link_is_accepted_once_and_refused_the_second_time(make
     other_browser = Web(w.app, w.ws, w.transport)
     second = other_browser.get(f"/?token={token}")
     assert second.status_code == 403
-    assert DENIED_MESSAGE in page_text(second)
+    assert USED_LINK_MESSAGE in page_text(second)
     assert not second.headers.getlist("Set-Cookie")
     assert other_browser.get("/crm").status_code == 403, "the replayed link must not open any page"
     assert w.get("/crm").status_code == 200, "the first browser keeps its session"

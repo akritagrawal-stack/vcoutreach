@@ -140,7 +140,17 @@ def _searxng_search(query: str, count: int = 10) -> list[dict]:
         logger.warning("%s", exc)
         return []
 
-    url = validated_url(setting_value("SEARXNG_URL", _get_searxng_url()), origin_only=True, loopback=True)
+    # SearXNG is opt-in: users without one have no SEARXNG_URL saved, and the
+    # search step then simply returns no web results. Nothing is dialed on a
+    # guess at a default local port.
+    configured = (setting_value("SEARXNG_URL", "") or "").strip()
+    if not configured:
+        return []
+    try:
+        url = validated_url(configured, origin_only=True, loopback=True)
+    except ValueError as exc:
+        logger.warning("SearXNG URL ignored: %s", exc)
+        return []
     params = {
         'q': query,
         'format': 'json',

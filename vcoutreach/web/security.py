@@ -8,7 +8,9 @@ from flask import request, session, redirect, jsonify, render_template
 from werkzeug.exceptions import HTTPException
 
 CSP = "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'self'"
+DECK_EMBED_PATH = '/crm/deck'
 AUTH_MESSAGE = 'Open the newest link printed in the Terminal window.'
+USED_LINK_MESSAGE = 'This one-time link was already used. Open the Publikreach window again for a fresh link.'
 
 def _cookie_name(workspace) -> str:
     """One stable session cookie name per workspace, so two local instances on 127.0.0.1 do not overwrite each other."""
@@ -16,6 +18,11 @@ def _cookie_name(workspace) -> str:
         return 'outreach_session'
     digest = hashlib.sha256(str(workspace).encode('utf-8')).hexdigest()[:10]
     return 'outreach_session_' + digest
+
+
+DECK_UPLOAD_PATH = '/crm/deck/upload'
+DECK_UPLOAD_BODY_LIMIT = 26 * 1024 * 1024
+DECK_TOO_LARGE_MESSAGE = 'That file is larger than 25 MB.'
 
 
 def install_security(app):
@@ -62,15 +69,25 @@ def install_security(app):
         if (parsed.hostname not in {'127.0.0.1', 'localhost'} or parsed.username
                 or parsed.password or (expected is not None and (port or (443 if request.is_secure else 80)) != expected)):
             return error('Host is not allowed.', 403)
-        if request.content_length is not None and request.content_length > app.config['MAX_CONTENT_LENGTH']:
-            return error('Request body exceeds 2 MB.',413)
+        limit = app.config['MAX_CONTENT_LENGTH']
+        if request.method == 'POST' and request.path == DECK_UPLOAD_PATH:
+            # The deck upload alone may carry a 25 MB file (plus form overhead); every other route keeps the 2 MB cap.
+            limit = DECK_UPLOAD_BODY_LIMIT
+            request.max_content_length = limit
+        if request.content_length is not None and request.content_length > limit:
+            return error(DECK_TOO_LARGE_MESSAGE if limit == DECK_UPLOAD_BODY_LIMIT else 'Request body exceeds 2 MB.',413)
         if request.path == '/healthz' and request.method == 'GET':
+            return None
+        if request.path == '/favicon.ico' and request.method in ('GET', 'HEAD'):
+            # Browsers fetch the tab icon without a session on the first load; it is a fixed public asset, host check above still applies.
             return None
         supplied = request.args.get('token', '')
         if request.path == '/' and supplied:
             with lock:
-                if (app.extensions['access_token_used']
-                        or not secrets.compare_digest(supplied.encode('utf-8'), token.encode('utf-8'))):
+                matches = secrets.compare_digest(supplied.encode('utf-8'), token.encode('utf-8'))
+                if matches and app.extensions['access_token_used']:
+                    return error(USED_LINK_MESSAGE, 403)
+                if not matches:
                     return error(AUTH_MESSAGE, 403)
                 app.extensions['access_token_used'] = True
             session.clear()
@@ -104,6 +121,10 @@ def install_security(app):
         response.headers.update({'Cache-Control': 'no-store',
             'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY',
             'Referrer-Policy': 'no-referrer', 'Content-Security-Policy': CSP})
+        if request.path == DECK_EMBED_PATH and request.method == 'GET':
+            # Only the pitch deck PDF may be framed, and only by this same origin (the inline deck preview).
+            response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+            response.headers['Content-Security-Policy'] = CSP + "; frame-ancestors 'self'"
         response.headers.pop('Access-Control-Allow-Origin', None)
         return response
 
@@ -112,7 +133,7 @@ def install_security(app):
         status = exc.code if isinstance(exc, HTTPException) else 500
         messages = {400: 'Invalid request.', 403: 'Request refused.',
                     404: 'Record not found.', 405: 'Method not allowed.',
-                    413: 'Request body exceeds 2 MB.'}
+                    413: DECK_TOO_LARGE_MESSAGE if request.path == DECK_UPLOAD_PATH else 'Request body exceeds 2 MB.'}
         message = messages.get(status, 'Operation failed. Check your workspace settings.')
         if status == 404 and not (request.path.startswith('/api/') or request.is_json):
             return render_template('error.html', message=message, active_page=''), status

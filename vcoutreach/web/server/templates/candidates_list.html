@@ -1,106 +1,105 @@
 {% extends 'base.html' %}
-{% from '_partner_macros.html' import tier_badge, empty_value %}
+{% from "_icons.html" import icon %}
+{% from '_partner_macros.html' import empty_value %}
 {% block page_id %}candidates_list{% endblock %}
 {% block title %}Candidates{% endblock %}
 
 {% block content %}
-<div class="section-header page-title">
-  <h1>Co-investor candidates <span class="page-count">{{ candidates|length }}</span></h1>
-  <p class="text-muted pl-counters">
-    From the PitchBook co-investor backtrace. Rows with no email or confidence under 0.5 start unchecked.
-    <strong class="text-ok">{{ already_imported_count }}</strong> already imported or skipped.
-  </p>
-</div>
+<header class="pk-page-head">
+  <div class="pk-page-head__text">
+    <h1>Co-investor candidates <span class="pk-pill pk-pill--neutral cand-count">{{ candidates|length }}</span></h1>
+    <p class="pk-page-sub">From the PitchBook co-investor backtrace. Rows with no email or confidence under 0.5 start unchecked. <strong>{{ already_imported_count }}</strong> already imported or skipped.</p>
+  </div>
+  <div class="pk-page-head__actions">
+    <a class="pk-btn pk-btn--secondary" href="/partners">Back to partners</a>
+  </div>
+</header>
 
 <form id="candidatesForm" method="POST" action="/candidates/import">
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 
-  <div id="bulkBar" class="bulk-bar" role="region" aria-label="Import actions">
-    <span id="bulkCount" class="bulk-count"></span>
-    <button type="submit" class="btn btn-primary btn-sm">Import selected</button>
-    <button type="button" class="btn btn-ghost btn-sm" data-action="candidates_list-0">Cancel</button>
+  <div id="bulkBar" class="pk-sticky-bar cand-bar" role="region" aria-label="Import actions" hidden>
+    <span id="bulkCount" class="pk-sticky-bar__count"></span>
+    <div class="pk-sticky-bar__actions">
+      <button type="button" class="pk-btn pk-btn--ghost pk-btn--sm" data-action="candidates_list-0">Cancel</button>
+      <button type="submit" class="pk-btn pk-btn--primary pk-btn--sm">Import selected</button>
+    </div>
   </div>
 
   {% if candidates %}
-  <div class="data-table-wrap">
-    <table class="data-table pl-table" id="candidatesTable"><caption class="sr-only">Candidates List records</caption>
-      <thead>
-        <tr>
-          <th class="col-check"><input aria-label="Select all candidates" type="checkbox" id="selectAll" title="Select all" data-action="candidates_list-1"></th>
-          <th>Name / Firm</th>
-          <th>Email</th>
-          <th>Tier</th>
-          <th>Source</th>
-          <th>Why fit</th>
-          <th>Confidence</th>
-          <th>LinkedIn</th>
-          <th>Status</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for c in candidates %}
-        <tr data-name="{{ c.partner_name|lower }}" data-firm="{{ (c.firm or '')|lower }}">
-          <td class="col-check">
-            <input aria-label="Select {{ c.partner_name }}" type="checkbox" name="row_indices" value="{{ c.row_index }}"
-                   class="row-check" data-action="candidates_list-2"
-                   {% if not c.email or c.confidence < 0.5 or c.already_in_db %}{% else %}checked{% endif %}
-                   {% if c.already_in_db %}disabled{% endif %}>
-          </td>
-          <td data-label="Name">
-            <span class="fw-600">{{ c.partner_name }}</span>
-            {% if c.first_name and c.first_name != c.partner_name %}<span class="text-faint">({{ c.first_name }})</span>{% endif %}
-            {% if c.firm %}<span class="cell-sub text-muted">{{ c.firm }}</span>{% endif %}
-          </td>
-          <td data-label="Email">
-            {% if c.email %}
-              <span class="cell-small">{{ c.email }}</span>
-              {% if c.email_uncertain %}<span class="badge badge-email-unverified" title="Email uncertain">?</span>{% endif %}
-            {% else %}{{ empty_value() }}{% endif %}
-          </td>
-          <td data-label="Tier">
-            {% if c.tier == 1 or c.tier_raw == 'A' %}<span class="badge badge-tier1">T1</span>
-            {% elif c.tier == 2 or c.tier_raw in ('B', 'C') %}<span class="badge badge-tier2">T{{ c.tier }}</span>
-            {% else %}{{ empty_value() }}{% endif %}
-          </td>
-          <td data-label="Source">{% if c.source %}<span class="badge badge-pitchbook">{{ c.source }}</span>{% else %}{{ empty_value() }}{% endif %}</td>
-          <td data-label="Why fit" class="cell-wide">
-            {% if c.why_fit %}
-              <span class="cell-small" title="{{ c.why_fit }}">{{ c.why_fit[:120] }}{% if c.why_fit|length > 120 %}&hellip;{% endif %}</span>
-            {% else %}{{ empty_value() }}{% endif %}
-          </td>
-          <td data-label="Confidence">
-            {% set conf = c.confidence %}
-            {% if conf >= 0.8 %}<span class="badge badge-approved">{{ "%.2f"|format(conf) }}</span>
-            {% elif conf >= 0.5 %}<span class="badge badge-pending">{{ "%.2f"|format(conf) }}</span>
-            {% else %}<span class="badge badge-rejected">{{ "%.2f"|format(conf) }}</span>{% endif %}
-          </td>
-          <td data-label="LinkedIn">
-            {% if c.linkedin_url %}
-              <span class="source-reference" title="{{ c.linkedin_url }}">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>
-                LinkedIn
-                <button type="button" class="copy-source" data-copy-text="{{ c.linkedin_url }}">Copy URL</button>
-              </span>
-            {% else %}{{ empty_value() }}{% endif %}
-          </td>
-          <td data-label="Status">
-            {% if c.already_in_db %}
-              <span class="badge badge-drafted" title="A partner with a matching email or name and firm already exists">Already in DB</span>
-            {% else %}
-              <span class="badge badge-default">New</span>
-            {% endif %}
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
+  <section class="pk-card pk-card--flush">
+    <div class="pk-table-wrap">
+      <table class="pk-table cand-table" id="candidatesTable"><caption class="sr-only">Candidates List records</caption>
+        <thead>
+          <tr>
+            <th scope="col" class="pk-col-check"><input aria-label="Select all candidates" type="checkbox" id="selectAll" title="Select all" data-action="candidates_list-1"></th>
+            <th scope="col">Name / Firm</th>
+            <th scope="col">Email</th>
+            <th scope="col">Tier</th>
+            <th scope="col">Source</th>
+            <th scope="col">Why fit</th>
+            <th scope="col">Confidence</th>
+            <th scope="col">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in candidates %}
+          <tr data-name="{{ c.partner_name|lower }}" data-firm="{{ (c.firm or '')|lower }}">
+            <td class="pk-col-check">
+              <input aria-label="Select {{ c.partner_name }}" type="checkbox" name="row_indices" value="{{ c.row_index }}"
+                     class="row-check" data-action="candidates_list-2"
+                     {% if not c.email or c.confidence < 0.5 or c.already_in_db %}{% else %}checked{% endif %}
+                     {% if c.already_in_db %}disabled{% endif %}>
+            </td>
+            <td data-label="Name" class="cand-name">
+              <span class="pk-cell-title">{{ c.partner_name }}</span>{% if c.first_name and c.first_name != c.partner_name %} <span class="pk-faint">({{ c.first_name }})</span>{% endif %}
+              {% if c.firm %}<span class="pk-cell-sub">{{ c.firm }}</span>{% endif %}
+            </td>
+            <td data-label="Email" class="cand-email">
+              {% if c.email %}
+                <span>{{ c.email }}</span>
+                {% if c.email_uncertain %}<span class="pk-pill pk-pill--warning" title="Email uncertain">?</span>{% endif %}
+              {% else %}{{ empty_value() }}{% endif %}
+            </td>
+            <td data-label="Tier">
+              {% if c.tier == 1 or c.tier_raw == 'A' %}<span class="pk-pill pk-pill--info">T1</span>
+              {% elif c.tier == 2 or c.tier_raw in ('B', 'C') %}<span class="pk-pill pk-pill--neutral">T{{ c.tier }}</span>
+              {% else %}{{ empty_value() }}{% endif %}
+            </td>
+            <td data-label="Source">{% if c.source %}<span class="pk-pill pk-pill--outline">{{ c.source }}</span>{% else %}{{ empty_value() }}{% endif %}</td>
+            <td data-label="Why fit" class="cand-why">
+              {% if c.why_fit %}
+                <span title="{{ c.why_fit }}">{{ c.why_fit[:120] }}{% if c.why_fit|length > 120 %}&hellip;{% endif %}</span>
+              {% else %}{{ empty_value() }}{% endif %}
+            </td>
+            <td data-label="Confidence" class="pk-num">
+              {% set conf = c.confidence %}
+              {% if conf >= 0.8 %}<span class="pk-pill pk-pill--success">{{ "%.2f"|format(conf) }}</span>
+              {% elif conf >= 0.5 %}<span class="pk-pill pk-pill--warning">{{ "%.2f"|format(conf) }}</span>
+              {% else %}<span class="pk-pill pk-pill--danger">{{ "%.2f"|format(conf) }}</span>{% endif %}
+            </td>
+            <td data-label="Status">
+              {% if c.already_in_db %}
+                <span class="pk-pill pk-pill--neutral" title="A partner with a matching email or name and firm already exists">Already in DB</span>
+              {% else %}
+                <span class="pk-pill pk-pill--dot pk-pill--info">New</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
   {% else %}
-  <div class="empty-state">
-    <p>No unreviewed candidates.</p>
-    <p class="text-faint">Every row has been imported or skipped. New candidates appear here after the next PitchBook co-investor run.</p>
-    <p><a class="btn btn-secondary btn-sm" href="/partners">Back to partners</a></p>
-  </div>
+  <section class="pk-card">
+    <div class="pk-empty">
+      <div class="pk-empty__icon">{{ icon("users", 28) }}</div>
+      <h2 class="pk-empty__title">No unreviewed candidates</h2>
+      <p>Every row has been imported or skipped. New candidates appear here after the next PitchBook co-investor run.</p>
+      <p><a class="pk-btn pk-btn--secondary pk-btn--sm" href="/partners">Back to partners</a></p>
+    </div>
+  </section>
   {% endif %}
 </form>
 {% endblock %}

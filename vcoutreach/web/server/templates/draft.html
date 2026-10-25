@@ -5,8 +5,8 @@
 <div class="crm-shell draft-page">
   <nav class="crm-breadcrumb" aria-label="Breadcrumb"><a href="/crm/drafts">Drafts</a><span>/</span><span>Edit draft</span></nav>
   {% if draft.blocked_reason %}<p class="flash flash-warning">blocked: {{ draft.blocked_reason }}</p>{% endif %}
+  {% include '_example_warning.html' %}
   <header class="crm-hero"><div><div class="crm-eyebrow">EDITOR / SAVE AND CHECK</div><h1>{{ draft.subject or 'Untitled draft' }}</h1><p>To: {{ draft.recipient_name }} &lt;{{ draft.recipient_email }}&gt;</p></div><span class="badge {{ 'badge-danger' if draft.status == 'blocked' else 'badge-success' }}">{{ draft.approval_state }}</span></header>
-  <p class="svc-hint">This is our email template and pitch deck that has gotten 50+ meetings and $600K raised in funding.</p>
   {% set deck_collapsed = true %}{% include '_template_deck_panel.html' %}
   <div class="draft-editor-layout">
     <section class="crm-panel draft-editor-main" aria-label="Draft editor">
