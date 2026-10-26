@@ -32,7 +32,7 @@
   }
 
   function initTableLabels() {
-    var tables = document.querySelectorAll('.crm-table, .en-table, .verification-table');
+    var tables = document.querySelectorAll('.crm-table, .en-table');
     Array.prototype.forEach.call(tables, function (table) {
       var head = table.querySelector('thead tr');
       if (!head) return;

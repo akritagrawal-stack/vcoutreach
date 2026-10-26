@@ -111,14 +111,14 @@
       <a class="pk-btn pk-btn--ghost pk-btn--sm" href="/partners/{{ pid }}">{{ icon("users") }}Open contact</a>
       {% else %}
       <a class="pk-btn pk-btn--primary pk-btn--sm" href="{{ url_for('crm_drafts') }}">{{ icon("mail", 14) }}Write follow-up</a>
-      <span class="pk-btn pk-btn--ghost pk-btn--sm" aria-disabled="true" title="This reply is not linked to a contact yet">Open contact</span>
+      <span class="pk-btn pk-btn--ghost pk-btn--sm" aria-disabled="true" title="This reply is not linked to a contact yet">{{ icon("users") }}Open contact</span>
       {% endif %}
       <form action="/replies/{{ reply['id'] }}/mark-reviewed" method="post" class="reply-read-form">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <button type="submit" class="pk-btn pk-btn--secondary pk-btn--sm">{% if reply['user_reviewed'] %}{{ icon("check", 14) }}{% endif %}Mark reviewed</button>
+        <button type="submit" class="pk-btn pk-btn--secondary pk-btn--sm">{{ icon("check", 14) }}Mark reviewed</button>
       </form>
       {% set nxt = next_unread_id|default(none) %}
-      <a class="pk-btn pk-btn--secondary pk-btn--sm" id="rpNextUnread" href="{{ '/replies/%s'|format(nxt) if nxt else '/replies?tab=needs' }}"{% if not nxt %} hidden{% endif %}>Next unread {{ icon("arrow-right") }}</a>
+      <a class="pk-btn pk-btn--secondary pk-btn--sm" id="rpNextUnread" href="{{ '/replies/%s'|format(nxt) if nxt else '/replies?tab=needs' }}"{% if not nxt %} hidden{% endif %}>{{ icon("arrow-right", 14) }}Next unread</a>
     </div>
   </div>
 </div>

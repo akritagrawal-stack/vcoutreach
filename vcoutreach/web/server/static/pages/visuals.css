@@ -58,7 +58,7 @@ svg.vz-spark { width: 100%; overflow: visible; }
 .vz-hover { opacity: 0; }
 .vz-hover.is-on { opacity: 1; }
 .vz-hover__rule { stroke: var(--border-strong); stroke-width: 1; vector-effect: non-scaling-stroke; }
-.vz-tip { position: absolute; top: 4px; z-index: 3; min-width: 120px; padding: 8px 12px; border: 1px solid var(--border-strong); border-radius: 0; background: var(--surface); color: var(--text); box-shadow: var(--shadow-float); font-size: var(--fs-12); line-height: 16px; pointer-events: none; opacity: 0; transform: translateX(12px); }
+.vz-tip { position: absolute; top: 4px; left: var(--vz-tip-x, 0); z-index: 3; min-width: 120px; padding: 8px 12px; border: 1px solid var(--border-strong); border-radius: 0; background: var(--surface); color: var(--text); box-shadow: var(--shadow-float); font-size: var(--fs-12); line-height: 16px; pointer-events: none; opacity: 0; transform: translateX(12px); }
 .vz-tip.is-on { opacity: 1; }
 .vz-tip.is-left { transform: translateX(calc(-100% - 12px)); }
 .vz-tip strong { display: block; margin-bottom: 4px; font-weight: 600; }
@@ -112,7 +112,8 @@ svg.vz-spark { width: 100%; overflow: visible; }
   .vz-chart__lines { animation: vz-reveal 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
   .vz-end--sent, .vz-end--reply, .vz-spark__dot { animation: vz-fade 0.3s ease 0.6s both; }
   .vz-spark__svg, svg.vz-spark { animation: vz-reveal 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
-  .vz-bars__fill, .vz-fun__bar { transform-box: fill-box; transform-origin: left center; animation: vz-grow 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+  .vz-bars__fill, .vz-fun__bar { transform-box: fill-box; animation: vz-grow 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+  .vz-bars__fill { transform-origin: left center; }
   .vz-fun__bar { transform-origin: center; }
   .vz-tip, .vz-hover { transition: opacity 0.12s ease; }
 }
@@ -120,7 +121,7 @@ svg.vz-spark { width: 100%; overflow: visible; }
 @media (max-width: 900px) {
   :root { --vz-plot-h: 170px; }
   .vz-chart { padding-left: 32px; }
-  }
+}
 @media (max-width: 560px) {
   .vz-xtick.is-mid { display: none; }
   .vz-fun .pk-funnel__track { grid-column: 1 / -1; }

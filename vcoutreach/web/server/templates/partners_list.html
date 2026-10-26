@@ -82,7 +82,7 @@
 <header class="pk-page-head">
   <div class="pk-page-head__text">
     <h1>Send</h1>
-    <p class="pk-page-sub">Pick approved emails, check the address quality, then send them now or schedule them for later.</p>
+    <p class="pk-page-sub">Pick approved emails, check quality, send or schedule.</p>
   </div>
 </header>
 
@@ -90,7 +90,7 @@
   <li class="pk-kpi" data-kpi="ready">
     <span class="pk-kpi__label">Ready to send
       <span class="pk-info pk-info--start">
-        <button type="button" class="pk-info__btn" aria-label="About Ready to send">i</button>
+        <button type="button" class="pk-info__btn" aria-label="About Ready to send" title="About Ready to send">{{ icon("info", 12) }}</button>
         <span class="pk-popover" role="tooltip">Approved emails with nothing blocking them, counted in the list below.</span>
       </span>
     </span>
@@ -107,7 +107,7 @@
   <li class="pk-kpi" data-kpi="bounced">
     <span class="pk-kpi__label">Bounced
       <span class="pk-info">
-        <button type="button" class="pk-info__btn" aria-label="About Bounced">i</button>
+        <button type="button" class="pk-info__btn" aria-label="About Bounced" title="About Bounced">{{ icon("info", 12) }}</button>
         <span class="pk-popover" role="tooltip">Addresses a check marked as invalid, counted in the list below.</span>
       </span>
     </span>
@@ -179,10 +179,10 @@
 <form id="bulkForm" method="POST" action="/send-batch">
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 
-  <p class="pk-note pl-tick">Tick the approved contacts you want to send to. A send bar appears once you tick one.</p>
+  <p class="pk-note pl-tick">Tick approved contacts to open the send bar.</p>
 
   <section class="pk-card pk-card--flush pl-card">
-    <div class="pk-table-wrap pl-wrap">
+    <div class="pk-table-wrap">
       <table class="pk-table pl-table" id="partnersTable"><caption class="sr-only">Emails ready to review and send</caption>
         <thead>
           <tr>
@@ -190,14 +190,14 @@
             <th>Contact</th>
             <th>Email quality
               <span class="pk-info pk-info--start">
-                <button type="button" class="pk-info__btn" aria-label="About email quality">i</button>
-                <span class="pk-popover" role="tooltip">Verified means the address was checked. Risky means the domain accepts any address or the check was weak. Unknown means it was not checked yet. Invalid addresses should not be sent to.</span>
+                <button type="button" class="pk-info__btn" aria-label="About email quality" title="About email quality">{{ icon("info", 12) }}</button>
+                <span class="pk-popover" role="tooltip">Verified: checked. Risky: weak check or catch-all. Unknown: not checked. Invalid: do not send.</span>
               </span>
             </th>
             <th>Status
               <span class="pk-info pk-info--end">
-                <button type="button" class="pk-info__btn" aria-label="About status">i</button>
-                <span class="pk-popover" role="tooltip">Needs review: the email still needs your OK. Approved: ready to send. Sent: it went out. Test sent: it went only to your test address.</span>
+                <button type="button" class="pk-info__btn" aria-label="About status" title="About status">{{ icon("info", 12) }}</button>
+                <span class="pk-popover" role="tooltip">Needs review: awaiting your OK. Approved: ready. Sent: out. Test sent: test address only.</span>
               </span>
             </th>
           </tr>

@@ -7,26 +7,26 @@
 <meta name="color-scheme" content="light dark">
 <link rel="icon" type="image/svg+xml" href="/favicon.ico">
 <title>{% block title %}{{ g_workspace.workspace_name }}{% endblock %} | Publikreach</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=20261025-btn1">
-<link rel="stylesheet" href="{{ url_for('static', filename='pages/components.css') }}?v=20261025-btn1">
-<link rel="stylesheet" href="{{ url_for('static', filename='pages/analytics.css') }}?v=20261025-btn1">
-<link rel="stylesheet" href="{{ url_for('static', filename='pages/visuals.css') }}?v=20261025-btn1">
-<link rel="stylesheet" href="{{ url_for('static', filename='pages/dashboard.css') }}?v=20261025-btn1">
-<link rel="stylesheet" href="{{ url_for('static', filename='pages/campaign.css') }}?v=20261025-btn1">
-<link rel="stylesheet" href="{{ url_for('static', filename='pages/partners.css') }}?v=20261025-btn1">
-<link rel="stylesheet" href="{{ url_for('static', filename='pages/crm.css') }}?v=20261025-btn1">
-<link rel="stylesheet" href="{{ url_for('static', filename='pages/replies.css') }}?v=20261025-btn1">
-<link rel="stylesheet" href="{{ url_for('static', filename='pages/misc.css') }}?v=20261025-btn1">
-<link rel="stylesheet" href="{{ url_for('static', filename='pages/nextstep.css') }}?v=20261025-btn1">
-<script src="{{ url_for('static', filename='app.js') }}?v=20261025-btn1"></script>
-<script src="{{ url_for('static', filename='pages/components.js') }}?v=20261025-btn1" defer></script>
-<script src="{{ url_for('static', filename='pages/partners.js') }}?v=20261025-btn1" defer></script>
-<script src="{{ url_for('static', filename='pages/crm.js') }}?v=20261025-btn1" defer></script>
-<script src="{{ url_for('static', filename='pages/replies.js') }}?v=20261025-btn1" defer></script>
-<script src="{{ url_for('static', filename='pages/misc.js') }}?v=20261025-btn1" defer></script>
-<script src="{{ url_for('static', filename='pages/shell.js') }}?v=20261025-btn1" defer></script>
-<script src="{{ url_for('static', filename='pages/visuals.js') }}?v=20261025-btn1" defer></script>
-<script src="{{ url_for('static', filename='pages/glass.js') }}?v=20261025-btn1" defer></script>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=20261026-deslop1">
+<link rel="stylesheet" href="{{ url_for('static', filename='pages/components.css') }}?v=20261026-deslop1">
+<link rel="stylesheet" href="{{ url_for('static', filename='pages/analytics.css') }}?v=20261026-deslop1">
+<link rel="stylesheet" href="{{ url_for('static', filename='pages/visuals.css') }}?v=20261026-deslop1">
+<link rel="stylesheet" href="{{ url_for('static', filename='pages/dashboard.css') }}?v=20261026-deslop1">
+<link rel="stylesheet" href="{{ url_for('static', filename='pages/campaign.css') }}?v=20261026-deslop1">
+<link rel="stylesheet" href="{{ url_for('static', filename='pages/partners.css') }}?v=20261026-deslop1">
+<link rel="stylesheet" href="{{ url_for('static', filename='pages/crm.css') }}?v=20261026-deslop1">
+<link rel="stylesheet" href="{{ url_for('static', filename='pages/replies.css') }}?v=20261026-deslop1">
+<link rel="stylesheet" href="{{ url_for('static', filename='pages/misc.css') }}?v=20261026-deslop1">
+<link rel="stylesheet" href="{{ url_for('static', filename='pages/nextstep.css') }}?v=20261026-deslop1">
+<script src="{{ url_for('static', filename='app.js') }}?v=20261026-deslop1"></script>
+<script src="{{ url_for('static', filename='pages/components.js') }}?v=20261026-deslop1" defer></script>
+<script src="{{ url_for('static', filename='pages/partners.js') }}?v=20261026-deslop1" defer></script>
+<script src="{{ url_for('static', filename='pages/crm.js') }}?v=20261026-deslop1" defer></script>
+<script src="{{ url_for('static', filename='pages/replies.js') }}?v=20261026-deslop1" defer></script>
+<script src="{{ url_for('static', filename='pages/misc.js') }}?v=20261026-deslop1" defer></script>
+<script src="{{ url_for('static', filename='pages/shell.js') }}?v=20261026-deslop1" defer></script>
+<script src="{{ url_for('static', filename='pages/visuals.js') }}?v=20261026-deslop1" defer></script>
+<script src="{{ url_for('static', filename='pages/glass.js') }}?v=20261026-deslop1" defer></script>
 </head>
 <body data-page="{% block page_id %}{% endblock %}">
 <a class="skip-link" href="#main">Skip to content</a>
@@ -127,5 +127,6 @@
 </main>
 
 {% block scripts %}{% endblock %}
+<template id="glyph-eye">{{ icon("eye", 16) }}</template>
 </body>
 </html>

@@ -12,6 +12,7 @@
 {% macro section(id, title, blurb, cls='') %}<details class="acc" id="{{ id }}"><summary>{{ icon("chevron-down", cls="icon-chevron") }}<b>{{ title }}</b><span>{{ blurb }}</span></summary><div class="fields {{ cls }}">{{ caller() }}</div></details>{% endmacro %}
 
 {% block content %}
+<template id="pkGlyphPencil">{{ icon("pencil") }}</template>
 <div class="settings-shell settings-page">
   {% set sender_ready = (sender|default({})).get('name') %}
   {% set gm_ok = gmail.state in ('ok', 'saved') %}
@@ -83,10 +84,10 @@
         <label class="fld"><span>Gmail address</span><input name="address" type="email" autocomplete="username" required></label>
         <label class="fld"><span>App password</span><input name="password" type="password" autocomplete="new-password" placeholder="16 characters, spaces allowed" required></label>
         <div class="svc-actions"><button type="submit" class="svc-btn">{{ icon("link") }}Connect with app password</button></div>
-        <p class="svc-hint">Only if you cannot use an OAuth client file. 2-Step Verification must be on. <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer">Create an app password {{ icon("external-link") }}</a>. Your Workspace admin must allow app passwords.</p>
+        <p class="svc-hint">Only if you cannot use a client file. Needs 2-Step Verification. <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer">Create an app password {{ icon("external-link") }}</a></p>
       </form>
       </details>
-      <p class="svc-hint" data-gmail-message data-svc-note role="status">{{ 'Gmail connected.' if gmail.view == 'connected' else 'Gmail is not connected. Choose your Google OAuth client file, then choose Connect Gmail. Next, set your test recipient below.' }} TEST mode and send confirmations still apply.</p>
+      <p class="svc-hint" data-gmail-message data-svc-note role="status">{{ 'Gmail connected.' if gmail.view == 'connected' else 'Not connected. Choose your client file, then Connect Gmail. Next, set your test recipient below.' }} TEST mode still applies.</p>
     </article>
 
     <article class="svc-card" id="svc-test-recipient" tabindex="-1" data-service="test-recipient" data-state="{{ 'ok' if g_test_recipient else 'unset' }}">
@@ -95,7 +96,7 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <label class="fld" for="testRecipient"><span>Test recipient email</span><input id="testRecipient" name="TEST_RECIPIENT_EMAIL" type="email" autocomplete="off" value="{{ g_test_recipient }}" placeholder="you@example.com"></label>
         <div class="svc-actions"><button type="submit" class="svc-btn primary">{{ icon("save") }}Save test recipient</button></div>
-        <p class="svc-hint">Every test email goes here, never to a contact. Use an address that is not in your contact list. Clear it and save to hold test sends.</p>
+        <p class="svc-hint">Every test email goes here, never to a contact. Clear it to hold test sends.</p>
       </form>
     </article>
   </section>
@@ -105,8 +106,8 @@
     {% set ai_ready = settings.get('mcp_last_self_test_ok') %}
       <article class="svc-card" id="svc-ai-setup" tabindex="-1" data-service="ai-setup" data-state="{{ 'ok' if ai_ready else 'unset' }}">
         <header class="svc-head">{{ mark('ai-setup', 'AI') }}<h2>Set up with AI</h2><span class="svc-status" role="status"><i class="svc-dot"></i><b data-svc-label>{{ 'Ready' if ai_ready else 'Not connected' }}</b></span></header>
-        <p class="svc-hint">Let Claude, Codex or any MCP client walk you through setup and run the safe parts for you. It cannot see your keys and it cannot send a real email.</p>
-        <div class="svc-actions"><a class="svc-btn primary" href="/setup/ai">Set up with AI {{ icon("chevron-right") }}</a></div>
+        <p class="svc-hint">An AI assistant runs the safe setup steps. It never sees your keys and cannot send real email.</p>
+        <div class="svc-actions"><a class="svc-btn primary" href="/setup/ai">{{ icon("sparkles") }}Set up with AI</a></div>
       </article>
 
       {% for s in services %}
@@ -123,7 +124,7 @@
             {% elif s.fields %}<span class="svc-hint svc-no-test" data-no-test>No connection test is available for this provider.</span>{% endif %}
           </div>
         </form>
-        <p class="svc-hint" data-svc-note{% if s.test == 'pitchbook' %} data-pitchbook-message{% endif %} role="status">{% if s.test == 'pitchbook' %}Not connected. Sign in with your own PitchBook account in the dedicated browser, then turn PitchBook on under More settings.{% else %}{{ s.hint }}{% endif %}</p>
+        <p class="svc-hint" data-svc-note{% if s.test == 'pitchbook' %} data-pitchbook-message{% endif %} role="status">{% if s.test == 'pitchbook' %}Not connected. Use Open sign-in, then turn PitchBook on under More settings.{% else %}{{ s.hint }}{% endif %}</p>
       </article>
       {% endfor %}
       <article class="svc-card" id="svc-searxng" tabindex="-1" data-service="searxng" data-state="{{ 'saved' if searxng_url else 'unset' }}">
@@ -133,7 +134,7 @@
           <label class="fld"><span>SearXNG URL</span><input type="url" name="SEARXNG_URL" value="{{ searxng_url }}" placeholder="http://localhost:8080"></label>
           <div class="svc-actions"><button type="submit" class="svc-btn primary">{{ icon("save") }}Save</button><button type="button" class="svc-btn" data-searxng-test>{{ icon("check") }} Test connection</button></div>
         </form>
-        <p class="svc-hint" data-searxng-note role="status">{{ searxng_url or 'Optional. No SearXNG URL saved. Add one only if you run your own SearXNG search.' }}</p>
+        <p class="svc-hint" data-searxng-note role="status">{{ searxng_url or 'Optional. Add a URL only if you run your own SearXNG.' }}</p>
       </article>
       {% include '_publik_card.html' %}
   </section>
@@ -142,7 +143,7 @@
     <form method="post" action="/settings/keys" class="fields three" data-svc-form data-more>
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       {% for k in more_settings %}<label class="fld"><span>{{ k.name }} <em class="set-chip{{ ' on' if k.set }}" data-key-chip="{{ k.name }}">{{ 'Set' if k.set else 'Not set' }}</em></span><input name="{{ k.name }}" type="{{ k.type }}" autocomplete="{{ 'off' if k.type in ('email', 'text') else 'new-password' }}" placeholder="Enter a new value"{% if k.name == 'TEST_RECIPIENT_EMAIL' %} value="{{ g_test_recipient }}"{% endif %}></label>{% endfor %}
-      <div class="svc-actions wide"><button type="submit" class="svc-btn primary">{{ icon("save") }}Save</button><span class="svc-hint" data-svc-note role="status">Leave keys blank to keep them. Clear the test recipient field to hold test sends.</span></div>
+      <div class="svc-actions wide"><button type="submit" class="svc-btn primary">{{ icon("save") }}Save</button><span class="svc-hint" data-svc-note role="status">Blank keys stay unchanged. Clear the test recipient to hold test sends.</span></div>
     </form>
   </details>
 
@@ -176,10 +177,10 @@
     {% endcall %}
     {% call section('sec-package', 'Resume and email note' if job_view else 'Investor package', 'Resume, attachment rules, email note' if job_view else 'Pitch deck, attachment rules, email blurb') %}
       <span id="svc-deck" class="wide" tabindex="-1"></span>
-      <p class="wide pk-deck-cta"><button type="submit" form="publikSetupForm" class="pk-btn pk-btn--primary">{{ icon("sparkles") }}Let Publik do it for you</button><span class="svc-hint">Publik writes your email note from what you have told us. Save any edits below first.</span></p>
+      <p class="wide pk-deck-cta"><button type="submit" form="publikSetupForm" class="pk-btn pk-btn--primary">{{ icon("sparkles") }}Let Publik do it for you</button><span class="svc-hint">Writes your email note from what you told us. Save edits first.</span></p>
       {% if campaign_kind_info is defined and campaign_kind_info().chosen %}<p class="svc-hint wide">Campaign type: {{ 'Looking for a role' if job_view else 'Raising money' }}. <a href="/crm/drafts#campaignKindSwitch">Change it on the Campaign page</a>.</p>{% endif %}
-      {% if job_view %}<p class="svc-hint wide">Attach your own resume: point the local path below at your PDF. The bundled Publik investor example deck is not your resume and is never attached to a job search email. Delete the path to send without an attachment. The email note below starts from a placeholder template: replace each [bracketed] slot with your own details.</p>
-      {% else %}<p class="svc-hint wide">A redacted Publik example deck is included so a new workspace has a working attachment. It is only an example: point the local path below at your own PDF before you send real email. Delete the path to send without a deck.</p>{% endif %}
+      {% if job_view %}<p class="svc-hint wide">Point the local path at your own resume PDF. The Publik example deck is never attached to a job search email. Replace each [bracketed] slot in the note.</p>
+      {% else %}<p class="svc-hint wide">The bundled deck is only an example. Point the local path at your own PDF before real sends, or clear it to send without a deck.</p>{% endif %}
       {{ fld('pitch_deck_label','Resume label' if job_view else 'Pitch deck label',160) }}{{ fld('pitch_deck_url','Optional shared resume URL' if job_view else 'Optional shared deck URL',240,type='url') }}{{ fld('pitch_deck_path','Local resume path' if job_view else 'Local pitch deck path',500,wide=true) }}
       {{ fld('attachment_notes','Attachment instructions',1200,3,wide=true) }}{{ fld('outreach_blurb_template','Full email note format' if job_view else 'Full outreach blurb format',3000,10,wide=true) }}
     {% endcall %}
@@ -207,13 +208,13 @@
     <div class="sample-preview">
       <p><b id="sampleEmailSubject">{{ sample_email.subject }}</b> <span id="sampleEmailAttachment">{{ sample_email.attachment }}</span></p>
       <div id="sampleEmailCopy" aria-live="polite">{% for paragraph in sample_email.paragraphs %}<p>{{ paragraph }}</p>{% endfor %}</div>
-      <form method="post" action="/sample/load"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit" class="svc-btn">{{ icon("upload") }} Load the sample</button><span class="svc-hint">Daily send cap defaults to 20. Set DAILY_SEND_CAP in the workspace .env to override it.</span></form>
+      <form method="post" action="/sample/load"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit" class="svc-btn">{{ icon("upload") }} Load the sample</button><span class="svc-hint">Daily send cap: 20 (DAILY_SEND_CAP).</span></form>
     </div>
   </details>
 
   <form class="reset-settings" method="post" action="/settings/reset" data-confirm="Restore the editable example configuration?">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <span>Need a clean start? Restore the example configuration.</span>
+    <span>Clean start: restore the example configuration.</span>
     <button type="submit" class="svc-btn danger">{{ icon("trash") }} Restore example</button>
   </form>
 </div>

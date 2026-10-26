@@ -88,7 +88,7 @@
   <form method="post" action="/settings/campaign-kind" class="campaign-kind-switch cmp-kind" id="campaignKindSwitch">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="next" value="/crm/drafts">
     <span class="campaign-kind-switch-label" id="campaignKindLabel">Campaign type:</span>
-    <span role="group" aria-labelledby="campaignKindLabel" class="campaign-kind-switch-options">{% for choice in c.choices %}<button type="submit" name="kind" value="{{ choice.kind }}" class="campaign-kind-opt{{ ' is-current' if choice.kind == c.kind }}"{% if choice.kind == c.kind %} aria-pressed="true"{% else %} aria-pressed="false" title="Change the campaign type to {{ short_kind[choice.kind]|lower }}"{% endif %}>{{ short_kind[choice.kind] }}</button>{% endfor %}</span>
+    <span role="group" aria-labelledby="campaignKindLabel" class="campaign-kind-switch-options">{% for choice in c.choices %}<button type="submit" name="kind" value="{{ choice.kind }}" class="campaign-kind-opt{{ ' is-current' if choice.kind == c.kind }}"{% if choice.kind == c.kind %} aria-pressed="true"{% else %} aria-pressed="false" title="Change the campaign type to {{ short_kind[choice.kind]|lower }}"{% endif %}>{{ icon("tag", 14) }}{{ short_kind[choice.kind] }}</button>{% endfor %}</span>
     <span class="campaign-kind-switch-hint">Change it any time.</span>
   </form>
   {% else %}

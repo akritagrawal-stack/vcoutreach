@@ -23,16 +23,28 @@ def _enrichment_markup(send_web):
     return w, body(r)
 
 
+def _find_button(markup, label):
+    """Return the first <button> whose visible text (tags stripped, whitespace collapsed) equals label.
+
+    Buttons may carry inline svg glyphs before the label, so the inner markup is not required to be bare text.
+    """
+    for m in re.finditer(r'(?is)<button\b([^>]*)>(.*?)</button>', markup):
+        inner = re.sub(r'<[^>]+>', '', m.group(2))
+        if " ".join(inner.split()) == label:
+            return m
+    return None
+
+
 def test_enrichment_first_filter_control_has_action_zero(send_web):
     _, markup = _enrichment_markup(send_web)
-    m = re.search(r'(?is)<button\b[^>]*>\s*Has PB API\s*</button>', markup)
+    m = _find_button(markup, "Has PB API")
     assert m, "the Has PB API filter control must be shown"
-    assert 'data-action="enrichment_status-0"' in m.group(0)
+    assert 'data-action="enrichment_status-0"' in m.group(1)
 
 
 def test_enrichment_shows_missing_linkedin_filter(send_web):
     _, markup = _enrichment_markup(send_web)
-    assert re.search(r'(?is)<button\b[^>]*>\s*Missing LinkedIn\s*</button>', markup)
+    assert _find_button(markup, "Missing LinkedIn"), "the Missing LinkedIn filter control must be shown"
 
 
 def test_enrichment_hook_chip_reads_cite_specific_not_cite(send_web):

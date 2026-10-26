@@ -20,7 +20,7 @@
     {% for field,label in [('thread_subject','Thread subject'),('in_reply_to','In reply to'),('references','References'),('tags','Tags'),('next_action','Next action')] %}<label for="contact-{{ field }}">{{ label }}<input id="contact-{{ field }}" name="{{ field }}" value="{{ contact.get(field, '') }}"></label>{% endfor %}
     </details>
     <label for="contact-notes">Notes<textarea id="contact-notes" name="notes" rows="4">{{ contact.get('notes', '') }}</textarea></label>
-    <div class="form-actions"><button type="submit" class="crm-button crm-button-primary">{{ icon("plus") }}Add contact</button><a href="/crm">Cancel</a></div>
+    <div class="form-actions"><button type="submit" class="crm-button crm-button-primary">{{ icon("plus") }}Add contact</button><a class="pk-btn pk-btn--ghost" href="/crm">{{ icon("x") }}Cancel</a></div>
   </form>
 </div>
 {% endblock %}

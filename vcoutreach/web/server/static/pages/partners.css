@@ -1,8 +1,7 @@
-/* Publikreach Send page, contact send detail, enrichment and verification styles.
+/* Publikreach Send page, contact send detail and enrichment styles.
    Tokens only (var(--...)), square corners, no color change on hover. Works in light and dark. */
 
 /* -- Shared small helpers -- */
-.section-header.page-title { display: flex; align-items: baseline; gap: var(--space-2); margin-bottom: var(--space-1); }
 .pl-counters { margin: 0 0 var(--space-3); color: var(--text-muted); font-size: var(--fs-12); }
 .text-ok { color: var(--success); }
 .bulk-drawer .mono-input { font-family: var(--font-mono); font-size: var(--fs-12); }
@@ -64,42 +63,7 @@
 .pd-banner-spaced { margin-top: var(--space-3); }
 .pd-panel .form-control, .pd-panel-form .form-control { width: 100%; }
 
-/* -- Email verification: compact hero, responsive table -- */
-.verification-shell .verification-hero { min-height: 0; }
-.verification-shell .verification-hero > div:first-child { padding: 22px 24px; }
-.verification-shell .verification-guardrail { padding: 20px 24px; gap: 8px; }
-.verification-shell .verification-guardrail strong { font-size: 18px; }
-.verification-shell .verification-guardrail a { align-self: start; }
-.verification-shell .verification-table { min-width: 0; }
-.verification-shell .verification-table td { min-width: 0; }
-.verification-shell .verification-table td:last-child { min-width: 0; }
-.verification-shell .verification-actions { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
-.verification-shell .verification-actions button { width: 100%; min-height: 31px; }
-.verification-shell .verification-actions button:disabled { cursor: not-allowed; opacity: .4; }
-.verification-shell .verification-filters button { min-height: 31px; }
-.verification-more { margin-top: 10px; }
-.verification-more summary { cursor: pointer; color: var(--text-muted); font-size: 11px; }
-.verification-more .verification-attempt-grid { margin-top: 8px; }
-.verification-empty a { color: var(--accent); }
-
-@media (max-width: 1000px) {
-  .verification-shell .verification-hero { grid-template-columns: minmax(0, 1fr); }
-  .verification-shell .verification-hero > div:first-child { border-right: 0; border-bottom: 1px solid var(--border); }
-  .verification-shell .verification-provider-grid, .verification-shell .verification-attempts { grid-template-columns: minmax(0, 1fr); }
-  .verification-shell .verification-provider-card:first-child { border-right: 0; border-bottom: 1px solid var(--border); }
-  .verification-shell .verification-attempt { border-right: 0; }
-  .verification-shell .verification-workspace-head { flex-direction: column; align-items: stretch; }
-  .verification-shell .verification-filters { min-width: 0; grid-template-columns: minmax(0, 1fr) auto; }
-  .verification-shell .verification-filters select { grid-column: 1 / -1; border-right: 1px solid var(--border); order: 3; }
-}
-
 @media (max-width: 800px) {
-  .verification-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-  .verification-table, .verification-table tbody, .verification-table tr, .verification-table td { display: block; width: 100%; }
-  .verification-table tr { padding: 10px 12px; border-bottom: 1px solid var(--border-muted); }
-  .verification-table td { min-height: 0; height: auto; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; padding: 4px 0; border: 0; text-align: right; }
-  .verification-table td[data-label]::before { content: attr(data-label); flex: none; color: var(--text-faint); font-size: 12px; text-transform: none; letter-spacing: 0; text-align: left; }
-  .verification-table td .verification-actions { width: 100%; }
   .bulk-drawer-fields, .pd-sched-fields { grid-template-columns: minmax(0, 1fr); }
   .bulk-drawer { max-height: calc(100dvh - 96px); }
 }
@@ -109,7 +73,6 @@
 .pl-search { flex: 1 1 240px; max-width: 360px; }
 .pl-filter { display: inline-flex; }
 .pl-card { margin-bottom: var(--space-3); }
-.pl-wrap { min-height: 150px; }
 .pl-tick { margin: 0 0 var(--space-2); }
 .pl-clear { margin-left: var(--space-1); }
 
@@ -141,7 +104,7 @@
 .pl-key--invalid { background: var(--danger); }
 
 .pl-table .pk-col-check { width: 40px; }
-.pl-name { color: var(--text); font-weight: var(--fw-medium); text-decoration: none; background: linear-gradient(var(--accent), var(--accent)) 0 100% / 0 1px no-repeat; transition: background-size 160ms ease-out; }
+.pl-name { color: var(--text); font-weight: var(--fw-medium); text-decoration: none; background: linear-gradient(var(--accent), var(--accent)) 0 100% / 0 1px no-repeat; }
 .pl-name:hover, .pl-name:focus-visible { background-size: 100% 1px; }
 .pl-flag { margin-left: var(--space-1); vertical-align: middle; }
 .pl-blocked { color: var(--danger); }
@@ -179,7 +142,7 @@
   .pl-table, .pl-table tbody, .pl-table tr, .pl-table td { display: block; width: 100%; }
   .pl-table tbody tr { position: relative; padding: var(--space-3) var(--space-3) var(--space-3) 44px; border-bottom: 1px solid var(--border-muted); }
   .pl-table tbody tr:last-child { border-bottom: 0; }
-  .pl-table td { height: auto; padding: 2px 0; border-bottom: 0; }
+  .pl-table td { height: auto; padding: var(--space-1) 0; border-bottom: 0; }
   .pl-table td.pk-col-check { position: absolute; left: var(--space-3); top: var(--space-3); width: auto; padding: 0; }
   .pl-table td[data-label="Email quality"]::before, .pl-table td[data-label="Status"]::before {
     content: attr(data-label); display: block; font-size: var(--fs-12); line-height: var(--space-4); color: var(--text-faint);
@@ -190,8 +153,4 @@
   .pl-live-confirm { flex-wrap: wrap; width: 100%; }
   .pl-live-confirm .pk-input { flex: 1 1 140px; width: auto; }
   .pd-actions-label { min-width: 0; width: 100%; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .pl-name { transition: none; }
 }

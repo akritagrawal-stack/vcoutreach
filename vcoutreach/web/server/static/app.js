@@ -4,10 +4,10 @@
   // Glyph-safe label swap: keeps the icon span and replaces only the text.
   function ensureEyeGlyph(button) {
     if (button.querySelector('.icon')) return;
-    var holder = document.createElement('span');
-    holder.className = 'icon';
+    var tpl = document.getElementById('glyph-eye');
+    if (!tpl || !tpl.content.firstElementChild) return;
+    var holder = tpl.content.firstElementChild.cloneNode(true);
     holder.setAttribute('aria-hidden', 'true');
-    holder.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/></svg>';
     button.insertBefore(holder, button.firstChild);
   }
   function setBtnLabel(button, text) {

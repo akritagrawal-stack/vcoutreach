@@ -239,7 +239,6 @@ a.pk-kpi:hover { color: inherit; }
 .pk-search > input:focus {
   outline: 2px solid var(--focus);
   outline-offset: 1px;
-  border-color: var(--accent);
 }
 .pk-chip {
   display: inline-flex;
@@ -491,7 +490,7 @@ a.pk-kpi:hover { color: inherit; }
   border-radius: 0;
   pointer-events: none;
 }
-.pk-info__btn:focus-visible::before { border-color: var(--text-muted); }
+.pk-info__btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 .pk-popover {
   position: absolute;
   z-index: 60;
@@ -627,11 +626,14 @@ a.pk-kpi:hover { color: inherit; }
   cursor: pointer;
 }
 .pk-kebab > summary::-webkit-details-marker { display: none; }
-.pk-kebab[open] > summary {
-  background: var(--pk-surface-2);
-  color: var(--text);
+.pk-kebab[open] > summary { box-shadow: inset 0 0 0 1px var(--border-strong); }
+/* Three dots drawn with a gradient, so no text glyph is involved. */
+.pk-kebab > summary::before {
+  content: "";
+  width: 18px;
+  height: 4px;
+  background: radial-gradient(circle, currentColor 1.5px, transparent 2px) 0 50% / 6px 4px repeat-x;
 }
-.pk-kebab > summary::before { content: "\22EF"; font-size: var(--fs-16); line-height: 1; }
 .pk-kebab__menu {
   position: absolute;
   z-index: 60;
@@ -709,7 +711,7 @@ a.pk-kpi:hover { color: inherit; }
   :is(.pk-chip, .chip, .crm-chip, .crm-segment, .theme-toggle,
       .nav-toggle, .nav-link, .nav-more > summary, .pk-kebab > summary, .pk-info__btn, .pk-tab, .pk-tabs > a,
       .pk-tabs > button, .tabs > button, .pk-seg > *, .pk-kebab__menu :is(a, button):not(.pk-btn)) {
-    transition: transform var(--dur-hover) ease-out, box-shadow var(--dur-hover) ease-out;
+    transition: transform var(--dur-hover) ease-out;
   }
   :is(.pk-chip, .chip, .crm-chip, .crm-segment, .theme-toggle,
       .nav-toggle, .nav-link, .nav-more > summary, .pk-kebab > summary, .pk-info__btn):not(:is(:disabled, [aria-disabled="true"], .is-disabled, .disabled)):hover {

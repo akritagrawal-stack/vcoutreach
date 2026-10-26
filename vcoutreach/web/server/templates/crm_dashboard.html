@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% from "_icons.html" import icon, btn_icon %}
+{% set dash_tab_icons = {"current": "list", "not_contacted": "users", "unreplied": "clock", "replied": "message", "followup_due": "calendar"} %}
 {% block page_id %}crm_dashboard{% endblock %}
 {% block title %}Contacts{% endblock %}
 
@@ -140,10 +141,10 @@
   </ul>
 
   <form class="dash-form" method="get" action="{{ url_for('crm_dashboard') }}">
-    <button type="submit" class="sr-only" tabindex="-1" aria-hidden="true">Apply</button>
+    <button type="submit" class="sr-only" tabindex="-1" aria-hidden="true">{{ icon("check", 14) }}Apply</button>
     <nav class="pk-tabs dash-tabs" aria-label="Contact views">
       {% for t in d.tabs %}
-      <button type="submit" name="view" value="{{ t.key }}"{% if t.active %} class="is-active" aria-current="page"{% endif %}>{{ t.label }} <span class="pk-count">{{ t.count }}</span></button>
+      <button type="submit" name="view" value="{{ t.key }}"{% if t.active %} class="is-active" aria-current="page"{% endif %}>{{ icon(dash_tab_icons.get(t.key, "list"), 14) }}{{ t.label }} <span class="pk-count">{{ t.count }}</span></button>
       {% endfor %}
     </nav>
 

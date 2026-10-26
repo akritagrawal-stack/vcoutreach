@@ -21,7 +21,7 @@
     <a class="svc-link" href="/settings">{{ icon("arrow-left") }}Back to Settings</a>
   </header>
 
-  <p class="ai-intro">Let an AI assistant (Claude, Codex or any MCP client) walk you through setup and run the safe parts for you: it can check connections, import contacts, research, write and edit drafts, and send a copy to your own test inbox; it cannot see or enter your keys, and it cannot send a real email.</p>
+  <p class="ai-intro">{{ icon("sparkles") }}Let an AI assistant (Claude, Codex or any MCP client) walk you through setup and run the safe parts for you: it can check connections, import contacts, research, write and edit drafts, and send a copy to your own test inbox; it cannot see or enter your keys, and it cannot send a real email.</p>
 
   <section id="publik" class="ai-block" aria-label="Publik API">
     {% set pk_variant = 'setup' %}
@@ -30,7 +30,7 @@
 
   <section class="ai-block" aria-labelledby="ai-connect-h">
     <h2 id="ai-connect-h">Connect your assistant</h2>
-    <p class="svc-hint ai-lede">Pick your assistant, copy its snippet, and add it to the assistant's config. The snippets hold this app's launch command and workspace folder. Your home folder shows as ~ here, and Copy puts the full path on your clipboard.</p>
+    <p class="svc-hint ai-lede">Copy your assistant's snippet into its config. Copy puts the full path on your clipboard; ~ is your home folder.</p>
     {% if launch_hint %}<p class="ai-warn" role="note">{{ icon("alert-triangle") }} {{ launch_hint }}</p>{% endif %}
     <div class="ai-snippets">
       {{ snippet('desktop', 'Claude Desktop', 'claude_desktop_config.json', snippets.claude_desktop, 'claude_desktop') }}
@@ -50,13 +50,13 @@
         <h2 id="ai-test-h">Test the connection</h2>
         <span class="svc-status" role="status"><i class="svc-dot"></i><b data-ai-test-chip>{{ 'Passed' if last_self_test else 'Not tested' }}</b></span>
       </header>
-      <p class="svc-hint">Starts the same command locally, asks for its tool list, and checks that it looks right. It does not call any outside service.</p>
+      <p class="svc-hint">Runs the command locally and checks its tool list. No outside service is called.</p>
       <div class="svc-actions">
         <button type="button" class="svc-btn primary" data-ai-test hidden>{{ icon("play") }} Test MCP</button>
       </div>
       <p class="svc-busy" data-ai-busy hidden><i class="svc-spin" aria-hidden="true"></i><span>Testing...</span></p>
       <p class="svc-hint ai-test-msg" data-ai-test-msg role="status" aria-live="polite">{% if last_self_test %}Last passed: <time datetime="{{ last_self_test }}">{{ last_self_test }}</time>{% endif %}</p>
-      <noscript><p class="svc-hint">Turn on JavaScript to run the test here, or ask your assistant to run setup_status.</p></noscript>
+      <noscript><p class="svc-hint">Turn on JavaScript to test here, or ask your assistant to run setup_status.</p></noscript>
     </article>
   </section>
 </div>

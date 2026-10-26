@@ -23,24 +23,24 @@
 {% if rows %}
 <div class="pk-filterbar en-filters" id="filterBar">
   <span class="en-filter-label">Source</span>
-  <button type="button" class="pk-chip chip" id="chip-has-pb-api" data-action="enrichment_status-0">Has PB API</button>
-  <button type="button" class="pk-chip chip" id="chip-miss-pb-api" data-action="enrichment_status-1">Missing PB API</button>
-  <button type="button" class="pk-chip chip" id="chip-miss-linkedin" data-action="enrichment_status-2">Missing LinkedIn</button>
-  <button type="button" class="pk-chip chip" id="chip-miss-web" data-action="enrichment_status-3">Missing Web Search</button>
+  <button type="button" class="pk-chip chip" id="chip-has-pb-api" data-action="enrichment_status-0">{{ icon("check", 14) }}Has PB API</button>
+  <button type="button" class="pk-chip chip" id="chip-miss-pb-api" data-action="enrichment_status-1">{{ icon("alert-triangle", 14) }}Missing PB API</button>
+  <button type="button" class="pk-chip chip" id="chip-miss-linkedin" data-action="enrichment_status-2">{{ icon("alert-triangle", 14) }}Missing LinkedIn</button>
+  <button type="button" class="pk-chip chip" id="chip-miss-web" data-action="enrichment_status-3">{{ icon("alert-triangle", 14) }}Missing Web Search</button>
 
   <span class="en-sep" aria-hidden="true"></span>
   <span class="en-filter-label">Hook</span>
-  <button type="button" class="pk-chip chip" id="chip-hq-cite" data-action="enrichment_status-4">Cite-specific</button>
-  <button type="button" class="pk-chip chip" id="chip-hq-generic" data-action="enrichment_status-5">Generic</button>
-  <button type="button" class="pk-chip chip" id="chip-hq-none" data-action="enrichment_status-6">No hook</button>
+  <button type="button" class="pk-chip chip" id="chip-hq-cite" data-action="enrichment_status-4">{{ icon("check", 14) }}Cite-specific</button>
+  <button type="button" class="pk-chip chip" id="chip-hq-generic" data-action="enrichment_status-5">{{ icon("tag", 14) }}Generic</button>
+  <button type="button" class="pk-chip chip" id="chip-hq-none" data-action="enrichment_status-6">{{ icon("x", 14) }}No hook</button>
 
   <span class="en-sep" aria-hidden="true"></span>
   <span class="en-filter-label">Tier</span>
   {% for tv in ['1','2','3','4'] %}
-  <button type="button" class="pk-chip chip" id="chip-tier-{{ tv }}" data-action="enrichment_status-7" data-arg0="{{ tv }}">T{{ tv }}</button>
+  <button type="button" class="pk-chip chip" id="chip-tier-{{ tv }}" data-action="enrichment_status-7" data-arg0="{{ tv }}">{{ icon("tag", 14) }}T{{ tv }}</button>
   {% endfor %}
 
-  <button type="button" class="pk-chip chip chip-clear" id="chip-clear" data-action="enrichment_status-8">&#x2715; Clear filters</button>
+  <button type="button" class="pk-chip chip chip-clear" id="chip-clear" data-action="enrichment_status-8">{{ icon("x", 14) }}Clear filters</button>
 </div>
 
 <p class="en-legend pk-note">
@@ -55,18 +55,18 @@
   <table class="pk-table en-table" id="enrichTable"><caption class="sr-only">Enrichment Status records</caption>
     <thead>
       <tr>
-        <th aria-sort="none" data-sort="partner"><button class="table-sort" type="button">Contact &#x2195;</button></th>
-        <th aria-sort="none" data-sort="tier"><button class="table-sort" type="button">Tier &#x2195;</button></th>
+        <th aria-sort="none" data-sort="partner"><button class="table-sort" type="button">{{ icon("sort", 12) }} Contact</button></th>
+        <th aria-sort="none" data-sort="tier"><button class="table-sort" type="button">{{ icon("sort", 12) }} Tier</button></th>
         <th scope="col">Verified</th>
-        <th aria-sort="none" data-sort="pb_api"><button class="table-sort" type="button">PB API &#x2195;</button></th>
-        <th aria-sort="none" data-sort="pb"><button class="table-sort" type="button">PB Scrape &#x2195;</button></th>
-        <th aria-sort="none" data-sort="linkedin"><button class="table-sort" type="button">LinkedIn &#x2195;</button></th>
-        <th aria-sort="none" data-sort="web"><button class="table-sort" type="button">Web &#x2195;</button></th>
-        <th aria-sort="none" data-sort="web2"><button class="table-sort" type="button">Web v2 &#x2195;</button></th>
-        <th aria-sort="none" data-sort="fw"><button class="table-sort" type="button">Firm Site &#x2195;</button></th>
-        <th aria-sort="none" data-sort="eg"><button class="table-sort" type="button">Email &#x2195;</button></th>
-        <th aria-sort="none" data-sort="facts"><button class="table-sort" type="button">Facts &#x2195;</button></th>
-        <th aria-sort="none" data-sort="hook"><button class="table-sort" type="button">Hook &#x2195;</button></th>
+        <th aria-sort="none" data-sort="pb_api"><button class="table-sort" type="button">{{ icon("sort", 12) }} PB API</button></th>
+        <th aria-sort="none" data-sort="pb"><button class="table-sort" type="button">{{ icon("sort", 12) }} PB Scrape</button></th>
+        <th aria-sort="none" data-sort="linkedin"><button class="table-sort" type="button">{{ icon("sort", 12) }} LinkedIn</button></th>
+        <th aria-sort="none" data-sort="web"><button class="table-sort" type="button">{{ icon("sort", 12) }} Web</button></th>
+        <th aria-sort="none" data-sort="web2"><button class="table-sort" type="button">{{ icon("sort", 12) }} Web v2</button></th>
+        <th aria-sort="none" data-sort="fw"><button class="table-sort" type="button">{{ icon("sort", 12) }} Firm Site</button></th>
+        <th aria-sort="none" data-sort="eg"><button class="table-sort" type="button">{{ icon("sort", 12) }} Email</button></th>
+        <th aria-sort="none" data-sort="facts"><button class="table-sort" type="button">{{ icon("sort", 12) }} Facts</button></th>
+        <th aria-sort="none" data-sort="hook"><button class="table-sort" type="button">{{ icon("sort", 12) }} Hook</button></th>
         <th scope="col">Last enriched</th>
       </tr>
     </thead>

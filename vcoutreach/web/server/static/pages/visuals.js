@@ -58,7 +58,7 @@
       var bb = document.createElement("b"); bb.textContent = String(replied[idx]); b.appendChild(bb);
       tip.appendChild(head); tip.appendChild(a); tip.appendChild(b);
       tip.setAttribute("aria-label", label(days[idx]) + ": " + plural(sent[idx], "email", "emails") + " sent, " + plural(replied[idx], "reply", "replies"));
-      tip.style.left = pct + "%";
+      tip.style.setProperty("--vz-tip-x", pct + "%");
       tip.classList.toggle("is-left", pct > 62);
       tip.classList.add("is-on");
     }

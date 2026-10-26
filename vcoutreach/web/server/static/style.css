@@ -73,7 +73,7 @@
   --hover-scale:    1.03;
   --hover-scale-lg: 1.02;
   --press-scale:    .99;
-  --dur-hover:      160ms;
+  --dur-hover:      .12s;
   --trace:          rgba(26, 27, 31, .42);
   /* Buttons: gel tiers (primary, secondary, ghost). One radius token, one set of gradient tokens per theme. */
   --btn-radius:            0;
@@ -159,7 +159,6 @@ body {
   line-height: 1.45;
   color: var(--text);
   background: var(--bg);
-  transition: background-color var(--transition), color var(--transition);
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -253,7 +252,7 @@ code,
   font-size: var(--fs-12);
   width: 180px;
 }
-.banner-confirm-input:focus { border-color: var(--danger); }
+.banner-confirm-input:focus { outline: 2px solid var(--focus); outline-offset: 1px; }
 /* ── Navigation (grouped, icons, one sticky header) ───────── */
 .nav {
   position: sticky;
@@ -263,7 +262,6 @@ code,
   border-bottom: 1px solid var(--nav-border);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  transition: background var(--transition), border-color var(--transition);
 }
 .nav-inner { display: flex; align-items: center; flex-wrap: wrap; gap: 0 8px; min-height: 58px; padding: 0 30px; }
 .nav-brand {
@@ -380,10 +378,8 @@ code,
   color: var(--text);
   font-size: var(--fs-13);
   font-family: inherit;
-  transition: border-color var(--transition);
 }
 .search-input::placeholder { color: var(--text-faint); }
-.search-input:focus { border-color: var(--accent); }
 /* ── Buttons: one gel system. Every button carries a glyph (an .icon span before the label).
    Tiers: primary gel, secondary gel (the default), ghost / icon-only. Hover and press only move
    (transform) and trace the edge; they never change colour. ─────────────────────────────────── */
@@ -522,10 +518,8 @@ code,
   font-size: var(--fs-13);
   font-family: inherit;
   line-height: 1.5;
-  transition: border-color var(--transition);
   resize: vertical;
 }
-.form-control:focus { border-color: var(--accent); }
 .form-control::placeholder { color: var(--text-faint); }
 select.form-control { appearance: auto; }
 textarea.form-control { min-height: 80px; }
@@ -553,6 +547,9 @@ textarea.form-control { min-height: 80px; }
   background: var(--bg-subtle);
 }
 .preview-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
   padding: 4px 8px;
   border-radius: 0;
   font-size: var(--fs-12);
@@ -563,6 +560,13 @@ textarea.form-control { min-height: 80px; }
   font-family: inherit;
   color: var(--text-muted);
 }
+@media (prefers-reduced-motion: no-preference) {
+  .preview-tab { transition: transform .12s ease-out; }
+  .preview-tab:hover { transform: scale(var(--hover-scale)); }
+  .preview-tab:active { transform: scale(var(--press-scale)); }
+}
+.preview-tab:hover { box-shadow: inset 0 0 0 1px var(--trace); }
+.preview-tab:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .preview-tab.active { background: var(--bg); border-color: var(--border); color: var(--text); }
 .email-body {
   padding: 16px 24px;
@@ -637,51 +641,9 @@ textarea.form-control { min-height: 80px; }
 .settings-fields :is(input, select, textarea) { width: 100%; min-width: 0; }
 .settings-fields textarea { resize: vertical; }
 /* Contact verification ledger */
+.en-table .table-sort { display: inline-flex; align-items: center; gap: var(--space-1); }
 .verification-shell { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; min-width: 0; }
-.verification-hero,
-.verification-provider-grid,
-.verification-workspace,
-.verification-history,
-.verification-table-wrap {
-  min-width: 0;
-  width: 100%;
-}
-.verification-table-wrap { overflow-x: auto; }
-.verification-table { width: 100%; min-width: 1120px; border-collapse: collapse; }
-.verification-table th {
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface-tint);
-  color: var(--text-faint);
-  font-family: var(--font-sans);
-  font-size: var(--fs-12);
-  letter-spacing: 0;
-  text-align: left;
-}
-.verification-table td {
-  min-width: 150px;
-  padding: 12px 12px;
-  border-bottom: 1px solid var(--border);
-  vertical-align: top;
-}
-.verification-table tbody tr:last-child td { border-bottom: 0; }
-.verification-table td:first-child { min-width: 205px; }
-.verification-table td:last-child { min-width: 310px; }
-.verification-table td > strong,
-.verification-table td > span,
-.verification-table td > small {
-  display: block;
-}
-.verification-table td > strong { font-size: var(--fs-12); }
-.verification-table td > span { margin-top: 4px; color: var(--text-muted); font-size: var(--fs-12); }
-.verification-table td > small {
-  margin-top: 8px;
-  color: var(--text-faint);
-  font-family: var(--font-sans);
-  font-size: var(--fs-12);
-  letter-spacing: 0;
-}
-.verification-table code { color: var(--text); font-family: var(--font-sans); font-size: var(--fs-12); }
+.verification-table-wrap { min-width: 0; width: 100%; overflow-x: auto; }
 /* Relationship CRM pages */
 /* Relationship CRM pages */
 .crm-shell { width: 100%; display: grid; gap: 16px; color: var(--text); }
@@ -705,8 +667,7 @@ textarea.form-control { min-height: 80px; }
   color: var(--text-muted);
 }
 .crm-hero h1,
-.crm-profile-hero h1,
-.verification-hero h1 {
+.crm-profile-hero h1 {
   font-size: var(--fs-28);
   line-height: 1.15;
   font-weight: 600;
@@ -965,7 +926,8 @@ textarea.form-control { min-height: 80px; }
 .crm-fact-card time { color: var(--text-faint); font-family: var(--font-mono); font-size: var(--fs-12); }
 .crm-fact-card p { font-size: var(--fs-12); line-height: 1.45; overflow-wrap: anywhere; }
 /* Global helpers, accessibility and responsive table behaviour. */
-[hidden] { display: none !important; }
+/* The id in :not() lifts specificity above any single class rule, so no override flag is needed. */
+[hidden]:not(#_hidden) { display: none; }
 .sr-only {
   position: absolute;
   width: 1px;
@@ -1030,15 +992,12 @@ select {
 .data-table th,
 .data-table td,
 .crm-table th,
-.crm-table td,
-.verification-table th,
-.verification-table td {
+.crm-table td {
   overflow-wrap: anywhere;
   white-space: normal;
 }
 .data-table td > *,
-.crm-table td > *,
-.verification-table td > * {
+.crm-table td > * {
   max-width: 100%;
   white-space: normal;
   overflow-wrap: anywhere;
@@ -1523,8 +1482,7 @@ details[open] > summary .icon-chevron { transform: rotate(180deg); }
   color: var(--text-muted);
 }
 .crm-hero h1,
-.crm-profile-hero h1,
-.verification-hero h1 {
+.crm-profile-hero h1 {
   font-size: var(--fs-20);
   line-height: 1.25;
   letter-spacing: 0;
@@ -1540,9 +1498,7 @@ details[open] > summary .icon-chevron { transform: rotate(180deg); }
   font-family: var(--font-mono);
   font-size: var(--fs-12);
 }
-.crm-panel-heading h2,
-.verification-provider-title h2,
-.verification-workspace-head h2 {
+.crm-panel-heading h2 {
   font-size: var(--fs-16);
 }
 .send-banner { min-height: 32px; font-size: var(--fs-12); }
@@ -1578,7 +1534,6 @@ select:focus,
 textarea:focus,
 .form-control:focus,
 .search-input:focus {
-  border-color: var(--accent);
   outline: 2px solid var(--focus);
   outline-offset: 0;
 }
@@ -1600,9 +1555,7 @@ textarea:disabled {
 .settings-fields select,
 .draft-form input,
 .banner-confirm-input,
-.push-limit-input,
-.verification-filters input,
-.verification-filters select {
+.push-limit-input {
   height: var(--ctl-md);
   min-height: var(--ctl-md);
   padding: 0 12px;
@@ -1615,8 +1568,7 @@ textarea:disabled {
 .crm-form select,
 .fld select,
 .settings-fields select,
-select.form-control,
-.verification-filters select {
+select.form-control {
   padding: 0 28px 0 12px;
 }
 .search-input { padding-left: 30px; padding-right: 12px; border-radius: 0; }
@@ -1705,13 +1657,11 @@ input[type="checkbox"]:disabled { opacity: .45; cursor: not-allowed; }
 .data-table,
 .crm-table,
 .pl-table,
-.en-table,
-.verification-table {
+.en-table {
   font-size: var(--fs-13);
 }
 .data-table th,
-.crm-table th,
-.verification-table th {
+.crm-table th {
   position: sticky;
   top: 0;
   z-index: 2;
@@ -1727,8 +1677,7 @@ input[type="checkbox"]:disabled { opacity: .45; cursor: not-allowed; }
   text-align: left;
 }
 .data-table td,
-.crm-table td,
-.verification-table td {
+.crm-table td {
   height: 40px;
   padding: 8px 12px;
   font-size: var(--fs-13);

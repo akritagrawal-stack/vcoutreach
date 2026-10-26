@@ -7,7 +7,7 @@
 <header class="pk-page-head">
   <div class="pk-page-head__text">
     <h1>Replies</h1>
-    <p class="pk-page-sub">Review incoming conversations, set a label, and keep track of what you have read.</p>
+    <p class="pk-page-sub">Review replies, set a label, track what you read.</p>
   </div>
   <div class="pk-page-head__actions reply-actions">
     <div class="reply-check">
@@ -18,12 +18,12 @@
       <span class="pk-faint reply-check__stamp">{% if last_checked %}Last checked <time datetime="{{ last_checked }}" data-rel>{{ last_checked[:16]|replace('T',' ') }} UTC</time>{% else %}Not checked yet{% endif %}</span>
     </div>
     <details class="pk-kebab" id="addReply">
-      <summary aria-label="More actions"><span class="sr-only">More actions</span></summary>
+      <summary aria-label="More actions" title="More actions"><span class="sr-only">More actions</span></summary>
       <div class="pk-kebab__menu reply-add-menu">
         <form method="post" action="/replies/add" class="reply-add-form">
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
           <h2 class="reply-add-form__title">Add a reply</h2>
-          <p class="pk-faint reply-add-form__hint">Paste a reply you received outside Gmail so it shows up here.</p>
+          <p class="pk-faint reply-add-form__hint">Paste a reply received outside Gmail.</p>
           <label for="replyFrom">From email</label>
           <input id="replyFrom" class="pk-input" type="email" name="from_email" required>
           <label for="replySubject">Subject</label>

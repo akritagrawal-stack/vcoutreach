@@ -1,5 +1,7 @@
 {% extends 'base.html' %}
 {% from "_icons.html" import icon, btn_icon %}
+{% set an_tab_icons = {"hot": "zap", "warm": "sparkles", "engaged": "eye", "replied": "message"} %}
+{% set an_dim_icons = {"lane": "users", "fit_grade": "shield", "firm_type": "database", "send_weekday": "calendar", "send_hour_bucket": "clock", "cohort_era": "tag"} %}
 {% block page_id %}crm_analytics{% endblock %}
 {% block title %}Analytics{% endblock %}
 
@@ -154,7 +156,7 @@
         {% endfor %}
       </div>
       <span class="pk-info pk-info--end">
-        <button type="button" class="pk-info__btn" aria-label="How we count">i</button>
+        <button type="button" class="pk-info__btn" aria-label="How we count" title="How we count">{{ icon("info", 12) }}</button>
         <span class="pk-popover" role="tooltip">
           <strong>How we count.</strong> Sent is confirmed sends. Replies are incoming mail from the exact address you emailed, after your send, and exclude bounces and auto replies. Opens and clicks are estimates (est.): mail apps and scanners also load tracking links, so treat them as a hint. An email without a tracker is unknown, not zero, and is left out of open and click rates.
         </span>
@@ -240,7 +242,7 @@
     </div>
     <div class="pk-tabs an-tabs" role="tablist" aria-label="Contacts by signal">
       {% for tab in tabs.tabs %}
-      <button type="button" class="pk-tab{% if tab.key == tabs.default %} is-active{% endif %}" role="tab" id="an-tab-{{ tab.key }}" data-tab="{{ tab.key }}" aria-selected="{{ 'true' if tab.key == tabs.default else 'false' }}" aria-controls="an-panel-{{ tab.key }}">{{ tab.label }} <span class="pk-count">{{ tab.count }}</span></button>
+      <button type="button" class="pk-tab{% if tab.key == tabs.default %} is-active{% endif %}" role="tab" id="an-tab-{{ tab.key }}" data-tab="{{ tab.key }}" aria-selected="{{ 'true' if tab.key == tabs.default else 'false' }}" aria-controls="an-panel-{{ tab.key }}">{{ icon(an_tab_icons.get(tab.key, "list"), 14) }}{{ tab.label }} <span class="pk-count">{{ tab.count }}</span></button>
       {% endfor %}
     </div>
     <div class="pk-table-wrap">
@@ -274,7 +276,7 @@
       <div class="pk-seg-wrap">
         <div class="pk-seg" role="group" aria-label="Compare by">
           {% for dim in dims.dims %}
-          <button type="button" data-dim-btn="{{ dim.key }}" class="{% if dim.key == dims.default %}is-active{% endif %}" aria-pressed="{{ 'true' if dim.key == dims.default else 'false' }}">{{ dim.label }}</button>
+          <button type="button" data-dim-btn="{{ dim.key }}" class="{% if dim.key == dims.default %}is-active{% endif %}" aria-pressed="{{ 'true' if dim.key == dims.default else 'false' }}">{{ icon(an_dim_icons.get(dim.key, "tag"), 14) }}{{ dim.label }}</button>
           {% endfor %}
         </div>
       </div>
@@ -390,7 +392,7 @@
             <td class="num">{% if row.median_hours_to_first_person_signal is not none %}{{ row.median_hours_to_first_person_signal }}{% else %}<span class="pk-muted">No signal yet</span>{% endif %}</td>
             <td class="num">
               <span class="pk-info pk-info--end">
-                <button type="button" class="pk-info__btn" aria-label="More numbers for {{ row.cohort }}">+</button>
+                <button type="button" class="pk-info__btn" aria-label="More numbers for {{ row.cohort }}" title="More numbers">{{ icon("info", 12) }}</button>
                 <span class="pk-popover an-more" role="tooltip">
                   <dl class="an-more__list">
                     <dt>Opens est.</dt><dd>{{ row.person_opens }}</dd>

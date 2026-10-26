@@ -78,3 +78,6 @@
 .an-kpis--empty .pk-kpi { padding: 12px 16px; }
 .an-page .vz-ghost--chart { min-height: 176px; }
 .vz-ghost__action { margin-top: 8px; }
+
+/* Dimension buttons: glyph then label. */
+.an-block .pk-seg > button { gap: var(--space-1); }
