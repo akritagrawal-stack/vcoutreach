@@ -216,10 +216,22 @@ def test_a_pdf_over_25_mb_is_refused_and_nothing_is_saved(make_web):
 
 def test_a_pdf_just_under_the_limit_is_accepted(make_web):
     web = make_web()
-    near = b"%PDF-1.4\n" + b"0" * (MAX_BYTES - 4096)
+    head = b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n% "
+    tail = b"\ntrailer\n<< /Root 1 0 R >>\n%%EOF\n"
+    near = head + b"0" * (MAX_BYTES - 4096 - len(head) - len(tail)) + tail
+    assert len(near) == MAX_BYTES - 4096 and near.startswith(b"%PDF-") and b"/Type" in near
+    assert near.rstrip().endswith(b"%%EOF")
     response = upload(web, near, "big-but-fine.pdf")
     assert is_redirect(response), response.status_code
     assert saved_deck(web) is not None
+
+
+def test_a_header_only_pdf_is_refused_as_damaged(make_web):
+    web = make_web()
+    response = upload(web, b"%PDF-1.4\n" + b"0" * 4096, "header-only.pdf", follow=True)
+    assert_friendly(response, web)
+    assert "That file looks damaged or incomplete" in body(response)
+    assert_nothing_saved(web)
 
 
 def test_a_refused_upload_keeps_the_previous_deck(make_web):

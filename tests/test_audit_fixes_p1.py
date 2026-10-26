@@ -68,7 +68,7 @@ def test_template_draft_with_the_default_sender_also_passes_lint(make_web):
     write_drafts(web)
     for slug in ("eli", "raj"):
         page = dom(web, f"/crm/drafts/{slug}").get_text(" ", strip=True)
-        assert "No lint issues detected" in page, (slug, page[-900:])
+        assert "No problems found" in page, (slug, page[-900:])
         assert 50 <= words(read_draft_file(web.ws, slug).body) <= 130, slug
 
 
@@ -138,7 +138,7 @@ def test_blocked_draft_does_not_also_say_no_lint_issues(make_web):
     page = body(_save_ungrounded(web))
     text = page_text(page)
     assert "blocked" in text.lower(), "setup: the invented claim should have been blocked"
-    assert "No lint issues detected" not in text, "blocked draft also claims it is clean"
+    assert "No problems found" not in text, "blocked draft also claims it is clean"
 
 
 def test_blocked_draft_tells_the_user_how_to_fix_it(make_web):

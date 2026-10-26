@@ -6,7 +6,7 @@ and the "last checked" timestamp, both local SQLite.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from urllib.parse import quote
 
 from vcoutreach.web.db import get_conn
@@ -142,6 +142,35 @@ def safe_replies_next(value) -> str | None:
     return None
 
 
+SERIES_DAYS = 14
+
+
+def reply_series(prepared, days: int = SERIES_DAYS, now: datetime | None = None) -> dict:
+    """Daily reply counts for the last `days` days (oldest first) as vz-spark data: all, unread, needs and interested."""
+    from vcoutreach.web.server.view_models_dashboard import _spark
+    now = now or datetime.now(timezone.utc)
+    keys = [(now - timedelta(days=days - 1 - i)).date().isoformat() for i in range(days)]
+    index = {key: i for i, key in enumerate(keys)}
+    buckets = {name: [0] * days for name in ('all', 'unread', 'needs', 'interested')}
+    for r in prepared:
+        iso = r.get('received_iso')
+        pos = index.get(iso[:10]) if iso else None
+        if pos is None:
+            continue
+        buckets['all'][pos] += 1
+        if r.get('unread'):
+            buckets['unread'][pos] += 1
+        if r.get('bucket') == 'needs':
+            buckets['needs'][pos] += 1
+        if r.get('effective_label') == 'interested':
+            buckets['interested'][pos] += 1
+    return {
+        'unread': _spark(buckets['unread'], 'Unread replies per day'),
+        'needs': _spark(buckets['needs'], 'Replies that need a follow-up per day'),
+        'interested': _spark(buckets['interested'], 'Interested replies per day', 'vz-spark--success'),
+    }
+
+
 def build_replies_view(rows, tab: str | None, label_filter: str, labels) -> dict:
     """Bucket replies into the five tabs, count them, and prepare each row for drawing."""
     prepared = []
@@ -178,7 +207,15 @@ def build_replies_view(rows, tab: str | None, label_filter: str, labels) -> dict
 
     tabs = [{'key': key, 'text': text, 'count': counts[key], 'active': key == chosen} for key, text in TABS]
     empty_title, empty_text = EMPTY_COPY[chosen]
+    # Unfiltered per-label counts and daily series for the KPI row (never narrowed by the tab or label filter).
+    label_counts: dict[str, int] = {}
+    for r in prepared:
+        label_counts[r['effective_label']] = label_counts.get(r['effective_label'], 0) + 1
+    series = reply_series(prepared)
     return {
+        'label_counts': label_counts,
+        'interested': label_counts.get('interested', 0),
+        'series': series,
         'rows': shown,
         'tabs': tabs,
         'active_tab': chosen,
@@ -255,4 +292,4 @@ def wants_json(req) -> bool:
 def tab_counts(rows, labels) -> dict:
     """Counts for the five tabs plus total unread, for the JSON reply after an inline save."""
     view = build_replies_view(rows, 'all', '', labels)
-    return {'counts': {t['key']: t['count'] for t in view['tabs']}, 'unread': view['unread']}
+    return {'counts': {t['key']: t['count'] for t in view['tabs']}, 'unread': view['unread'], 'interested': view['interested']}

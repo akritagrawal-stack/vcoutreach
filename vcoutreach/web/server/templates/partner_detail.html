@@ -1,7 +1,20 @@
 {% extends 'base.html' %}
+{% from "_icons.html" import icon, btn_icon %}
 {% from '_partner_macros.html' import responsive_badge, empty_value %}
 {% block page_id %}partner_detail{% endblock %}
 {% block title %}{{ partner['partner_name'] }}{% endblock %}
+
+{# Plain-English label for the hook grounding state. The raw state stays in the title attribute only. #}
+{% macro grounding_label(raw) -%}
+  {%- set g = raw or '' -%}
+  {%- if g.startswith('blocked:') -%}Blocked: {{ g[8:]|trim }}
+  {%- elif g == 'grounded' -%}Opening line backed by research
+  {%- elif g == 'no hook' -%}No opening line yet
+  {%- elif 'has not been checked' in g -%}Opening line not checked yet
+  {%- elif g.startswith('ungrounded') -%}Opening line needs a source
+  {%- else -%}Not checked yet
+  {%- endif -%}
+{%- endmacro %}
 
 {# One status pill, same wording as the Send queue. #}
 {% macro status_pill(item, sent_to, test_recipient) -%}
@@ -44,7 +57,7 @@
     <p class="pk-page-sub pd-firm">{{ partner['firm'] or 'Unknown firm' }}. Review the email, then approve and send it.</p>
   </div>
   <div class="pk-page-head__actions pd-pills">
-    {% if partner['tier'] %}<span class="pk-pill pk-pill--outline" title="Priority from the partner tier">Priority {{ partner['tier'] }}</span>{% endif %}
+    {% if partner['tier'] %}<span class="pk-pill pk-pill--outline" title="Priority from the contact tier">Priority {{ partner['tier'] }}</span>{% endif %}
     <span class="pk-pill pk-pill--{{ q_cls }} pk-pill--dot" title="{{ q_tip }}">{{ q_txt }}</span>
     {% if partner['email_uncertain'] %}<span class="pk-pill pk-pill--warning" title="Email address is uncertain">Check email</span>{% endif %}
     {% if draft %}{{ status_pill(draft, sent_to, g_test_recipient) }}{% endif %}
@@ -88,19 +101,19 @@
     <span class="pd-actions-label">Prepare</span>
     <form method="POST" action="/partners/{{ partner['id'] }}/enrich" data-busy="Enriching, this takes about 30 seconds...">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <button type="submit" class="pk-btn pk-btn--sm {{ 'pk-btn--primary crm-button-primary' if primary == 'enrich' else 'pk-btn--secondary' }}" title="Run web search, LinkedIn and email guess enrichment">Enrich</button>
+      <button type="submit" class="pk-btn pk-btn--sm {{ 'pk-btn--primary crm-button-primary' if primary == 'enrich' else 'pk-btn--secondary' }}" title="Run web search, LinkedIn and email guess enrichment">{{ icon("sparkles") }}Enrich</button>
     </form>
     {% if not locked %}
     <form method="POST" action="/partners/{{ partner['id'] }}/generate-hook" data-busy="Generating hook...">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <button type="submit" class="pk-btn pk-btn--sm {{ 'pk-btn--primary crm-button-primary' if primary == 'hook' else 'pk-btn--secondary' }}" title="Generate an opener from saved research; creates a base draft if needed">{{ 'Regenerate hook' if draft else 'Generate hook' }}</button>
+      <button type="submit" class="pk-btn pk-btn--sm {{ 'pk-btn--primary crm-button-primary' if primary == 'hook' else 'pk-btn--secondary' }}" title="Generate an opener from saved research; creates a base draft if needed">{{ btn_icon('Regenerate hook' if draft else 'Generate hook') }}{{ 'Regenerate hook' if draft else 'Generate hook' }}</button>
       <span class="pk-cell-sub">Creates a template draft first if none exists.</span>
     </form>
     {% endif %}
     {% if pitchbook_enabled %}
     <form method="POST" action="/partners/{{ partner['id'] }}/pitchbook-enrich">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <button type="submit" class="pk-btn pk-btn--secondary pk-btn--sm" title="Run PitchBook enrichment ({{ pitchbook_lookups_used }}/{{ pitchbook_lookups_cap }} used today)">
+      <button type="submit" class="pk-btn pk-btn--secondary pk-btn--sm" title="Run PitchBook enrichment ({{ pitchbook_lookups_used }}/{{ pitchbook_lookups_cap }} used today)">{{ icon("database") }}
         PitchBook <span class="pk-pill pk-pill--neutral">{{ pitchbook_lookups_used }}/{{ pitchbook_lookups_cap }}</span>
       </button>
     </form>
@@ -108,7 +121,7 @@
     {% if not email_verified %}
     <form method="post" action="{{ url_for('partner_verify_email_manually', partner_id=partner.id) }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <button type="submit" class="pk-btn pk-btn--secondary pk-btn--sm" title="Use only after you checked the address yourself">Mark email verified</button>
+      <button type="submit" class="pk-btn pk-btn--secondary pk-btn--sm" title="Use only after you checked the address yourself">{{ icon("check") }}Mark email verified</button>
     </form>
     {% endif %}
   </div>
@@ -119,39 +132,39 @@
       {% if draft['status'] != 'approved' %}
       <form method="POST" action="/partners/{{ partner['id'] }}/approve">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <button type="submit" class="pk-btn pk-btn--sm {{ 'pk-btn--primary crm-button-primary' if primary == 'approve' else 'pk-btn--secondary' }}"{% if draft.blocked_reason %} disabled title="blocked: {{ draft.blocked_reason }}"{% endif %}>Approve draft</button>
-        {% if draft.blocked_reason %}<span class="pk-cell-sub">blocked: {{ draft.blocked_reason }}</span>{% endif %}
+        <button type="submit" class="pk-btn pk-btn--sm {{ 'pk-btn--primary crm-button-primary' if primary == 'approve' else 'pk-btn--secondary' }}"{% if draft.blocked_reason %} disabled title="Blocked: {{ draft.blocked_reason }}"{% endif %}>{{ icon("check") }}Approve draft</button>
+        {% if draft.blocked_reason %}<span class="pk-cell-sub pl-blocked">Blocked: {{ draft.blocked_reason }}</span>{% endif %}
       </form>
       {% else %}
-      <button type="button" class="pk-btn pk-btn--secondary pk-btn--sm" disabled>Approved</button>
+      <button type="button" class="pk-btn pk-btn--secondary pk-btn--sm" disabled>{{ icon("check") }}Approved</button>
       {% endif %}
-      <button type="button" class="pk-btn pk-btn--secondary pk-btn--sm" id="rejectToggle" data-action="partner_detail-0">Reject</button>
+      <button type="button" class="pk-btn pk-btn--secondary pk-btn--sm" id="rejectToggle" data-action="partner_detail-0">{{ icon("x") }}Reject</button>
     {% endif %}
 
     {% if draft and draft.get('live_sent_at') %}
       {% if g_send_mode == 'live' %}
-      <button type="button" class="pk-btn pk-btn--secondary pk-btn--sm" disabled title="Already sent live. Re-send requires admin reset of live_sent_at.">Already sent live</button>
+      <button type="button" class="pk-btn pk-btn--secondary pk-btn--sm" disabled title="Already sent live. Re-send requires admin reset of live_sent_at.">{{ icon("check") }}Already sent live</button>
       {% endif %}
     {% elif draft and draft['status'] in ('sent', 'test_sent') %}
       <span class="text-muted pd-note">Test sent{% if sent_to %} to <strong>{{ sent_to }}</strong>{% endif %}{% if draft.get('last_test_sent_at') %} on {{ draft['last_test_sent_at'][:10] }}{% elif draft['sent_at'] %} on {{ draft['sent_at'][:10] }}{% endif %}</span>
     {% elif g_send_mode == 'test' %}
       <form method="POST" action="/partners/{{ partner['id'] }}/send" data-busy="Sending test...">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <button type="submit" class="pk-btn pk-btn--sm {{ 'pk-btn--primary crm-button-primary' if primary == 'send' else 'pk-btn--secondary' }}" title="Sends to {{ g_test_recipient }} (test mode)"{% if not draft %} disabled{% endif %}>Send test email</button>
+        <button type="submit" class="pk-btn pk-btn--sm {{ 'pk-btn--primary crm-button-primary' if primary == 'send' else 'pk-btn--secondary' }}" title="Sends to {{ g_test_recipient }} (test mode)"{% if not draft %} disabled{% endif %}>{{ icon("send") }}Send test email</button>
         {% if not draft %}<span class="pk-cell-sub">Write a draft first.</span>{% endif %}
       </form>
     {% else %}
-      <button type="button" class="pk-btn pk-btn--danger pk-btn--sm" data-action="partner_detail-1">Send to {{ partner['email'] }}</button>
+      <button type="button" class="pk-btn pk-btn--danger pk-btn--sm" data-action="partner_detail-1">{{ icon("send") }}Send to {{ partner['email'] }}</button>
     {% endif %}
 
     {% if not (draft and draft['status'] in ('sent', 'test_sent', 'live_sent')) %}
-    <button type="button" class="pk-btn pk-btn--secondary pk-btn--sm" id="scheduleToggle1" data-action="partner_detail-2">Schedule for later</button>
+    <button type="button" class="pk-btn pk-btn--secondary pk-btn--sm" id="scheduleToggle1" data-action="partner_detail-2">{{ icon("calendar") }}Schedule for later</button>
     {% endif %}
 
     {% if g_send_mode != 'test' %}
     <form method="POST" action="/partners/{{ partner['id'] }}/send-test" data-busy="Sending test...">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <button type="submit" class="pk-btn pk-btn--ghost pk-btn--sm" title="Sends to {{ g_test_recipient }} regardless of approval"{% if not draft %} disabled{% endif %}>Send test to {{ g_test_recipient }}</button>
+      <button type="submit" class="pk-btn pk-btn--ghost pk-btn--sm" title="Sends to {{ g_test_recipient }} regardless of approval"{% if not draft %} disabled{% endif %}>{{ icon("send") }}Send test to {{ g_test_recipient }}</button>
     </form>
     {% endif %}
 
@@ -162,7 +175,7 @@
     <form method="POST" action="/partners/{{ partner['id'] }}/reject" class="pd-panel-form">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <textarea aria-label="Review Notes" name="review_notes" class="form-control" rows="2" placeholder="Reason for rejection (optional)"></textarea>
-      <button type="submit" class="pk-btn pk-btn--danger-solid pk-btn--sm">Confirm reject</button>
+      <button type="submit" class="pk-btn pk-btn--danger-solid pk-btn--sm">{{ icon("x") }}Confirm reject</button>
     </form>
   </div>
   {% endif %}
@@ -172,10 +185,10 @@
     <form method="POST" action="/partners/{{ partner['id'] }}/send" class="pd-panel-form">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <div class="form-group">
-        <label class="form-label text-danger" for="partner_detail-field-1">Type exactly: <code>SEND TO {{ partner['email'] }}</code></label>
+        <label class="form-label text-danger" for="partner_detail-field-1">Type exactly: <code>SEND TO {{ partner['email'] }}</code> <span class="form-hint">One contact, not a batch. For a test send use the Send test button above.</span></label>
         <input id="partner_detail-field-1" type="text" name="confirm_text" class="form-control mono-input" placeholder="SEND TO {{ partner['email'] }}" autocomplete="off">
       </div>
-      <button type="submit" class="pk-btn pk-btn--danger-solid pk-btn--sm">Confirm send</button>
+      <button type="submit" class="pk-btn pk-btn--danger-solid pk-btn--sm">{{ icon("send") }}Confirm send</button>
     </form>
   </div>
   {% endif %}
@@ -207,7 +220,7 @@
         <label class="form-label text-danger" for="partner_detail-field-2">Type exactly: <code>SCHEDULE LIVE FOR 1</code></label>
         <input id="partner_detail-field-2" type="text" name="confirm_text" class="form-control mono-input" placeholder="SCHEDULE LIVE FOR 1" autocomplete="off">
       </div>
-      <button type="submit" class="pk-btn pk-btn--primary pk-btn--sm">Schedule 1 send</button>
+      <button type="submit" class="pk-btn pk-btn--primary pk-btn--sm">{{ icon("calendar") }}Schedule 1 send</button>
     </form>
   </div>
   {% endif %}
@@ -240,7 +253,7 @@
     {% elif draft %}
     <div class="pk-note pd-banner pd-banner-warn">Could not assemble the email preview. Check that data/boilerplate.json is valid.</div>
     {% else %}
-    <div class="pk-empty"><p class="pk-empty__title">No draft found for this partner.</p></div>
+    <div class="pk-empty"><p class="pk-empty__title">No draft found for this contact.</p></div>
     {% endif %}
 
     {% if draft and not locked %}
@@ -256,7 +269,7 @@
           <label class="form-label" for="partner_detail-field-4">Hook <span class="form-hint">personalized opener, 1 to 2 sentences</span></label>
           <textarea id="partner_detail-field-4" name="hook" class="form-control" rows="6">{{ draft['hook'] }}</textarea>
         </div>
-        <button type="submit" class="pk-btn pk-btn--secondary pk-btn--sm">Save changes</button>
+        <button type="submit" class="pk-btn pk-btn--secondary pk-btn--sm">{{ icon("save") }}Save changes</button>
       </form>
     </section>
     {% endif %}
@@ -264,7 +277,7 @@
 
   <aside class="pd-side">
     <section class="pk-card pd-card">
-      <div class="pk-card__head"><h2 class="pk-card__title">Partner info</h2></div>
+      <div class="pk-card__head"><h2 class="pk-card__title">Contact info</h2></div>
       <div class="meta-list">
         <div class="meta-row"><span class="meta-key">Email</span><span class="meta-val">{{ partner['email'] }}</span></div>
         {% if partner.get('email_verified_at') %}
@@ -284,7 +297,7 @@
       <div class="meta-list">
         <div class="meta-row"><span class="meta-key">Created</span><span class="meta-val text-muted">{{ draft['created_at'][:10] }}</span></div>
         <div class="meta-row"><span class="meta-key">Version</span><span class="meta-val"><code>{{ draft['boilerplate_version'] }}</code></span></div>
-        <div class="meta-row"><span class="meta-key">Grounding</span><span class="meta-val">{{ hook_grounding_state(draft) }}</span></div>
+        <div class="meta-row"><span class="meta-key">Grounding</span>{% set ground_raw = hook_grounding_state(draft) %}<span class="meta-val" title="{{ ground_raw }}">{{ grounding_label(ground_raw) }}</span></div>
         {% if draft['approved_at'] and draft['status'] == 'approved' %}<div class="meta-row"><span class="meta-key">Approved</span><span class="meta-val text-muted">{{ draft['approved_at'][:16] }} UTC</span></div>{% endif %}
         {% if draft['drafted_at'] %}<div class="meta-row"><span class="meta-key">Drafted</span><span class="meta-val text-muted">{{ draft['drafted_at'][:10] }}</span></div>{% endif %}
         {% if draft['sent_at'] %}<div class="meta-row"><span class="meta-key">Sent</span><span class="meta-val text-muted">{{ draft['sent_at'][:10] }}{% if sent_to %} to {{ sent_to }}{% endif %}</span></div>{% endif %}
@@ -316,7 +329,7 @@
         {% endfor %}
       </div>
       {% elif partner.get('enriched_at') %}
-      <div class="pk-note pd-banner pd-banner-warn">Partner was enriched but no usable facts were extracted. Try re-enriching.</div>
+      <div class="pk-note pd-banner pd-banner-warn">This contact was enriched but no usable facts were extracted. Try re-enriching.</div>
       {% else %}
       <div class="pk-empty pd-empty"><p class="pk-empty__title">No enrichment data yet.</p><p class="pk-empty__text">Use Enrich under Prepare above.</p></div>
       {% endif %}

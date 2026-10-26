@@ -14,7 +14,7 @@ dependencies = []
 
 [project.optional-dependencies]
 web = ["Flask>=3.1,<4"]
-integrations = ["google-genai", "anthropic", "curl_cffi", "playwright", "beautifulsoup4", "requests", "dnspython"]
+integrations = ["google-genai", "anthropic>=0.40", "curl_cffi", "playwright", "beautifulsoup4>=4.12", "requests>=2.31", "dnspython"]
 gmail = [
     "google-auth",
     "google-auth-oauthlib>=1.2.2",
@@ -22,6 +22,8 @@ gmail = [
 ]
 dev = [
     "pytest>=8.0",
+    "beautifulsoup4>=4.12",
+    "requests>=2.31",
 ]
 
 [project.scripts]

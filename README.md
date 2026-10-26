@@ -22,9 +22,9 @@ Or download Publikreach.dmg in a browser, drag the app to Applications and open 
 
 The app is ad hoc signed and open source, with no Apple Developer ID. You can read [install.sh](packaging/install.sh) before running it and [build the app from source](packaging/mac/README.md).
 
-The easy sender setup is a Gmail app password, described below. Google OAuth is optional and advanced. To use OAuth, in Settings, in the Gmail card: (1) download a Google OAuth client file of type Desktop app from your own Google Cloud project (Google's [Desktop OAuth client setup steps](https://developers.google.com/workspace/gmail/api/quickstart/python#authorize_credentials_for_a_desktop_application); enable the Gmail API and add yourself as a test user on the consent screen), (2) choose that file with **Choose OAuth client file**, then (3) click **Connect Gmail**. Google opens a sign-in in your system browser and this app never sees your Google password. Consent expires locally after three minutes if left unfinished. Consent requests `gmail.modify`, and the client file and refresh token are saved privately in the workspace with mode 0600. Disconnect removes them. A saved connection does not bypass send confirmations or TEST mode.
+**Gmail setup: connect with your Google OAuth client file.** In Settings, in the Gmail card, three steps: (1) download a Google OAuth client file of type Desktop app from your own Google Cloud project (Google's [Desktop OAuth client setup steps](https://developers.google.com/workspace/gmail/api/quickstart/python#authorize_credentials_for_a_desktop_application); enable the Gmail API and add yourself as a test user on the consent screen), (2) choose that file with **Choose OAuth client file**, then (3) click **Connect Gmail**. Google opens a sign-in in your system browser and this app never sees your Google password. Consent expires locally after three minutes if left unfinished. Consent requests `gmail.modify`, and the client file and refresh token are saved privately in the workspace with mode 0600. Disconnect removes them. A saved connection does not bypass send confirmations or TEST mode.
 
-The **Gmail app password** option on the Gmail card is the simpler, recommended path and needs no Google Cloud project. Turn on 2-Step Verification and [create a 16-character app password](https://myaccount.google.com/apppasswords) first, then enter your Gmail address and the password. Spaces are stripped. The app verifies IMAP and SMTP logins before saving `data/.gmail_app_password.json` with mode 0600, and no Google Cloud client file is needed for this mode. Google revokes app passwords when you change your Google password, and Workspace admins may disable them. See [Google's app-password guide](https://support.google.com/accounts/answer/185833). An existing app-password connection continues to work.
+**Simpler alternative: a Gmail app password.** If you do not want a Google Cloud project, open **Alternative: use a Gmail app password instead** on the Gmail card. It takes about two minutes. Turn on 2-Step Verification and [create a 16-character app password](https://myaccount.google.com/apppasswords) first, then enter your Gmail address and the password. Spaces are stripped. The app verifies IMAP and SMTP logins before saving `data/.gmail_app_password.json` with mode 0600. Google revokes app passwords when you change your Google password, and Workspace admins may disable them. See [Google's app-password guide](https://support.google.com/accounts/answer/185833). An existing app-password connection continues to work.
 
 The existing `install-mac.sh` is the developer option for a Python installation and browser launcher. The CLI and browser documentation follows.
 
@@ -310,7 +310,7 @@ into stacked cards under about 900 pixels so nothing needs sideways scrolling.
 
 The first-run banner and the assistant's `setup_status` tool use the same seven steps, in this order:
 
-1. Connect Gmail (the OAuth client file, as above).
+1. Connect Gmail (your Google OAuth client file, as above; a Gmail app password is the simpler alternative).
 2. Set your test recipient (an inbox you own, not one of your contacts).
 3. Add contacts.
 4. Write drafts.
@@ -369,6 +369,8 @@ Everything beyond local drafting is optional and uses your own accounts and keys
 Gmail, Enrow, Apollo, PitchBook, Gemini, Claude and a Cloudflare tracking Worker.
 [docs/integrations.md](docs/integrations.md) lists, for each one, what it needs,
 what it does in the app, and what it costs or requires from you.
+
+Web-search enrichment uses an optional local SearXNG server (default `http://localhost:8080`). Start it with: `docker compose -f packaging/searxng/docker-compose.yml up -d`.
 
 ### Try it with the sample
 
@@ -709,12 +711,13 @@ fact the sender actually supplied and reacts to it honestly.
 You do not need this to use the tool: copy the drafts into your own mail client
 and send them from there. Sending is off the quickstart path and guarded.
 
-For the browser app, use Settings > Gmail: choose your Google OAuth client file,
-then **Connect Gmail**, as described above. A collapsed "use a Gmail app password
-instead" option exists for people who cannot create an OAuth client; it uses only
-the Python standard library for IMAP and SMTP, including reply polling and CRM
-inbox refresh. The same TEST routing and LIVE confirmation gates apply with either
-auth mode.
+For the browser app, use Settings > Gmail: download your Google OAuth client file,
+choose it with **Choose OAuth client file**, and click **Connect Gmail**, as described
+above. If you do not want a Google Cloud project, the simpler alternative is a Gmail
+app password, under **Alternative: use a Gmail app password instead** on the same
+card. It needs no Google Cloud project and uses only the Python standard library for
+IMAP and SMTP, including reply polling and CRM inbox refresh. The same TEST routing
+and LIVE confirmation gates apply with either auth mode.
 
 The standalone CLI retains its advanced OAuth setup. Its prerequisites are the optional Google libraries installed, a Google
 Cloud OAuth client file (desktop app) at `GMAIL_CLIENT_SECRETS_PATH`,

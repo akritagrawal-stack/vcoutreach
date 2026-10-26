@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% from "_icons.html" import icon %}
+{% from "_icons.html" import icon, btn_icon %}
 {% from '_partner_macros.html' import verification_badge, tier_badge, empty_value %}
 {% block page_id %}enrichment_status{% endblock %}
 {% block title %}Enrichment{% endblock %}
@@ -8,12 +8,12 @@
 <header class="pk-page-head">
   <div class="pk-page-head__text">
     <h1>Enrichment status <span class="pk-pill pk-pill--neutral">{{ rows|length }}</span></h1>
-    <p class="pk-page-sub">Which research sources each partner has, and whether the saved hook is backed by them.</p>
+    <p class="pk-page-sub">Which research sources each contact has, and whether the saved hook is backed by them.</p>
   </div>
 </header>
 
 <ul class="pk-kpis en-stats" aria-label="Enrichment overview">
-  <li class="pk-kpi"><span class="pk-kpi__label">Partners</span><span class="pk-kpi__value">{{ stats.total }}</span></li>
+  <li class="pk-kpi"><span class="pk-kpi__label">Contacts</span><span class="pk-kpi__value">{{ stats.total }}</span></li>
   <li class="pk-kpi"><span class="pk-kpi__label">Fully enriched</span><span class="pk-kpi__value">{{ stats.fully_enriched }}</span></li>
   <li class="pk-kpi"><span class="pk-kpi__label">Needs PB enrichment</span><span class="pk-kpi__value">{{ stats.needs_pb }}</span></li>
   <li class="pk-kpi"><span class="pk-kpi__label">Needs LinkedIn</span><span class="pk-kpi__value">{{ stats.needs_linkedin }}</span></li>
@@ -47,7 +47,7 @@
   <span class="en-ok" aria-hidden="true">&#x2713;</span> source present (fact count beside it)
   <span class="en-dot" aria-hidden="true">&middot;</span> <span class="pk-faint">none</span> source missing
   <span class="en-dot" aria-hidden="true">&middot;</span> Hook: <span class="en-ok" aria-hidden="true">&#x2713;</span> cites a specific company,
-  <span class="en-bad" aria-hidden="true">&#x2717;</span> generic, <span class="pk-faint">Not checked</span> hook not yet verified, <span class="en-bad">Ungrounded</span> hook claims not in the research, <span class="pk-faint">?</span> cannot tell
+  <span class="en-bad" aria-hidden="true">&#x2717;</span> generic, <span class="pk-faint">Not checked</span> hook not yet verified, <span class="badge badge-danger">Ungrounded</span> hook claims not in the research, <span class="pk-faint">?</span> cannot tell
 </p>
 
 <section class="pk-card pk-card--flush">
@@ -55,7 +55,7 @@
   <table class="pk-table en-table" id="enrichTable"><caption class="sr-only">Enrichment Status records</caption>
     <thead>
       <tr>
-        <th aria-sort="none" data-sort="partner"><button class="table-sort" type="button">Partner &#x2195;</button></th>
+        <th aria-sort="none" data-sort="partner"><button class="table-sort" type="button">Contact &#x2195;</button></th>
         <th aria-sort="none" data-sort="tier"><button class="table-sort" type="button">Tier &#x2195;</button></th>
         <th scope="col">Verified</th>
         <th aria-sort="none" data-sort="pb_api"><button class="table-sort" type="button">PB API &#x2195;</button></th>
@@ -103,7 +103,7 @@
         <td data-label="Hook" class="en-c">
           {% if row.hook_quality == 'cite_specific' %}<span class="en-ok" title="Hook cites a specific company from PB data">&#x2713;</span>
           {% elif row.hook_quality == 'generic' %}<span class="en-bad" title="Hook exists but does not cite a specific PB company">&#x2717;</span>
-          {% elif row.hook_quality == 'ungrounded' %}<span class="en-bad" title="Hook has claims that are not in the saved research. Regenerate it before approving.">Ungrounded</span>
+          {% elif row.hook_quality == 'ungrounded' %}<span class="badge badge-danger" title="Hook has claims that are not in the saved research. Regenerate it before approving.">Ungrounded</span>
           {% elif row.hook_quality == 'grounded' %}<span class="en-ok" title="Every claim in the hook matches the saved research">&#x2713;</span>
           {% elif row.hook_quality == 'not_checked' %}<span class="pk-faint" title="Hook exists but has not been checked against enrichment facts">Not checked</span>
           {% elif row.hook_quality == 'no_enrichment' %}<span class="pk-faint" title="No enrichment, hook quality unknown">?</span>
@@ -121,9 +121,9 @@
 <section class="pk-card">
   <div class="pk-empty">
     <div class="pk-empty__icon">{{ icon("database", 28) }}</div>
-    <h2 class="pk-empty__title">No active partners to enrich yet</h2>
-    <p>Enrichment status appears here once partners exist.</p>
-    <p><a class="pk-btn pk-btn--primary pk-btn--sm" href="/crm/new">Add a contact</a></p>
+    <h2 class="pk-empty__title">No active contacts to enrich yet</h2>
+    <p>Enrichment status appears here once contacts exist.</p>
+    <p><a class="pk-btn pk-btn--primary pk-btn--sm" href="/crm/new">{{ icon("plus") }}Add a contact</a></p>
   </div>
 </section>
 {% endif %}

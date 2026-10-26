@@ -1,7 +1,20 @@
 {% extends 'base.html' %}
-{% from "_icons.html" import icon %}
+{% from "_icons.html" import icon, btn_icon %}
 {% block page_id %}crm_dashboard{% endblock %}
 {% block title %}Contacts{% endblock %}
+
+{% macro spark(s) -%}
+<svg class="vz-spark dash-spark{% if s.tone %} {{ s.tone }}{% endif %}{% if s.ghost %} vz-spark--ghost is-ghost{% endif %}" width="100%" height="28" viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="{{ s.label }}" focusable="false">
+  <line class="vz-spark__base" x1="0" y1="26" x2="100" y2="26"/>
+  {%- if s.ghost %}
+  <polyline class="vz-spark__line" points="0,26 100,26"/>
+  {%- else %}
+  <polygon class="vz-spark__area" points="0,26 {{ s.points }} 100,26"/>
+  <polyline class="vz-spark__line" points="{{ s.points }}"/>
+  <line class="dash-spark__end" x1="100" y1="{{ '%.2f'|format(s.last_y) }}" x2="100.01" y2="{{ '%.2f'|format(s.last_y) }}"/>
+  {%- endif %}
+</svg>
+{%- endmacro %}
 
 {% block content %}
 {% set d = dash %}
@@ -14,18 +27,8 @@
       <p class="pk-page-sub">{% if d.no_contacts %}Add the {{ people }} you want to reach and this page tracks every step.{% else %}Your {{ people }}, where each one stands, and what to do next.{% endif %}</p>
     </div>
     <div class="pk-page-head__actions dash-actions">
-      <span class="dash-gmail">
-        <a class="pk-chip crm-chip" href="/settings#svc-gmail">{{ icon("mail", 14) }}{% if d.gmail.when %}Gmail synced <time datetime="{{ d.gmail.when.iso }}" data-rel>{{ d.gmail.when.fallback }}</time>{% else %}Gmail not checked yet{% endif %}</a>
-        <span class="pk-info pk-info--end">
-          <button type="button" class="pk-info__btn" aria-label="About the Gmail check">i</button>
-          <span class="pk-popover" role="tooltip">{{ d.gmail.tip }}</span>
-        </span>
-        <form method="post" action="{{ url_for('crm_refresh_inbox_route') }}" data-busy="Checking Gmail, this can take a minute...">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-          <button class="pk-btn pk-btn--ghost pk-btn--icon" type="submit" title="Check Gmail now" aria-label="Check Gmail now">{{ icon("refresh", 16) }}</button>
-        </form>
-      </span>
-      <a class="pk-btn pk-btn--primary" href="{{ d.primary.href }}">{{ d.primary.label }}</a>
+      <a class="pk-chip crm-chip" href="/settings#svc-gmail" title="{{ d.gmail.tip }}">{{ icon("mail", 14) }}{% if d.gmail.when %}Gmail synced <time datetime="{{ d.gmail.when.iso }}" data-rel>{{ d.gmail.when.fallback }}</time>{% else %}Gmail not checked yet{% endif %}</a>
+      <a class="pk-btn pk-btn--primary" href="{{ d.primary.href }}">{{ btn_icon(d.primary.label) }}{{ d.primary.label }}</a>
       <details class="pk-kebab">
         <summary aria-label="More actions"><span class="sr-only">More actions</span></summary>
         <div class="pk-kebab__menu">
@@ -33,63 +36,105 @@
           <a href="/crm/export.csv">Export CSV</a>
           <a href="{{ url_for('crm_analytics') }}">Analytics</a>
           <a href="{{ url_for('crm_tracking') }}">Open tracking</a>
+          <form class="dash-refresh" method="post" action="{{ url_for('crm_refresh_inbox_route') }}" data-busy="Checking Gmail, this can take a minute...">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button type="submit" title="Check Gmail now">{{ icon("refresh", 16) }}Check Gmail now</button>
+          </form>
         </div>
       </details>
     </div>
   </header>
 
   {% if d.no_contacts %}
-  <section class="pk-card">
-    <div class="pk-empty crm-empty-state">
-      <span class="pk-empty__icon">{{ icon("users", 48) }}</span>
-      <h2 class="pk-empty__title">No {{ people }} yet</h2>
-      <p>Import a list in the first step of your campaign. Every {{ person }} you add shows up here with its draft, send and reply status.</p>
-      <ol class="crm-empty-steps">
-        <li><a href="/settings#svc-gmail">Connect Gmail and set your test recipient</a></li>
-        <li><a href="/crm/new">Add a {{ person }}</a>, import a CSV from <a href="{{ d.step_one_href }}">campaign step 1</a>, or load the sample</li>
-        <li><a href="/crm/drafts#writeDrafts">Write drafts, then approve and send a test</a></li>
-      </ol>
-      <details class="crm-collapse crm-empty-import" id="crmImport" open><summary>{{ icon("upload") }}Import contacts from a CSV{{ icon("chevron-down", 16, "icon-chevron") }}</summary>
-        <form method="post" action="/crm/import" enctype="multipart/form-data" class="settings-fields import-form">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-          <input type="hidden" name="next" value="/crm">
-          <label for="crmCsv">Choose a CSV file<input id="crmCsv" type="file" name="file" accept=".csv,text/csv"></label>
-          <label for="crmCsvText">Or paste CSV<textarea id="crmCsvText" name="csv_text" rows="5" placeholder="name,email,org,role,facts&#10;Ada Lovelace,ada@example.com,Analytical Co,Founder,your essay on small teams | your talk on shipping weekly"></textarea></label>
-          <p class="crm-source-note">Name and email are required; org, role and facts are optional. Put several facts in the facts column separated by " | ". Drafts need at least one fact per contact.</p>
-          <button type="submit" class="pk-btn pk-btn--primary pk-btn--sm">{{ icon("upload") }}Import contacts</button>
-        </form>
-      </details>
-      <div class="dash-empty-actions">
-        <a class="pk-btn pk-btn--primary" href="#crmImport">{{ icon("upload", 16) }}Import contacts</a>
-        <form method="post" action="/sample/load">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-          <button type="submit" class="pk-btn pk-btn--secondary">Load the sample</button>
-        </form>
+  <section class="pk-card dash-empty crm-empty-state" aria-label="No {{ people }} yet">
+    <div class="vz-ghost vz-ghost--funnel dash-ghost">
+      <div class="vz-ghost__art" aria-hidden="true">
+        <svg class="vz-ghost__svg vz-ghost__svg--funnel" viewBox="0 0 100 40" preserveAspectRatio="none" focusable="false">
+          <rect class="vz-ghost__bar" x="0" y="0" width="100" height="6"/>
+          <rect class="vz-ghost__bar" x="10" y="9" width="80" height="6"/>
+          <rect class="vz-ghost__bar" x="20" y="18" width="60" height="6"/>
+          <rect class="vz-ghost__bar" x="30" y="27" width="40" height="6"/>
+          <rect class="vz-ghost__bar" x="40" y="36" width="20" height="4"/>
+        </svg>
+      </div>
+      <div class="vz-ghost__msg dash-ghost__msg">
+        <p class="vz-ghost__hint">Import a CSV or load the sample to see your pipeline here.</p>
+        <ol class="crm-empty-steps">
+          <li><a href="/settings#svc-gmail">Connect Gmail</a></li>
+          <li><a href="/crm/new">Add {{ "an" if person[:1]|lower in "aeiou" else "a" }} {{ person }}</a></li>
+          <li><a href="/crm/drafts#writeDrafts">Write drafts</a></li>
+        </ol>
+        <div class="dash-empty-actions">
+          <a class="pk-btn pk-btn--secondary" href="#crmImport" data-open-details="crmImport">{{ icon("upload", 16) }}Import CSV</a>
+          <form method="post" action="/sample/load">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button type="submit" class="pk-btn pk-btn--secondary">{{ icon("upload") }}Load the sample</button>
+          </form>
+        </div>
       </div>
     </div>
   </section>
+  <details class="crm-collapse crm-empty-import" id="crmImport"><summary>{{ icon("upload") }}Import contacts from a CSV{{ icon("chevron-down", 16, "icon-chevron") }}</summary>
+    <form method="post" action="/crm/import" enctype="multipart/form-data" class="settings-fields import-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="next" value="/crm">
+      <label for="crmCsv">Choose a CSV file<input id="crmCsv" type="file" name="file" accept=".csv,text/csv"></label>
+      <label for="crmCsvText">Or paste CSV<textarea id="crmCsvText" name="csv_text" rows="5" placeholder="name,email,org,role,facts&#10;Ada Lovelace,ada@example.com,Analytical Co,Founder,your essay on small teams | your talk on shipping weekly"></textarea></label>
+      <p class="crm-source-note">Name and email are required; org, role and facts are optional. Put several facts in the facts column separated by " | ". Drafts need at least one fact per contact.</p>
+      <button type="submit" class="pk-btn pk-btn--primary pk-btn--sm">{{ icon("upload") }}Import contacts</button>
+    </form>
+  </details>
   {% else %}
 
-  {% if d.next_actions %}
+  {% if d.next_actions or d.caught_up %}
   <section class="pk-card pk-card--flush dash-next" aria-labelledby="dash-next-h">
-    <div class="pk-card__head"><h2 class="pk-card__title" id="dash-next-h">Next actions</h2></div>
-    <ul class="dash-next__list">
-      {% for a in d.next_actions %}
-      <li class="dash-next__item">
-        <span class="dash-next__text"><strong class="pk-num">{{ a.count }}</strong> {{ a.text }}</span>
-        <a class="pk-btn pk-btn--secondary pk-btn--sm" href="{{ a.href }}">{{ a.label }}</a>
-      </li>
-      {% endfor %}
-    </ul>
+    <div class="dash-next__main">
+      <div class="pk-card__head"><h2 class="pk-card__title" id="dash-next-h">Next actions</h2></div>
+      {% if d.next_actions %}
+      <ul class="dash-next__list">
+        {% for a in d.next_actions %}
+        <li class="dash-next__item dash-tile{% if a.ghost %} is-ghost{% endif %}">
+          <strong class="dash-tile__num pk-num">{{ a.count }}</strong>
+          <span class="dash-tile__text" title="{{ a.count }} {{ a.text }}">{{ a.text }}</span>
+          {{ spark(a.spark) }}
+          <a class="pk-btn pk-btn--sm {{ 'pk-btn--primary' if a.primary else ('pk-btn--ghost' if a.ghost else 'pk-btn--secondary') }}" href="{{ a.href }}">{{ btn_icon(a.label) }}{{ a.label }}</a>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <div class="dash-caught">
+        <span class="dash-caught__text">{{ d.caught_up.text }}</span>
+        <a class="pk-btn pk-btn--primary pk-btn--sm" href="{{ d.caught_up.href }}">{{ btn_icon(d.caught_up.label) }}{{ d.caught_up.label }}</a>
+      </div>
+      {% endif %}
+    </div>
+    <aside class="dash-next__rail" aria-labelledby="dash-fun-h">
+      <h3 class="dash-rail__title" id="dash-fun-h">Pipeline</h3>
+      <div class="pk-funnel vz-fun dash-funnel" role="list">
+        {% for f in d.funnel %}
+        <div class="pk-funnel__row" role="listitem" data-stage="{{ f.label|lower }}">
+          <span class="pk-funnel__label">{{ f.label }}</span>
+          <span class="pk-funnel__track"><svg class="vz-fun__svg" viewBox="0 0 100 32" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+            <rect class="vz-fun__bar{% if f.zero %} is-zero{% endif %}" x="{{ '%.2f'|format(f.x) }}" y="0" width="{{ '%.2f'|format(f.w) }}" height="26"/>
+            {%- if f.join %}<polygon class="vz-fun__join" points="{{ f.join }}"/>{% endif -%}
+          </svg></span>
+          <span class="pk-funnel__val pk-num">{{ f.value }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </aside>
   </section>
   {% endif %}
 
   <ul class="pk-kpis dash-kpis" aria-label="Key numbers">
     {% for k in d.kpis %}
-    <li class="pk-kpi">
-      <span class="pk-kpi__label">{{ k.label }}</span>
-      <span class="pk-kpi__value{% if k.na %} pk-kpi__value--na{% endif %}">{{ k.value }}</span>
-      <span class="pk-kpi__caption">{{ k.caption }}</span>
+    <li class="pk-kpi vz-kpi">
+      <a class="dash-kpi__link" href="{{ k.href }}">
+        <span class="pk-kpi__label">{{ k.label }}</span>
+        <span class="pk-kpi__value{% if k.na %} pk-kpi__value--na{% endif %}">{{ k.value }}</span>
+        <span class="pk-kpi__caption">{{ k.caption }}</span>
+        {{ spark(k.spark) }}
+      </a>
     </li>
     {% endfor %}
   </ul>
@@ -106,7 +151,7 @@
       <label class="pk-search" for="crm_dashboard-field-1">
         <span class="sr-only">Search {{ people }}</span>
         {{ icon("search", 16) }}
-        <input id="crm_dashboard-field-1" type="search" name="q" value="{{ filters.q or '' }}" placeholder="Search name, organization or email" autocomplete="off">
+        <input id="crm_dashboard-field-1" type="search" name="q" value="{{ filters.q or '' }}" placeholder="Search contacts" autocomplete="off">
       </label>
       <label for="crm_dashboard-field-2"><span class="sr-only">Stage</span>
         <select id="crm_dashboard-field-2" class="pk-select" name="stage" data-crm-autosubmit>
@@ -164,11 +209,18 @@
           {% for row in rows %}
           <tr>
             <td>
-              <a class="pk-primary pk-cell-title" href="{{ url_for('crm_contact', partner_id=row.partner_id) }}">{{ row.name or 'Unknown ' ~ person }}</a>
-              <span class="pk-cell-sub">{{ row.firm or 'Organization not recorded' }}{% if row.firm %} <a class="dash-similar" href="{{ url_for('crm_alternate_investors', partner_id=row.partner_id) }}">Find similar</a>{% endif %}</span>
-              <span class="pk-cell-sub">{{ row.new_research_email if filters.view == 'new_research' and row.new_research_email else (row.email or 'Email unknown') }}</span>
+              <div class="dash-contact">
+                <span class="dash-row-icon" aria-hidden="true">{{ icon(row.icon, 16) }}</span>
+                <div class="dash-contact__body">
+                  <a class="pk-primary pk-cell-title" href="{{ url_for('crm_contact', partner_id=row.partner_id) }}">{{ row.name or 'Unknown ' ~ person }}</a>
+                  <span class="pk-cell-sub">{{ row.firm or 'Organization not recorded' }}{% if row.firm %} <a class="dash-similar pk-btn pk-btn--ghost pk-btn--sm" href="{{ url_for('crm_alternate_investors', partner_id=row.partner_id) }}">{{ icon("search", 14) }}Find similar</a>{% endif %}</span>
+                  <span class="pk-cell-sub">{{ row.new_research_email if filters.view == 'new_research' and row.new_research_email else (row.email or 'Email unknown') }}</span>
+                </div>
+              </div>
             </td>
-            <td>{{ row.stage|replace('_', ' ')|title if row.stage else 'Unknown' }}</td>
+            <td>
+              <span class="dash-stage"><span class="pk-meter dash-meter" role="img" aria-label="Stage: {{ row.stage_label }}">{% for i in range(1, 5) %}<span class="dash-meter__seg{% if i <= row.stage_segments %} is-on{% endif %}"></span>{% endfor %}</span><span class="dash-stage__label">{{ row.stage_label }}</span></span>
+            </td>
             <td>
               <span class="pk-pill pk-pill--dot {{ row.pill.cls }}">{{ row.pill.label }}</span>{% if row.pill.est %} <span class="pk-pill pk-pill--est">est.</span>{% endif %}
               {% if filters.view == 'followup_watchlist' and row.watchlist_rank %}<span class="pk-cell-sub">Priority #{{ row.watchlist_rank }}</span>{% endif %}
@@ -179,9 +231,7 @@
               {% if row.when %}<time datetime="{{ row.when.iso }}" data-rel>{{ row.when.fallback }}</time>{% else %}<span class="pk-faint">No activity yet</span>{% endif %}
             </td>
             <td>
-              {% if row.next_step.kind == 'text' %}<span class="pk-muted">{{ row.next_step.label }}</span>
-              {% elif row.next_step.kind == 'link' %}<a href="{{ row.next_step.href }}">{{ row.next_step.label }}</a>
-              {% else %}<a class="pk-btn pk-btn--secondary pk-btn--sm" href="{{ row.next_step.href }}">{{ row.next_step.label }}</a>{% endif %}
+              <a class="pk-btn pk-btn--sm {{ 'pk-btn--primary' if row.next_step.tone == 'primary' else ('pk-btn--ghost' if row.next_step.tone == 'ghost' else 'pk-btn--secondary') }}" href="{{ row.next_step.href }}">{{ btn_icon(row.next_step.label) }}{{ row.next_step.label }}</a>
               {% if row.follow_up %}<span class="pk-cell-sub">Follow-up <time datetime="{{ row.follow_up.iso }}" data-rel>{{ row.follow_up.fallback }}</time></span>{% endif %}
             </td>
           </tr>
@@ -195,9 +245,9 @@
       <span>{% if counts.matching %}Showing {{ d.first_shown }} to {{ d.first_shown + rows|length - 1 }} of {{ counts.matching }}{% else %}0 {{ people }}{% endif %}</span>
       {% if counts.pages > 1 %}
       <nav class="dash-pager" aria-label="Contact pages">
-        {% if counts.page > 1 %}<a class="pk-btn pk-btn--secondary pk-btn--sm" href="{{ url_for('crm_dashboard', view=filters.view, q=filters.q, stage=filters.stage, tag=filters.tag, draft=filters.draft, page=counts.page - 1) }}">Previous</a>{% endif %}
+        {% if counts.page > 1 %}<a class="pk-btn pk-btn--secondary pk-btn--sm" href="{{ url_for('crm_dashboard', view=filters.view, q=filters.q, stage=filters.stage, tag=filters.tag, draft=filters.draft, page=counts.page - 1) }}">{{ icon("arrow-left") }}Previous</a>{% endif %}
         <span class="pk-muted">Page {{ counts.page }} of {{ counts.pages }}</span>
-        {% if counts.page < counts.pages %}<a class="pk-btn pk-btn--secondary pk-btn--sm" href="{{ url_for('crm_dashboard', view=filters.view, q=filters.q, stage=filters.stage, tag=filters.tag, draft=filters.draft, page=counts.page + 1) }}">Next</a>{% endif %}
+        {% if counts.page < counts.pages %}<a class="pk-btn pk-btn--secondary pk-btn--sm" href="{{ url_for('crm_dashboard', view=filters.view, q=filters.q, stage=filters.stage, tag=filters.tag, draft=filters.draft, page=counts.page + 1) }}">Next {{ icon("arrow-right") }}</a>{% endif %}
       </nav>
       {% endif %}
     </div>

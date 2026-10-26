@@ -1,5 +1,11 @@
 /* Copy button for the read-only "Example pitch" block (_example_pitch.html). Same-origin script, CSP safe. */
 (function () {
+  // Glyph-safe label swap: keeps the icon span and replaces only the text.
+  function setBtnLabel(button, text) {
+    var nodes = Array.prototype.slice.call(button.childNodes);
+    nodes.forEach(function (node) { if (node.nodeType === 3) button.removeChild(node); });
+    button.appendChild(document.createTextNode(text));
+  }
   function bind() {
     var buttons = document.querySelectorAll('#examplePitch [data-copy-target]');
     Array.prototype.forEach.call(buttons, function (button) {
@@ -10,8 +16,8 @@
         var label = button.dataset.copyLabel || 'Copy';
         if (!area) return;
         function done(text) {
-          button.textContent = text;
-          window.setTimeout(function () { button.textContent = label; }, 1800);
+          setBtnLabel(button, text);
+          window.setTimeout(function () { setBtnLabel(button, label); }, 1800);
         }
         function fallback() {
           try {

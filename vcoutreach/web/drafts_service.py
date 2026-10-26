@@ -645,6 +645,7 @@ def campaign_state(all_drafts):
             'approved': bool(progress['approved']), 'test_sent': bool(progress['send_test']),
             'can_sample': contact_count == 0 and drafts_total == 0 and not has_sender,
             'gmail': gmail, 'test_recipient': test_recipient, 'sender_name': sender_name,
+            'approved_count': sum(1 for row in all_drafts if row.get('approval_state') == 'approved'),
             'first_approved_slug': first_approved['slug'] if first_approved else '',
             'first_approved_partner_id': first_approved.get('partner_id') if first_approved else None,
             'preview': preview, 'deck_file_name': panel['deck_file_name'],

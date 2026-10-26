@@ -1,0 +1,130 @@
+/* Publikreach visual layer: dependency-free inline SVG charts (sparklines, daily line chart, funnel, segment
+   bars). The page grid and the glass board live in style.css and components.css.
+   Theme: only the existing CSS variables from style.css (dark/light via [data-theme]). No images, fonts or CDN.
+   Charts are server-rendered SVG; visuals.js only adds hover and keyboard reading on top. */
+
+:root {
+  --vz-sent: var(--accent);
+  --vz-reply: var(--success);
+  --vz-ghost: var(--border);
+  --vz-plot-h: 200px;
+}
+
+/* -- Sparklines inside KPI cards ------------------------------------------------------------------ */
+.vz-spark { display: block; position: relative; height: 28px; margin: 8px 0 4px; color: var(--vz-sent); }
+.vz-spark--success { color: var(--vz-reply); }
+.vz-spark--muted { color: var(--text-muted); }
+svg.vz-spark { width: 100%; overflow: visible; }
+.vz-spark__svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; overflow: visible; }
+.vz-spark__base { stroke: var(--border-muted); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.vz-spark__line { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.vz-spark__area { fill: currentColor; opacity: 0.1; stroke: none; }
+.vz-spark__dots { position: absolute; inset: 0; width: 100%; height: 100%; display: block; overflow: visible; pointer-events: none; }
+.vz-spark__dot { fill: currentColor; stroke: var(--surface); stroke-width: 2; }
+.vz-spark--ghost, .vz-spark.is-ghost { color: var(--vz-ghost); opacity: 0.55; }
+.vz-spark.is-ghost .vz-spark__line { stroke-dasharray: 2 4; stroke-width: 1.25; }
+
+/* -- Daily line chart ----------------------------------------------------------------------------- */
+.vz-chart-card .pk-card__body { padding-top: 12px; }
+.vz-legend-row { padding-left: 40px; }
+.vz-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; margin: 0 0 12px; padding: 0; list-style: none; font-size: var(--fs-12); line-height: 16px; color: var(--text-muted); }
+.vz-legend li { display: inline-flex; align-items: center; gap: 8px; }
+.vz-legend strong { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+.vz-key { width: 14px; height: 0; border-top: 2px solid currentColor; border-radius: 0; }
+.vz-key--sent { color: var(--vz-sent); }
+.vz-key--reply { color: var(--vz-reply); border-top-style: solid; position: relative; }
+.vz-key--reply::after { content: ""; position: absolute; left: 50%; top: -5px; width: 6px; height: 6px; margin-left: -3px; border-radius: 0; background: currentColor; }
+
+.vz-chart { position: relative; padding: 4px 8px 24px 36px; }
+.vz-chart__plot { position: relative; height: var(--vz-plot-h); outline: none; touch-action: pan-y; }
+.vz-chart__plot:focus-visible { outline: 2px solid var(--focus); outline-offset: 4px; border-radius: 0; }
+.vz-chart__svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; overflow: visible; }
+.vz-grid-h { stroke: var(--border-muted); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.vz-grid-h--base { stroke: var(--border); }
+.vz-grid-v { stroke: var(--border-muted); stroke-width: 1; stroke-dasharray: 1 5; vector-effect: non-scaling-stroke; opacity: 0.8; }
+.vz-line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.vz-line--sent { stroke: var(--vz-sent); }
+.vz-line--reply { stroke: var(--vz-reply); }
+.vz-area--sent { fill: var(--vz-sent); opacity: 0.08; stroke: none; }
+.vz-overlay { position: absolute; inset: 0; width: 100%; height: 100%; display: block; overflow: visible; pointer-events: none; }
+.vz-ytick, .vz-xtick { font-size: var(--fs-12); fill: var(--text-faint); font-variant-numeric: tabular-nums; }
+.vz-ytick { text-anchor: end; dominant-baseline: central; }
+.vz-xtick { text-anchor: middle; }
+.vz-xtick.is-first { text-anchor: start; }
+.vz-xtick.is-last { text-anchor: end; }
+.vz-end { stroke: var(--surface); stroke-width: 2; }
+.vz-end--sent { fill: var(--vz-sent); }
+.vz-end--reply { fill: var(--vz-reply); }
+.vz-hover { opacity: 0; }
+.vz-hover.is-on { opacity: 1; }
+.vz-hover__rule { stroke: var(--border-strong); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.vz-tip { position: absolute; top: 4px; z-index: 3; min-width: 120px; padding: 8px 12px; border: 1px solid var(--border-strong); border-radius: 0; background: var(--surface); color: var(--text); box-shadow: var(--shadow-float); font-size: var(--fs-12); line-height: 16px; pointer-events: none; opacity: 0; transform: translateX(12px); }
+.vz-tip.is-on { opacity: 1; }
+.vz-tip.is-left { transform: translateX(calc(-100% - 12px)); }
+.vz-tip strong { display: block; margin-bottom: 4px; font-weight: 600; }
+.vz-tip span { display: flex; justify-content: space-between; gap: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.vz-tip span b { color: var(--text); font-weight: 600; }
+.vz-chart__note { margin: 12px 0 0; }
+
+/* -- Ghost (empty) states ------------------------------------------------------------------------- */
+.vz-ghost { position: relative; }
+.vz-ghost__art { opacity: 0.5; pointer-events: none; }
+.vz-ghost__path { fill: none; stroke: var(--vz-ghost); stroke-width: 2; stroke-dasharray: 3 6; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.vz-ghost__msg { position: absolute; inset: 0; z-index: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; text-align: center; padding: 0 16px; }
+.vz-ghost__title { font-size: var(--fs-14); line-height: 20px; font-weight: 600; color: var(--text); }
+.vz-ghost__hint { font-size: var(--fs-12); line-height: 16px; color: var(--text-muted); max-width: 46ch; }
+.vz-ghost--funnel, .vz-ghost--bars { min-height: 150px; }
+.vz-ghost--funnel .vz-ghost__art, .vz-ghost--bars .vz-ghost__art { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; padding: 8px 0; }
+.vz-ghost__svg { display: block; width: 100%; overflow: visible; }
+.vz-ghost__svg--funnel { height: 88px; }
+.vz-ghost__svg--bars { height: 64px; }
+.vz-ghost__bar { fill: none; stroke: var(--vz-ghost); stroke-width: 1; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
+
+/* -- Funnel: centered bars with tapered connectors ------------------------------------------------ */
+.vz-fun { gap: 0; }
+.vz-fun .pk-funnel__row { align-items: start; }
+.vz-fun .pk-funnel__label, .vz-fun .pk-funnel__val { line-height: 22px; }
+.vz-fun .pk-funnel__track { height: 32px; background: none; border-radius: 0; overflow: visible; }
+.vz-fun__svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.vz-fun__bar { fill: var(--accent); }
+.vz-fun__bar.is-zero { opacity: 0.45; }
+.vz-fun__join { fill: var(--accent); opacity: 0.1; }
+.vz-fun__na { fill: none; stroke: var(--vz-ghost); stroke-width: 1; stroke-dasharray: 3 4; vector-effect: non-scaling-stroke; opacity: 0.7; }
+.vz-fun .pk-funnel__row:nth-child(2) .vz-fun__bar { opacity: 0.82; }
+.vz-fun .pk-funnel__row:nth-child(3) .vz-fun__bar { opacity: 0.66; }
+.vz-fun .pk-funnel__row:nth-child(4) .vz-fun__bar { opacity: 0.52; }
+.vz-fun .pk-funnel__row:nth-child(n+5) .vz-fun__bar { opacity: 0.4; }
+
+/* -- Segment bars --------------------------------------------------------------------------------- */
+.vz-bars { gap: 12px; }
+.vz-bars .pk-bars__track { height: 20px; background: none; border-radius: 0; overflow: visible; }
+.vz-bars__svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.vz-bars__rail { fill: var(--pk-bar-track); }
+.vz-bars__tick { stroke: var(--border); stroke-width: 1; stroke-dasharray: 1 3; vector-effect: non-scaling-stroke; }
+.vz-bars__fill { fill: var(--accent); }
+.vz-bars .pk-bars__row.is-low .vz-bars__fill { fill: var(--border-strong); stroke: var(--text-faint); stroke-width: 1; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; opacity: 0.7; }
+
+/* -- Motion: only when the person has not asked for less ----------------------------------------- */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes vz-reveal { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 -6px 0 -6px); } }
+  @keyframes vz-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+  @keyframes vz-fade { from { opacity: 0; } to { opacity: 1; } }
+  .vz-chart__lines { animation: vz-reveal 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+  .vz-end--sent, .vz-end--reply, .vz-spark__dot { animation: vz-fade 0.3s ease 0.6s both; }
+  .vz-spark__svg, svg.vz-spark { animation: vz-reveal 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+  .vz-bars__fill, .vz-fun__bar { transform-box: fill-box; transform-origin: left center; animation: vz-grow 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+  .vz-fun__bar { transform-origin: center; }
+  .vz-tip, .vz-hover { transition: opacity 0.12s ease; }
+}
+/* -- Narrow windows (the Mac app can be resized down to about 900px) ----------------------------- */
+@media (max-width: 900px) {
+  :root { --vz-plot-h: 170px; }
+  .vz-chart { padding-left: 32px; }
+  }
+@media (max-width: 560px) {
+  .vz-xtick.is-mid { display: none; }
+  .vz-fun .pk-funnel__track { grid-column: 1 / -1; }
+}
+
+/* Ghost captions sit on a surface chip so dashed placeholder art never runs through the text */
+.vz-ghost__title, .vz-ghost__hint { background: var(--surface); padding: 0 8px; }

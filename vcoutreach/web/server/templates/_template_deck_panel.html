@@ -1,4 +1,4 @@
-{% from "_icons.html" import icon %}
+{% from "_icons.html" import icon, btn_icon %}
 {# "Template and deck" panel: a compact attachment card. Needs deck_panel; set deck_collapsed to render it as a collapsed details block.
    Set deck_embed to false when the page shows the deck preview elsewhere (the draft editor does).
    Posts to /crm/deck/upload, /crm/deck/remove, /crm/deck/example and /crm/setup/publik, then returns to this page. #}
@@ -12,6 +12,8 @@
 {% set _has = _p.has_deck and not _min %}
 {% set _next = request.path if request is defined else '/crm/drafts' %}
 {# The credibility line renders here only when the example pitch block (which carries it) is absent, so it never shows twice. #}
+{# A refused upload, removal or example swap leaves a deck_error flash: show it beside the input and open the panel. #}
+{% set _deck_err = get_flashed_messages(category_filter=['deck_error']) %}
 {% macro _hidden() %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="next" value="{{ _next }}">{% endmacro %}
 {% macro _upload_form(button, label) %}
   <form method="post" action="/crm/deck/upload" enctype="multipart/form-data" class="pk-deck-upload">
@@ -19,6 +21,7 @@
     <input class="pk-input pk-deck-file" type="file" name="deck" accept="application/pdf,.pdf" required aria-label="{{ label }}">
     <button type="submit" class="pk-btn pk-btn--secondary pk-btn--sm">{{ icon("upload") }}{{ button }}</button>
   </form>
+  {% for _msg in _deck_err %}<p class="pk-deck-error" role="alert" data-deck-error>{{ icon("alert-triangle", 14) }}<span>{{ _msg }}</span></p>{% endfor %}
 {% endmacro %}
 {% macro _body() %}
   {% if _k and _k.chosen and _k.words.panel_credibility and not example_pitch and (deck_credibility is not defined or deck_credibility) %}<p class="svc-hint deck-panel-credibility">{{ _k.words.panel_credibility }}</p>{% endif %}
@@ -49,13 +52,13 @@
       {% endif %}
       {{ _upload_form('Upload', 'Choose a PDF ' ~ _doc) }}
       {% if not _job %}
-      <form method="post" action="/crm/deck/example" class="pk-deck-inline">{{ _hidden() }}<button type="submit" class="pk-btn pk-btn--ghost pk-btn--sm">Use the example deck</button></form>
+      <form method="post" action="/crm/deck/example" class="pk-deck-inline">{{ _hidden() }}<button type="submit" class="pk-btn pk-btn--ghost pk-btn--sm">{{ icon("eye") }}Use the example deck</button></form>
       {% endif %}
     {% endif %}
   </div>
   <form method="post" action="/crm/setup/publik" class="pk-deck-cta">
     {{ _hidden() }}
-    <button type="submit" class="pk-btn pk-btn--primary">Let Publik do it for you</button>
+    <button type="submit" class="pk-btn pk-btn--primary">{{ icon("sparkles") }}Let Publik do it for you</button>
     <span class="svc-hint">Publik writes your email template from what you have told us.</span>
   </form>
   {% if _p.deck_file_name and not _min and (deck_embed is not defined or deck_embed) %}{% include '_deck_embed.html' %}{% endif %}
@@ -64,7 +67,7 @@
   <p class="crm-source-note"><a href="/settings#sec-package">Edit in Settings</a></p>
 {% endmacro %}
 {% if deck_collapsed %}
-<details class="crm-panel deck-panel" id="templateDeckPanel">
+<details class="crm-panel deck-panel" id="templateDeckPanel"{% if _deck_err %} open{% endif %}>
   <summary><strong>{{ 'Template and resume' if _job else 'Template and deck' }}</strong>{{ icon("chevron-down", 16, "icon-chevron") }}</summary>
   <div class="deck-panel-body">{{ _body() }}</div>
 </details>

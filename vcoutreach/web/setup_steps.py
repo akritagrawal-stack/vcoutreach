@@ -216,3 +216,8 @@ def next_step(steps: list[dict] | None = None, workspace=None) -> dict | None:
         if not step["done"]:
             return {name: step[name] for name in ("key", "index", "total", "label", "href", "recommended")}
     return None
+
+
+def required_done(steps: list[dict] | None = None, workspace=None) -> bool:
+    """True when every required step is done. The optional Publik API step never blocks going live."""
+    return all(step["done"] for step in (steps if steps is not None else setup_steps(workspace)) if step["key"] != "publik_api")

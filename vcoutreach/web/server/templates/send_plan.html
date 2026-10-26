@@ -1,11 +1,12 @@
 {% extends 'base.html' %}
+{% from "_icons.html" import icon, btn_icon %}
 {% block page_id %}send_plan{% endblock %}
 {% block title %}Send plan{% endblock %}
 {% block content %}
 <div class="crm-shell send-plan-page cmp-page">
   <header class="pk-page-head">
     <div class="pk-page-head__text"><h1 class="pk-page-title">Send plan</h1><p class="pk-page-sub">Nothing is sent from this screen.</p></div>
-    <div class="pk-page-head__actions"><a class="pk-btn pk-btn--secondary pk-btn--sm" href="/crm/drafts">Review drafts</a></div>
+    <div class="pk-page-head__actions"><a class="pk-btn pk-btn--secondary pk-btn--sm" href="/crm/drafts">{{ icon("eye") }}Review drafts</a></div>
   </header>
   <section class="pk-kpis send-stats" aria-label="Plan totals">
     <div class="pk-kpi"><span class="pk-kpi__label">PLANNED</span><strong class="pk-kpi__value">{{ summary.planned }}</strong><small class="pk-kpi__caption">Passed every gate</small></div>
@@ -14,7 +15,7 @@
   </section>
   {% if error %}<p class="flash flash-error" role="status">{{ error }}</p>{% endif %}
   {% set _example_slugs = example_draft_slugs() %}
-  {% if _example_slugs %}<p class="flash flash-warning example-warning" role="status" data-example-warning="1"><strong>{% if _example_slugs|length == 1 %}1 draft still carries{% else %}{{ _example_slugs|length }} drafts still carry{% endif %} the Publik example pitch.</strong> {{ example_warning_text }} <a href="/settings#sec-story">Edit your pitch in Settings</a>.</p>{% endif %}
+  {% if _example_slugs %}<p class="flash flash-warning example-warning" role="status" data-example-warning="1"><strong>{% if _example_slugs|length == 1 %}1 draft still carries{% else %}{{ _example_slugs|length }} drafts still carry{% endif %} the Publik example pitch.</strong> {{ example_warning_text }} <a href="/settings#sec-story">Edit your pitch in Settings</a></p>{% endif %}
   {% if g_send_mode == 'test' %}<p>Delivery target: {{ g_test_recipient or 'Test recipient not set' }}</p>{% endif %}
   <section class="pk-card pk-card--flush">
     <div class="pk-table-wrap"><table class="pk-table crm-table send-plan-table"><caption>Draft eligibility and delivery targets</caption><thead><tr><th>Contact</th><th>Delivery target</th><th>Approval</th><th>Subject</th><th>Mode</th><th>Result and reason</th></tr></thead><tbody>

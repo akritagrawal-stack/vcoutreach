@@ -3,8 +3,6 @@
 .m-publik rect { fill: var(--surface-soft); stroke: var(--border-muted); }
 .m-publik text { fill: var(--text); }
 
-.pk-card [hidden], .ai-page [hidden] { display: none !important; }
-
 /* ---- Publik card (used on /settings and /setup/ai) ---- */
 .pk-card .svc-head { flex-wrap: wrap; }
 .pk-card .svc-head h2 { flex: 1 1 8ch; }
@@ -32,16 +30,16 @@
 .ai-block > h2 { margin: 0; font-size: 16px; }
 .ai-block > .svc-card { max-width: 760px; margin-bottom: 0; }
 .ai-lede { max-width: 60ch; }
-.ai-warn { margin: 0; border-radius: var(--radius); padding: 10px 12px; border: 1px solid var(--warning); background: var(--warning-dim); color: var(--text); font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; }
+.ai-warn { margin: 0; border-radius: 0; padding: 10px 12px; border: 1px solid var(--warning); background: var(--warning-dim); color: var(--text); font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; }
 
 /* ---- snippets ---- */
 .ai-snippets { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); align-items: start; }
-.ai-snippet { display: grid; min-width: 0; margin-bottom: 0; padding: var(--space-3) 14px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
+.ai-snippet { display: grid; min-width: 0; margin-bottom: 0; padding: var(--space-3) var(--space-4); border-radius: 0; }
 .ai-snippet-head { margin-bottom: var(--space-2); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
 .ai-snippet-title { display: grid; gap: 2px; min-width: 0; flex: 1 1 10ch; }
 .ai-snippet-title h3 { margin: 0; font-size: 14px; }
 .ai-where { color: var(--text-muted); font-size: 12px; overflow-wrap: anywhere; }
-.ai-code { margin: 0; padding: 10px 12px; max-width: 100%; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-soft); color: var(--text); font: 12px/1.5 var(--font-mono); white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; user-select: all; -webkit-user-select: all; }
+.ai-code { margin: 0; padding: 10px 12px; max-width: 100%; border: 1px solid var(--border); border-radius: 0; background: var(--surface-soft); color: var(--text); font: 12px/1.5 var(--font-mono); white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; user-select: all; -webkit-user-select: all; }
 .ai-code code { font: inherit; white-space: inherit; overflow-wrap: inherit; }
 .ai-code:focus-visible, .pk-card .svc-btn:focus-visible, .ai-page .svc-btn:focus-visible, .ai-page .svc-link:focus-visible, .pk-card .svc-link:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .ai-copy-note:empty { display: none; }

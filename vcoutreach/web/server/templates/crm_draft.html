@@ -1,11 +1,14 @@
 {% extends 'base.html' %}
-{% from "_icons.html" import icon %}
+{% from "_icons.html" import icon, btn_icon %}
 {% block page_id %}draft{% endblock %}
 {% block title %}Edit draft{% endblock %}
 {% block content %}
-{% set ed = campaign_vm.editor(draft) %}
+{% set ed = campaign_vm.editor(draft, drafts) %}
+{% set from_send = request.args.get('from') == 'send' %}
+{% set back_href = '/partners' if from_send else ed.back_href %}
+{% set back_text = 'Back to Send' if from_send else ed.back_label %}
 <div class="crm-shell draft-page cmp-editor">
-  <nav class="crm-breadcrumb" aria-label="Breadcrumb"><a href="/crm/drafts">Campaign</a><span>/</span><a href="/crm/drafts#draftsTable">Drafts</a><span>/</span><span>{{ draft.recipient_name or draft.recipient_email or 'Edit draft' }}</span></nav>
+  <nav class="crm-breadcrumb" aria-label="Breadcrumb"><a href="/crm/drafts">Campaign</a><span>/</span><a class="cmp-backlink" href="{{ back_href }}">{{ back_text }}</a></nav>
   {% if draft.blocked_reason %}<p class="flash flash-warning cmp-banner" role="status"><span class="cmp-banner__icon" aria-hidden="true">{{ icon("alert-triangle", 16) }}</span><span>This draft is blocked: {{ draft.blocked_reason }}. {% if draft.partner_id %}<a href="/crm/{{ draft.partner_id }}#contact-facts">Add a fact about the contact</a> or <a href="#draftBody">edit the draft</a> to fix it.{% else %}<a href="#draftBody">Edit the draft</a> to fix it.{% endif %}</span></p>{% endif %}
   {% include '_example_warning.html' %}
   <header class="pk-page-head cmp-editor__head">
@@ -13,12 +16,11 @@
       <h1 class="pk-page-title">{{ draft.subject or 'Untitled draft' }}</h1>
       <p class="pk-page-sub">To: {{ draft.recipient_name }} &lt;{{ draft.recipient_email }}&gt; <span class="{{ ed.pill.cls }}">{{ ed.pill.label }}</span></p>
     </div>
-    <div class="pk-page-head__actions"><a class="draft-back pk-btn pk-btn--ghost pk-btn--sm" href="/crm/drafts">Back to drafts</a></div>
   </header>
   <div class="draft-editor-layout cmp-panes">
     <section class="pk-card cmp-pane cmp-pane--editor draft-editor-main" aria-label="Draft editor">
       <div class="pk-card__body">
-      {% if draft.issues %}<ul class="lint-issues" aria-live="polite">{% for issue in draft.issues %}<li><strong>{{ issue.code }}</strong>: {{ issue.message }}</li>{% endfor %}</ul>{% elif not draft.blocked_reason %}<p class="draft-clear" aria-live="polite">No lint issues detected.</p>{% endif %}
+      {% if draft.issues %}<ul class="lint-issues cmp-lint" aria-live="polite">{% for row in ed.issue_rows %}<li><span class="cmp-lint__text">{{ row.text }}</span> <code class="pk-tag">{{ row.code }}</code></li>{% endfor %}</ul>{% elif not draft.blocked_reason %}<p class="draft-clear" aria-live="polite">No problems found.</p>{% endif %}
       {% if draft.blocked_reason %}<p class="svc-hint" id="grounding-help">Claims in a draft must reuse a stored fact about the contact. Add the fact to the contact{% if draft.partner_id %} (<a href="/crm/{{ draft.partner_id }}#contact-facts">open the Add facts form</a>){% endif %}, or quote it exactly in the draft, then save and check again.</p>{% endif %}
       <form method="post" class="draft-form" id="draftForm" action="/crm/drafts/{{ draft.slug|urlencode }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -35,20 +37,24 @@
           </div>
         </details>
         <div class="draft-actions">
-          <button class="pk-btn pk-btn--secondary" type="submit">Save draft</button>
+          <button class="pk-btn pk-btn--secondary" type="submit">{{ icon("save") }}Save draft</button>
         </div>
       </form>
-      <section class="draft-approval cmp-approval" id="approve" aria-label="Approval">
-        {% if draft.blocked_reason %}<p class="svc-hint">Approval is unavailable while the draft is blocked. Fix the issue above first.</p>
-        <p class="cmp-approve-row"><button class="pk-btn pk-btn--primary" type="button" disabled aria-describedby="approveReason">Approve</button> <span class="cmp-approve-reason" id="approveReason">{{ ed.reason }}</span></p>
-        {% elif draft.review_state == 'approved' %}<p class="svc-hint">This draft is approved. Select it on Partners when you are ready to send.</p>
-        {% elif draft.partner_id %}<form method="post" action="/partners/{{ draft.partner_id }}/approve" class="cmp-approve-form" id="approveForm"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="next" value="/crm/drafts/{{ draft.slug|urlencode }}"><button class="pk-btn pk-btn--primary" type="submit" id="approveBtn">Approve</button> <span class="svc-hint cmp-approve-reason" id="approveReason">Saved edits only. Approving does not send anything.</span></form>
-        {% endif %}
-      </section>
       <p class="crm-source-note">Checks cover proper nouns and numbers and can miss invented claims, so verify every claim and the recipient before sending.</p>
       </div>
     </section>
     <div class="cmp-pane cmp-pane--side">
+      <section class="pk-card pk-card--flush cmp-checks" aria-labelledby="checksHeading">
+        <div class="pk-card__head"><h2 class="pk-card__title" id="checksHeading">Checks</h2><span class="pk-card__sub">{{ ed.checks_passing }} of {{ ed.checks_total }} checks passing</span></div>
+        <div class="pk-card__body">
+          <span class="pk-meter cmp-meter" role="img" aria-label="{{ ed.checks_passing }} of {{ ed.checks_total }} checks passing"><svg class="cmp-meter__svg" viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true" focusable="false"><rect class="cmp-meter__rail" x="0" y="0" width="100" height="4"/><rect class="cmp-meter__fill" x="0" y="0" width="{{ ed.checks_pct }}" height="4"/></svg></span>
+          <ul class="cmp-ticks">
+            {% for row in ed.issue_rows %}<li class="is-bad">{{ icon("alert-triangle", 14) }}<span>{{ row.text }}</span></li>{% endfor %}
+            {% if draft.blocked_reason and not ed.issue_rows %}<li class="is-bad">{{ icon("alert-triangle", 14) }}<span>{{ draft.blocked_reason }}</span></li>{% endif %}
+            {% if ed.checks_passing %}<li class="is-ok">{{ icon("check", 14) }}<span>{{ ed.checks_passing }} {{ 'check passes' if ed.checks_passing == 1 else 'checks pass' }}</span></li>{% endif %}
+          </ul>
+        </div>
+      </section>
       <section class="pk-card draft-preview cmp-preview" id="draftPreview" aria-label="Live preview">
         <div class="pk-card__head"><h2 class="pk-card__title">Preview</h2><span class="pk-card__sub" id="previewState">Updates as you type</span></div>
         <div class="pk-card__body">
@@ -64,9 +70,23 @@
           </div>
         </div>
       </section>
-      <aside class="pk-card draft-siblings cmp-siblings" aria-label="Other drafts"><div class="pk-card__head"><h2 class="pk-card__title">Other drafts</h2></div><ul>{% for sibling in campaign_vm.sibling_rows(drafts) %}<li{% if sibling.slug == draft.slug %} class="is-current"{% endif %}><a href="/crm/drafts/{{ sibling.slug|urlencode }}" {% if sibling.slug == draft.slug %}aria-current="page"{% endif %}>{{ sibling.recipient_name or sibling.recipient_email }}</a>{% if sibling.slug != draft.slug %}<span class="crm-table-subline">{{ sibling.subject }}</span>{% endif %}<span class="{{ sibling.pill.cls }}">{{ sibling.pill.label }}</span></li>{% else %}<li>No other drafts.</li>{% endfor %}</ul></aside>
+      <aside class="pk-card pk-card--flush draft-siblings cmp-siblings" aria-label="Other drafts"><div class="pk-card__head"><h2 class="pk-card__title">Other drafts</h2><span class="pk-card__sub">{{ drafts|length }} in this campaign</span></div>
+        <div class="pk-card__body"><ul class="cmp-strip">{% for sibling in campaign_vm.sibling_rows(drafts) %}<li class="cmp-strip__item{{ ' is-current' if sibling.slug == draft.slug }}"><a class="cmp-strip__link" href="/crm/drafts/{{ sibling.slug|urlencode }}"{% if sibling.slug == draft.slug %} aria-current="page"{% endif %} title="{{ sibling.recipient_name or sibling.recipient_email }}: {{ sibling.pill.label }}"><span class="cmp-sq cmp-sq--{{ sibling.pill.key }}" aria-hidden="true"></span><span class="cmp-strip__name">{{ sibling.recipient_name or sibling.recipient_email }}</span><span class="sr-only">{{ sibling.pill.label }}</span></a></li>{% else %}<li>No other drafts.</li>{% endfor %}</ul></div></aside>
     </div>
+  </div>
+  <div class="pk-sticky-bar cmp-actionbar" id="approve" role="region" aria-label="Approval">
+    <span class="{{ ed.pill.cls }}">{{ ed.pill.label }}</span>
+    <span class="pk-sticky-bar__count">{{ ed.issue_count }} {{ 'issue' if ed.issue_count == 1 else 'issues' }}</span>
+    <div class="pk-sticky-bar__actions">
+      <a class="pk-btn pk-btn--ghost" href="{{ back_href }}">{{ icon("arrow-left") }}Back</a>
+      {% if draft.blocked_reason %}<button class="pk-btn pk-btn--primary" type="button" disabled aria-describedby="approveReason" title="Approval is unavailable: {{ ed.reason }}">{{ icon("check") }}Approve</button>
+      {% elif draft.review_state == 'approved' %}<a class="pk-btn pk-btn--secondary" href="/partners?status=approved">{{ icon("send") }}Open Send</a>
+      {% elif draft.partner_id %}<form method="post" action="/partners/{{ draft.partner_id }}/approve" class="cmp-approve-form" id="approveForm"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="next" value="/crm/drafts/{{ draft.slug|urlencode }}"><button class="pk-btn pk-btn--primary" type="submit" id="approveBtn" aria-describedby="approveReason">{{ icon("check") }}Approve</button></form>
+      {% endif %}
+      {% if ed.next_draft %}<a class="pk-btn pk-btn--secondary" href="/crm/drafts/{{ ed.next_draft.slug|urlencode }}">Next draft {{ icon("chevron-right", 14) }}</a>{% endif %}
+    </div>
+    <p class="cmp-approve-reason" id="approveReason">{% if draft.blocked_reason %}{{ ed.reason }}. Approval is unavailable while the draft is blocked.{% elif draft.review_state == 'approved' %}Approved. <a href="/partners?status=approved">Open Send</a> to pick it, or review the next draft.{% else %}Saved edits only. Approving does not send anything.{% endif %}</p>
   </div>
 </div>
 {% endblock %}
-{% block scripts %}<script src="{{ url_for('static', filename='pages/campaign.js') }}?v=20261024-cp1" defer></script>{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='pages/campaign.js') }}?v=20261025-btn1" defer></script>{% endblock %}

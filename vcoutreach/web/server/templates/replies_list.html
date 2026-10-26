@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% from "_icons.html" import icon %}
+{% from "_icons.html" import icon, btn_icon %}
 {% block page_id %}replies_list{% endblock %}
 {% block title %}Replies{% endblock %}
 {% block content %}
@@ -30,12 +30,67 @@
           <input id="replySubject" class="pk-input" name="subject">
           <label for="replyBody">Body</label>
           <textarea id="replyBody" class="pk-input" name="body" rows="4"></textarea>
-          <button type="submit" class="pk-btn pk-btn--primary">Add a reply</button>
+          <button type="submit" class="pk-btn pk-btn--primary">{{ icon("plus") }}Add a reply</button>
         </form>
       </div>
     </details>
   </div>
 </header>
+
+{%- macro kpi_spark(s) -%}
+<svg class="vz-spark{% if s.tone %} {{ s.tone }}{% endif %}{% if s.ghost %} vz-spark--ghost is-ghost{% endif %}" width="100%" height="28" viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="{{ s.label }}" focusable="false">
+  <line class="vz-spark__base" x1="0" y1="26" x2="100" y2="26"/>
+  {%- if s.ghost %}
+  <polyline class="vz-spark__line" points="0,26 100,26"/>
+  {%- else %}
+  <polygon class="vz-spark__area" points="0,26 {{ s.points }} 100,26"/>
+  <polyline class="vz-spark__line" points="{{ s.points }}"/>
+  {%- endif %}
+</svg>
+{%- endmacro -%}
+{% set tab_n = {} %}
+{% for t in view.tabs %}{% if tab_n.update({t.key: t.count}) %}{% endif %}{% endfor %}
+<ul class="pk-kpis rp-kpis" aria-label="Reply numbers">
+  <li class="pk-kpi vz-kpi" data-kpi="unread">
+    <span class="pk-kpi__label">Unread</span>
+    <span class="pk-kpi__value" data-kpi-value="unread">{{ view.unread }}</span>
+    {{ kpi_spark(view.series.unread) }}
+    <span class="pk-kpi__caption">{% if view.total %}of {{ view.total }} {{ 'reply' if view.total == 1 else 'replies' }} in total{% else %}No replies yet{% endif %}</span>
+  </li>
+  <li class="pk-kpi vz-kpi" data-kpi="needs">
+    <span class="pk-kpi__label">Needs follow-up</span>
+    <span class="pk-kpi__value" data-kpi-value="needs">{{ tab_n.get('needs', 0) }}</span>
+    {{ kpi_spark(view.series.needs) }}
+    <span class="pk-kpi__caption">Interested, needs more info or not classified</span>
+  </li>
+  <li class="pk-kpi vz-kpi" data-kpi="interested">
+    <span class="pk-kpi__label">Interested</span>
+    <span class="pk-kpi__value" data-kpi-value="interested">{{ view.interested }}</span>
+    {{ kpi_spark(view.series.interested) }}
+    <span class="pk-kpi__caption">Replies labeled Interested</span>
+  </li>
+</ul>
+
+{% if view.total %}
+<section class="pk-card rp-dist" aria-labelledby="rp-dist-h">
+  <div class="pk-card__head">
+    <h2 class="pk-card__title" id="rp-dist-h">Where replies land</h2>
+    <p class="pk-card__sub">Share of all {{ view.total }} {{ 'reply' if view.total == 1 else 'replies' }} by outcome</p>
+  </div>
+  <div class="pk-card__body">
+    <ul class="pk-bars vz-bars">
+      {% for t in view.tabs if t.key != 'all' %}
+      {%- set pct = (t.count / view.total * 100) -%}
+      <li class="pk-bars__row">
+        <span class="pk-bars__label"><a href="/replies?tab={{ t.key }}">{{ t.text }}</a></span>
+        <span class="pk-bars__track"><svg class="vz-bars__svg" viewBox="0 0 100 20" preserveAspectRatio="none" aria-hidden="true" focusable="false"><rect class="vz-bars__rail" x="0" y="0" width="100" height="20"/><line class="vz-bars__tick" x1="25" y1="0" x2="25" y2="20"/><line class="vz-bars__tick" x1="50" y1="0" x2="50" y2="20"/><line class="vz-bars__tick" x1="75" y1="0" x2="75" y2="20"/>{% if t.count %}<rect class="vz-bars__fill" x="0" y="0" width="{{ [pct, 0.8]|max|round(1) }}" height="20"/>{% endif %}</svg></span>
+        <span class="pk-bars__val">{{ t.count }}<span class="pk-funnel__pct">{{ pct|round|int }}%</span></span>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+</section>
+{% endif %}
 
 <nav class="pk-tabs reply-tabs" aria-label="Reply tabs">
   {% for t in view.tabs %}<a href="/replies?tab={{ t.key }}" {% if t.active and not view.label_filter %}class="is-active" aria-current="page"{% endif %} data-tab="{{ t.key }}">{{ t.text }} <span class="pk-count" data-count-for="{{ t.key }}">{{ t.count }}</span></a>{% endfor %}
@@ -55,13 +110,13 @@
   <span class="pk-sticky-bar__count"><span data-bulk-count>0</span> selected</span>
   <div class="pk-sticky-bar__actions">
     <button type="submit" name="action" value="mark_read" class="pk-btn pk-btn--secondary pk-btn--sm">{{ icon("check", 14) }}Mark read</button>
-    <button type="submit" name="action" value="mark_unread" class="pk-btn pk-btn--ghost pk-btn--sm">Mark unread</button>
+    <button type="submit" name="action" value="mark_unread" class="pk-btn pk-btn--ghost pk-btn--sm">{{ icon("check") }}Mark unread</button>
     <label class="sr-only" for="bulkLabel">Label for selected replies</label>
     <select id="bulkLabel" name="label" class="pk-select">
       <option value="">Set label to...</option>
       {% for value in all_labels|default(labels|default([])) %}<option value="{{ value }}">{{ value|replace('_',' ')|title }}</option>{% endfor %}
     </select>
-    <button type="submit" name="action" value="set_label" class="pk-btn pk-btn--secondary pk-btn--sm">Set label</button>
+    <button type="submit" name="action" value="set_label" class="pk-btn pk-btn--secondary pk-btn--sm">{{ icon("tag") }}Set label</button>
   </div>
 </form>
 
@@ -89,14 +144,14 @@
               <select id="reply-label-{{ row.id }}" name="user_label" class="pk-pill pk-pill--{{ row.pill.tone }} reply-pill-select" data-initial="{{ row.effective_label }}">
                 {% for o in row.options %}<option value="{{ o.value }}" {% if o.selected %}selected{% endif %} {% if o.disabled %}disabled{% endif %}>{{ o.text }}</option>{% endfor %}
               </select>
-              <noscript><button type="submit" class="pk-btn pk-btn--secondary pk-btn--sm">Save label</button></noscript>
+              <noscript><button type="submit" class="pk-btn pk-btn--secondary pk-btn--sm">{{ icon("save") }}Save label</button></noscript>
             </form>
           </td>
           <td class="pk-col-actions">
             <form method="post" action="/replies/{{ row.id }}/mark-reviewed" class="reply-read-form">
               <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
               <input type="hidden" name="next" value="{{ view.return_to }}">
-              <button type="submit" class="pk-btn pk-btn--ghost pk-btn--sm">{% if row.unread %}Mark read{% else %}Mark unread{% endif %}</button>
+              <button type="submit" class="pk-btn pk-btn--ghost pk-btn--sm">{{ icon("check") }}{% if row.unread %}Mark read{% else %}Mark unread{% endif %}</button>
             </form>
           </td>
         </tr>
@@ -109,6 +164,7 @@
 <section class="pk-card">
   <div class="pk-empty">
     <div class="pk-empty__icon">{{ icon("mail", 28) }}</div>
+    <div class="vz-ghost rp-ghost" aria-hidden="true"><div class="vz-ghost__art"><svg class="vz-ghost__svg vz-ghost__svg--bars" focusable="false"><rect class="vz-ghost__bar" x="0.5" y="0.5" width="78%" height="14"/><rect class="vz-ghost__bar" x="0.5" y="24.5" width="52%" height="14"/><rect class="vz-ghost__bar" x="0.5" y="48.5" width="30%" height="14"/></svg></div></div>
     <h2 class="pk-empty__title">{% if view.label_filter %}No replies match this label{% else %}{{ view.empty_title }}{% endif %}</h2>
     <p>{% if view.label_filter %}Try another label or <a href="/replies">show all replies</a>.{% else %}{{ view.empty_text }}{% endif %}</p>
   </div>

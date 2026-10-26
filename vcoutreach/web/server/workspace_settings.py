@@ -294,6 +294,7 @@ def bundled_example_deck() -> Path:
 KNOWN_OLD_EXAMPLE_DECK_MD5 = (
     '558bb3abc414862536936ef6329d1aad',
     '33fabacc25dff7baa41fc967f27cc53a',  # pre-release 8 page build that still showed real TAM and SAM
+    '30589ce65165e964b296cbc057e5ffab',  # build whose cover headline used profanity (reworded in repair round 1)
 )
 
 

@@ -4,7 +4,7 @@ import hashlib
 import secrets
 import threading
 from urllib.parse import urlsplit
-from flask import request, session, redirect, jsonify, render_template
+from flask import request, session, redirect, jsonify, render_template, flash
 from werkzeug.exceptions import HTTPException
 
 CSP = "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'self'"
@@ -23,6 +23,9 @@ def _cookie_name(workspace) -> str:
 DECK_UPLOAD_PATH = '/crm/deck/upload'
 DECK_UPLOAD_BODY_LIMIT = 26 * 1024 * 1024
 DECK_TOO_LARGE_MESSAGE = 'That file is larger than 25 MB.'
+DECK_TOO_LARGE_BACK = '/crm/drafts#templateDeckPanel'
+_DRAIN_CHUNK = 1024 * 1024
+_DRAIN_CAP = 256 * 1024 * 1024
 
 
 def install_security(app):
@@ -39,6 +42,23 @@ def install_security(app):
         if request.path.startswith('/api/') or request.is_json:
             return jsonify(error=message), status
         return app.response_class(message, status=status, mimetype='text/plain')
+
+    def deck_too_large():
+        """An oversize deck upload from a signed-in person goes back to the Campaign page with a flash, so the
+        desktop app never shows a bare text page. Anyone else keeps the plain refusal. The body is read and
+        dropped first (bounded) so the browser receives the redirect instead of a reset connection."""
+        if session.get('authenticated') != app.config['SESSION_NONCE']:
+            return error(DECK_TOO_LARGE_MESSAGE, 413)
+        remaining = request.content_length if request.content_length is not None else 0
+        if remaining <= _DRAIN_CAP:
+            stream = request.environ.get('wsgi.input')
+            while stream is not None and remaining > 0:
+                chunk = stream.read(min(_DRAIN_CHUNK, remaining))
+                if not chunk:
+                    break
+                remaining -= len(chunk)
+        flash(DECK_TOO_LARGE_MESSAGE, 'deck_error')
+        return redirect(DECK_TOO_LARGE_BACK)
 
     def csrf_expired():
         message = 'Your session expired or this page is out of date. Reload the page and try again.'
@@ -75,7 +95,9 @@ def install_security(app):
             limit = DECK_UPLOAD_BODY_LIMIT
             request.max_content_length = limit
         if request.content_length is not None and request.content_length > limit:
-            return error(DECK_TOO_LARGE_MESSAGE if limit == DECK_UPLOAD_BODY_LIMIT else 'Request body exceeds 2 MB.',413)
+            if limit == DECK_UPLOAD_BODY_LIMIT:
+                return deck_too_large()
+            return error('Request body exceeds 2 MB.',413)
         if request.path == '/healthz' and request.method == 'GET':
             return None
         if request.path == '/favicon.ico' and request.method in ('GET', 'HEAD'):
@@ -134,6 +156,8 @@ def install_security(app):
         messages = {400: 'Invalid request.', 403: 'Request refused.',
                     404: 'Record not found.', 405: 'Method not allowed.',
                     413: DECK_TOO_LARGE_MESSAGE if request.path == DECK_UPLOAD_PATH else 'Request body exceeds 2 MB.'}
+        if status == 413 and request.path == DECK_UPLOAD_PATH and request.method == 'POST':
+            return deck_too_large()
         message = messages.get(status, 'Operation failed. Check your workspace settings.')
         if status == 404 and not (request.path.startswith('/api/') or request.is_json):
             return render_template('error.html', message=message, active_page=''), status

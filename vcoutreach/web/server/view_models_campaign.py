@@ -6,7 +6,7 @@ here sends mail, writes files or calls a live API.
 """
 from __future__ import annotations
 
-from urllib.parse import urlencode
+from urllib.parse import quote as _quote, urlencode
 
 # One color map for every draft status pill (crm_drafts table, crm_draft header, Other drafts list).
 # key -> (label, pk-pill modifier)
@@ -168,8 +168,118 @@ def stepper(campaign, approved: int) -> dict:
         'table_first': first_three_done,
         'step4_note': step4_note,
         'approved': approved,
-        'send_label': 'Send %d approved %s' % (approved, 'email' if approved == 1 else 'emails'),
+        'send_label': 'Send to contacts',
+        'send_count': approved,
+        'send_href': '/partners?status=approved',
+        'strip': [{'n': n, 'done': done[n], 'current': n == current} for n in (1, 2, 3, 4, 5)],
     }
+
+
+# Readiness rows keep the order the tests pin: Gmail, test recipient, sender profile, one approved draft.
+# key -> (short label used in the pill, row title)
+READINESS_ROWS = (
+    ('gmail', 'gmail', 'Gmail connected'),
+    ('recipient', 'test recipient', 'Test recipient set'),
+    ('sender', 'sender profile', 'Sender profile saved'),
+    ('approved', 'approved draft', 'One draft approved'),
+)
+
+
+def readiness(campaign, flags=None) -> dict:
+    """The four readiness rows for the test send, the first row that blocks, and the pill wording.
+
+    `flags` is optional and only adds an override: {'same_as_contact': bool} marks the recipient row as not ready
+    when the test recipient is the same address as the contact on the previewed draft.
+    """
+    c = campaign or {}
+    flags = flags or {}
+    gmail = c.get('gmail')
+    preview = c.get('preview') or {}
+    same = bool(flags.get('same_as_contact', preview.get('same_as_contact')))
+    recipient = (c.get('test_recipient') or '').strip()
+    first_slug = c.get('first_slug') or ''
+    approved_ok = c.get('first_approved_partner_id') is not None and bool(c.get('first_approved_slug'))
+    approved_n = int(c.get('approved_count') or 0) if approved_ok else 0
+    # One count drives the row title, its status and the Campaign copy, so they can never disagree.
+    approved_title = 'One draft approved' if approved_n <= 1 else '%d drafts approved' % approved_n
+    ok = {
+        'gmail': gmail == 'connected',
+        'recipient': bool(recipient),
+        'sender': bool(c.get('has_sender')),
+        'approved': approved_ok,
+    }
+    # Everything else passes but the preview shows the recipient is the contact: the test send would be refused.
+    recipient_clash = ok['gmail'] and ok['recipient'] and ok['sender'] and ok['approved'] and same
+    if recipient_clash:
+        ok['recipient'] = False
+    status = {
+        'gmail': 'Connected' if ok['gmail'] else ('OAuth required: choose Connect Gmail' if gmail == 'OAuth required' else 'Not connected'),
+        'recipient': (recipient if ok['recipient'] else
+                      ('Same address as the contact on this draft, so a test send is refused. Use your own inbox.' if recipient_clash
+                       else 'Not set. Test emails go only to this address.')),
+        'sender': (c.get('sender_name') or 'Saved') if ok['sender'] else 'Not saved. Fill it in under step 3.',
+        'approved': ('Approved: %d ready to send' % max(approved_n, 1)) if ok['approved'] else (
+            'Not yet. Open the first draft to review it.' if first_slug else
+            ('No drafts yet. Write drafts in step 3.' if int(c.get('contact_count') or 0) > 0 else 'No contacts yet. Add one in step 1.')),
+    }
+    if first_slug:
+        approve_href = '/crm/drafts/%s#approve' % _quote(first_slug)
+    elif int(c.get('contact_count') or 0) > 0:
+        approve_href = '#writeDrafts'
+    else:
+        approve_href = '/crm/new?next=campaign'
+    fix = {
+        'gmail': ('/settings#svc-gmail', 'Fix'),
+        'recipient': ('/settings#svc-test-recipient', 'Fix'),
+        'sender': ('#writeDrafts', 'Fix'),
+        'approved': (approve_href, 'Fix'),
+    }
+    rows = []
+    for key, label, title in READINESS_ROWS:
+        href, fix_label = fix[key]
+        if key == 'approved':
+            title = approved_title
+        rows.append({'key': key, 'label': label, 'title': title, 'ok': ok[key], 'status': status[key],
+                     'fix_href': href, 'fix_label': fix_label})
+    blocking = next((r for r in rows if not r['ok']), None)
+    todo = sum(1 for r in rows if not r['ok'])
+    pill_text = 'Ready to test send' if blocking is None else 'Not ready: ' + blocking['label']
+    return {
+        'rows': rows,
+        'blocking': blocking,
+        'todo': todo,
+        'ready': blocking is None,
+        'recipient_clash': recipient_clash,
+        'pill_text': pill_text,
+        'pill_cls': 'pk-pill pk-pill--dot ' + ('pk-pill--success' if blocking is None else 'pk-pill--warning'),
+        'count_line': ('To do: %d %s' % (todo, 'item' if todo == 1 else 'items')) if todo else '',
+    }
+
+
+# Draft status funnel for the Campaign right rail: key -> label. Rejected drafts are not shown (they are out of the flow).
+FUNNEL = (
+    ('needs-review', 'Needs review'),
+    ('approved', 'Approved'),
+    ('blocked', 'Blocked'),
+    ('sent', 'Sent'),
+)
+
+
+def funnel(all_rows) -> dict:
+    """Counts of drafts per status for the right-rail bars. width is a percent of the largest bucket (0 when empty)."""
+    counts = {key: 0 for key, _ in FUNNEL}
+    for row in all_rows or []:
+        key = pill_key(row)
+        if key == 'test-sent':
+            key = 'needs-review' if (row.get('approval_state') or 'pending') != 'approved' else 'approved'
+        if key in counts:
+            counts[key] += 1
+    peak = max(counts.values()) if counts else 0
+    rows = [{'key': key, 'label': label, 'n': counts[key],
+             'width': (round(100.0 * counts[key] / peak, 1) if peak else 0),
+             'pill_cls': 'pk-pill pk-pill--dot pk-pill--' + key}
+            for key, label in FUNNEL]
+    return {'rows': rows, 'total': sum(counts.values()), 'empty': peak == 0}
 
 
 def editor(draft, all_rows=None) -> dict:
@@ -184,14 +294,39 @@ def editor(draft, all_rows=None) -> dict:
     reason = ''
     if blocked:
         reason = 'Fix %d %s to approve' % (n, 'issue' if n == 1 else 'issues')
+    key = pill_key(draft)
+    # Back goes to the step the person was last on: fixing issues is step 3, reviewing is step 4.
+    back_step = 3 if (key in ('needs-review', 'blocked') and n > 0) else 4
+    back_label = 'Back to step %d: %s' % (back_step, 'Write drafts' if back_step == 3 else 'Review and approve')
+    # Checks meter: one check per lint issue plus the blocked reason when it has no lint issue of its own.
+    total_checks = max(len(issues), n, 1) if (issues or blocked) else 1
+    passing = max(total_checks - n, 0)
+    nxt = None
+    ordered = list(all_rows or [])
+    slugs = [r.get('slug') for r in ordered]
+    if draft.get('slug') in slugs:
+        i = slugs.index(draft.get('slug'))
+        for r in ordered[i + 1:] + ordered[:i]:
+            if pill_key(r) in ('needs-review', 'blocked'):
+                nxt = r
+                break
     return {
         'pill': pill(draft),
+        'back_step': back_step,
+        'back_label': back_label,
+        'back_href': '/crm/drafts#step-%d' % back_step,
+        'next_draft': nxt,
+        'checks_total': total_checks,
+        'checks_passing': passing,
+        'checks_pct': round(100.0 * passing / total_checks, 1),
         'issue_count': n,
         'blocked': blocked,
         'approved': approved,
         'can_approve': (not blocked) and (not approved) and bool(draft.get('partner_id')),
         'reason': reason,
         'checks': checks(draft),
+        'issue_rows': [{'code': (i.get('code') if isinstance(i, dict) else getattr(i, 'code', '')) or '',
+                        'text': issue_hover(i)} for i in issues],
         'paragraphs': [p for p in (draft.get('body') or '').split('\n\n') if p.strip()],
     }
 

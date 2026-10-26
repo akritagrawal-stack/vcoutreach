@@ -63,7 +63,7 @@ cat <<MSG
 
 Next steps:
   1. Publikreach opens in TEST mode. Nothing is sent until you turn that off.
-  2. In Settings, connect Gmail with an app password (the easy way).
+  2. In Settings, connect Gmail with your Google OAuth client file (or, if you skip Google Cloud, the app password under 'Alternative: use a Gmail app password instead').
   3. Your data lives in ~/Documents/Publikreach and is kept when you update.
 To update, run the same install command again.
 MSG

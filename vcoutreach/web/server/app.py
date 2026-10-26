@@ -14,6 +14,7 @@ import time
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from urllib.error import URLError
+from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
 from flask import (
@@ -27,6 +28,7 @@ from flask import (
     session,
     url_for,
 )
+from werkzeug.exceptions import HTTPException
 
 from vcoutreach.web.config import DB_PATH, WorkspacePath, configure_workspace, get_workspace, send_mode, daily_send_cap
 from vcoutreach.web.crm_store import STAGES as CRM_STAGES
@@ -494,16 +496,21 @@ def _gmail_connection_state() -> str:
         return 'not connected'
     return 'OAuth required'
 
-def first_run_next_step(app) -> dict | None:
-    """First unmet setup step for the global Next step banner, or None when all seven are done.
+def first_run_state(app) -> tuple[dict | None, bool]:
+    """(first unmet setup step, whether every required step is done) for the global banner.
     Seven steps (Publik recommendation first) come from vcoutreach.web.setup_steps, the same
     helper the MCP setup_status tool uses. Local files and the workspace database only (no
-    network); any failure hides the banner."""
+    network); any failure hides the banner and keeps the LIVE switch closed."""
     try:
         from vcoutreach.web import setup_steps as _setup_steps
-        return _setup_steps.next_step(_setup_steps.setup_steps(get_workspace()))
+        steps = _setup_steps.setup_steps(get_workspace())
+        return _setup_steps.next_step(steps), _setup_steps.required_done(steps)
     except Exception:
-        return None
+        return None, False
+
+def first_run_next_step(app) -> dict | None:
+    """First unmet setup step for the global Next step banner, or None when all seven are done."""
+    return first_run_state(app)[0]
 
 _SERVICE_MARKS = {'pitchbook': 'Pb', 'apollo': 'Ap', 'enrow': 'En', 'gemini': 'Ge', 'openai': 'Oa', 'anthropic': 'An', 'openrouter': 'Or', 'tracking': 'Tr'}
 
@@ -619,47 +626,55 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
         info = drafts_service.campaign_kind()
         return bool(info['chosen'] and info['kind'] == 'job_search')
 
-    def _deck_back():
-        return redirect(deck_upload.back_path(request.form.get('next')))
+    def _deck_back(failed=False):
+        target = deck_upload.back_path(request.form.get('next'))
+        # A refusal lands next to the file input with the panel open, so the message sits beside what failed.
+        return redirect(target + '#templateDeckPanel' if failed else target)
 
     @app.post('/crm/deck/upload')
     def crm_deck_upload():
         job = _deck_job_search()
+        failed = True
         try:
             deck_upload.save_uploaded_deck(request.files.get('deck'), job_search=job)
         except deck_upload.DeckUploadError as exc:
-            flash(str(exc), 'error')
+            flash(str(exc), 'deck_error')
         except OSError:
-            flash("We couldn't save that file. Try again.", 'error')
+            flash("We couldn't save that file. Try again.", 'deck_error')
         else:
             flash(f'{deck_upload.noun(job)} attached.', 'success')
-        return _deck_back()
+            failed = False
+        return _deck_back(failed)
 
     @app.post('/crm/deck/remove')
     def crm_deck_remove():
         job = _deck_job_search()
+        failed = True
         try:
             had = deck_upload.remove_deck()
         except OSError:
-            flash("We couldn't remove that file. Try again.", 'error')
+            flash("We couldn't remove that file. Try again.", 'deck_error')
         else:
             flash(f'{deck_upload.noun(job)} removed.' if had else f'No {deck_upload.noun(job).lower()} was attached.', 'success')
-        return _deck_back()
+            failed = False
+        return _deck_back(failed)
 
     @app.post('/crm/deck/example')
     def crm_deck_example():
         if _deck_job_search():
-            flash('The example deck is for fundraising. Upload your resume instead.', 'error')
-            return _deck_back()
+            flash('The example deck is for fundraising. Upload your resume instead.', 'deck_error')
+            return _deck_back(True)
+        failed = True
         try:
             deck_upload.use_example_deck()
         except deck_upload.DeckUploadError as exc:
-            flash(str(exc), 'error')
+            flash(str(exc), 'deck_error')
         except OSError:
-            flash("We couldn't add the example deck. Try again.", 'error')
+            flash("We couldn't add the example deck. Try again.", 'deck_error')
         else:
             flash('Example deck attached. Replace it with your own any time.', 'success')
-        return _deck_back()
+            failed = False
+        return _deck_back(failed)
     from vcoutreach.web.server import example_pitch_web
     example_pitch_web.register(app)
 
@@ -688,12 +703,39 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
             session.pop('_flashes',None)
         return response
 
+    def error_page(message, status):
+        # Back goes to the page the person came from when the Referer is same-origin, else to the overview.
+        back_href, back_label = '/crm', 'Back to overview'
+        try:
+            ref = urlsplit(request.referrer or '')
+        except ValueError:
+            ref = None
+        if (ref and ref.netloc in ('', request.host) and ref.path.startswith('/') and not ref.path.startswith('//')
+                and '\\' not in ref.path and ref.path != request.path):
+            back_href, back_label = ref.path + ('?' + ref.query if ref.query else ''), 'Go back'
+        return render_template('error.html', message=message, back_href=back_href, back_label=back_label, active_page=''), status
+
     @app.errorhandler(404)
     def record_not_found(exc):
         session.pop('_flashes',None)
         if request.path.startswith('/api/') or request.is_json:
             return {'error':'Record not found.'},404
-        return render_template('error.html',message='Record not found.',active_page=''),404
+        return error_page('Record not found.',404)
+
+    # Pages that fail with a 403 or a crash show the same friendly page. install_security already
+    # registered the JSON and plain-text handler for everything else, so hand those requests back to it.
+    sanitized_error=app.error_handler_spec[None][None].get(Exception)
+
+    @app.errorhandler(Exception)
+    def friendly_error(exc):
+        status=exc.code if isinstance(exc,HTTPException) else 500
+        if status in {403,500} and not (request.path.startswith('/api/') or request.is_json):
+            try:
+                return error_page('Something went wrong. Nothing was sent.',status)
+            except Exception:
+                # The page itself needs workspace state that is the thing that broke: fall back to the plain response.
+                pass
+        return sanitized_error(exc)
 
     @app.get('/healthz')
     def healthz():
@@ -732,7 +774,8 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
 
     @app.context_processor
     def inject_next_step():
-        return {'g_next_step': first_run_next_step(app)}
+        next_step,required_done=first_run_state(app)
+        return {'g_next_step': next_step,'g_required_done': required_done}
 
     @app.context_processor
     def inject_workspace():
@@ -886,7 +929,15 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
               and (not query or query.casefold() in (row['recipient_name']+' '+row['subject']+' '+row['firm']).casefold())]
         from vcoutreach.providers import configured_providers
         providers=configured_providers(drafts_service.engine_settings())
-        return render_template('crm_drafts.html',drafts=rows,all_drafts=drafts,draft_count=len(rows),total_draft_count=len(drafts),
+        focus=None
+        raw_contact=request.args.get('contact','').strip()
+        if raw_contact:
+            partner=get_partner(int(raw_contact)) if raw_contact.isdigit() else None
+            if partner is not None:
+                have=next((row for row in drafts if row['slug']==partner['slug']),None)
+                focus={'id':partner['id'],'slug':partner['slug'],'name':partner['partner_name'] or partner['slug'],
+                       'kind':'follow_up' if request.args.get('type')=='follow_up' else 'draft','draft_slug':have['slug'] if have else None}
+        return render_template('crm_drafts.html',drafts=rows,all_drafts=drafts,draft_count=len(rows),total_draft_count=len(drafts),focus_contact=focus,
             status_filter=status,query=query,deck_panel=drafts_service.template_deck_panel(),campaign=drafts_service.campaign_state(drafts),example_pitch=drafts_service.example_pitch_available(),providers=['auto','template','publik','openai','anthropic'],
             provider_status=_provider_status_line(providers),active_page='drafts')
 
@@ -1789,7 +1840,7 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
         from vcoutreach.web.pipeline.loader import get_draft_for_partner
         draft = get_draft_for_partner(partner_id)
         if draft is None:
-            flash('No draft exists for this partner yet. Open Drafts and click "Write drafts for everyone without one", then try again.', 'error')
+            flash('No draft exists for this contact yet. Open Campaign and click "Write drafts for everyone without one", then try again.', 'error')
             return redirect(url_for('partner_detail', partner_id=partner_id))
 
         hook = request.form.get('hook', '').strip()
@@ -1817,7 +1868,7 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
         _next = request.form.get('next', '')
         back = _next if re.fullmatch(r'/crm/drafts/[A-Za-z0-9._%-]+', _next) else url_for('partner_detail', partner_id=partner_id)
         if draft is None:
-            flash('No draft found for this partner.', 'error')
+            flash('No draft found for this contact. Open Campaign and write drafts first.', 'error')
             return redirect(back)
 
         if draft['status'] == 'drafted':
@@ -1833,7 +1884,7 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
             flash(UNGROUNDED_APPROVAL_MESSAGE, 'error')
             return redirect(back)
         set_draft_status(draft['id'], 'approved')
-        flash('Draft approved. Select it on Partners when you are ready to send.', 'success')
+        flash('Approved. Open Send to pick it, or review the next draft.', 'success')
         return redirect(back)
 
     # ── Reject ────────────────────────────────────────────────────────────────
@@ -1843,7 +1894,7 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
         from vcoutreach.web.pipeline.loader import get_draft_for_partner
         draft = get_draft_for_partner(partner_id)
         if draft is None:
-            flash('No draft found for this partner.', 'error')
+            flash('No draft found for this contact. Open Campaign and write drafts first.', 'error')
             return redirect(url_for('partner_detail', partner_id=partner_id))
 
         review_notes = request.form.get('review_notes', '').strip()[:500] or None
@@ -1925,7 +1976,7 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
         from vcoutreach.web.enrichment.orchestrator import enrich_partner, get_enrichment_facts
         partner = get_partner(partner_id)
         if partner is None:
-            flash(f'Partner {partner_id} not found.', 'error')
+            flash(f'Contact {partner_id} was not found.', 'error')
             return redirect(url_for('partners_list'))
 
         try:
@@ -1964,7 +2015,7 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
 
         partner = get_partner(partner_id)
         if partner is None:
-            flash(f'Partner {partner_id} not found.', 'error')
+            flash(f'Contact {partner_id} was not found.', 'error')
             return redirect(url_for('partners_list'))
 
         from vcoutreach.web.enrichment.orchestrator import enrich_partner, get_enrichment_facts
@@ -2050,8 +2101,11 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
             from vcoutreach.web.server.view_models_replies import set_reviewed
             set_reviewed([reply_id], True)
             row = get_reply(reply_id) or row
+        from vcoutreach.web.replies.loader import list_replies
+        next_unread_id=next((r['id'] for r in list_replies() if r['id']!=reply_id and not r['user_reviewed']),None)
         return render_template('reply_detail.html',
                                reply=row,
+                               next_unread_id=next_unread_id,
                                all_labels=sorted(ALL_LABELS),
                                active_page='replies')
 
@@ -2075,7 +2129,8 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
             meta = label_meta(current)
             counts = tab_counts([dict(r) for r in list_replies()], sorted(_LABELS))
             return Response(json.dumps({'ok': True, 'label': current, 'text': meta['text'], 'tone': meta['tone'],
-                                        'bucket': meta['bucket'], 'counts': counts['counts'], 'unread': counts['unread']}),
+                                        'bucket': meta['bucket'], 'counts': counts['counts'], 'unread': counts['unread'],
+                                        'interested': counts['interested']}),
                             mimetype='application/json')
         if user_label:
             try:
@@ -2138,7 +2193,7 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
 
         partner = get_partner(partner_id)
         if partner is None:
-            flash(f'Partner {partner_id} not found.', 'error')
+            flash(f'Contact {partner_id} was not found.', 'error')
             return redirect(url_for('partners_list'))
 
         draft = get_draft_for_partner(partner_id)
@@ -2623,7 +2678,7 @@ def create_app(workspace=None, testing=False, send_transport=None) -> Flask:
         with cursor_ctx() as (_,cur):
             cur.execute("INSERT INTO scheduled_sends(draft_ids,mode,scheduled_for,estimated_completion,status,created_by,confirmation) VALUES (?,?,?,?,'pending','web',?)",
                 (json.dumps(ids),mode,instant.isoformat(),(instant+timedelta(seconds=len(ids)*32)).isoformat(),request.form.get('confirm_text','')))
-        flash('Send scheduled. The scheduler runs only with OUTREACH_SCHEDULER=1.','success')
+        flash('Send scheduled. It will go out while the app is open at that time.','success')
         return redirect(url_for('scheduled_list'))
 
     @app.route('/scheduled')

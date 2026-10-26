@@ -4,7 +4,7 @@
    through the Jinja globals draft_carries_example() and example_warning_text (example_pitch_web.register).
    TEST sends are still allowed; this is a warning, not a block. #}
 {% if draft is defined and draft_carries_example(draft.body, draft.subject) %}
-<p class="flash flash-warning example-warning" role="status" data-example-warning="1"><strong>Example pitch still in this draft.</strong> {{ example_warning_text }} <a href="/settings#sec-story">Edit your pitch in Settings</a>.</p>
+<p class="flash flash-warning example-warning" role="status" data-example-warning="1"><strong>Example pitch still in this draft.</strong> {{ example_warning_text }} <a href="/settings#sec-story">Edit your pitch in Settings</a></p>
 {% endif %}
 {# Words such as "Settings" must never break mid-word at 390px: beats the global `p { overflow-wrap: anywhere }`. #}
 <style>

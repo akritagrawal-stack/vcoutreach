@@ -11,10 +11,18 @@
 .reply-add-form__title { margin: 0; font-size: 14px; font-weight: 600; }
 .reply-add-form__hint { margin: 0 0 6px; font-size: 12px; }
 .reply-add-form textarea { min-height: 96px; height: auto; resize: vertical; }
-.pk-kebab__menu.reply-add-menu button.pk-btn--primary { width: auto; justify-self: start; justify-content: center; margin-top: 8px; height: 32px; padding: 0 14px; background: var(--accent); color: var(--accent-contrast, #fff); }
+.reply-add-menu .pk-btn--primary { width: auto; justify-self: start; margin-top: 8px; }
 
 /* Replies list: tabs, filter chip, table */
 .reply-tabs { margin: 0 0 16px; overflow-x: auto; }
+
+/* Replies list: KPI strip, outcome bars, ghost empty state */
+.rp-kpis { margin-bottom: 16px; }
+.rp-dist { margin: 0 0 16px; }
+.rp-dist .pk-bars__label a { color: inherit; text-decoration: none; }
+.rp-dist .pk-bars__label a:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.rp-ghost { width: min(320px, 100%); margin: 8px auto 0; }
+.rp-ghost .vz-ghost__art { opacity: 0.5; }
 .reply-filter { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; }
 .reply-table td { vertical-align: top; }
 .reply-sub { display: block; font-size: 12px; font-weight: 400; margin-top: 2px; overflow-wrap: anywhere; }
@@ -26,9 +34,9 @@
 .reply-label { white-space: nowrap; }
 .reply-pill-form, .reply-read-form { margin: 0; display: inline-flex; align-items: center; gap: 6px; }
 .reply-pill-select {
-  appearance: none; -webkit-appearance: none; cursor: pointer; border: 0; font: inherit;
-  padding-right: 22px; background-repeat: no-repeat; background-position: right 7px center; background-size: 10px;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%23888' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 4.5l4 4 4-4'/%3E%3C/svg%3E");
+  appearance: none; -webkit-appearance: none; cursor: pointer; height: 20px; border: 1px solid currentColor; border-radius: 0; font: inherit; padding: 0 20px 0 8px;
+  background-repeat: no-repeat; background-size: 4px 4px, 4px 4px; background-position: right 10px center, right 6px center;
+  background-image: linear-gradient(135deg, transparent 50%, currentColor 50%), linear-gradient(225deg, transparent 50%, currentColor 50%);
 }
 .reply-pill-select:focus-visible { outline: 2px solid var(--focus, var(--accent)); outline-offset: 2px; }
 .reply-pill-select:disabled { opacity: .6; cursor: progress; }
@@ -39,8 +47,7 @@
 
 /* Reply detail */
 .reply-back { margin: 0 0 8px; }
-.reply-back a { color: var(--text-muted); text-decoration: none; }
-.reply-back a:hover { color: var(--text); text-decoration: underline; }
+.reply-back a { color: var(--text-muted); text-decoration: underline; text-underline-offset: 2px; }
 .reply-detail .pk-page-head__actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .reply-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 360px); gap: 16px; align-items: start; }
 .reply-main, .reply-side { display: grid; gap: 16px; min-width: 0; align-content: start; }
@@ -56,11 +63,18 @@
 .reply-block { margin-top: 12px; }
 .reply-field-label { margin-bottom: 4px; font-size: 12px; font-weight: 500; color: var(--text-muted); }
 .reply-block p { margin: 0; font-size: 13px; }
-.reply-suggested { padding: 10px 12px; border-radius: var(--radius, 6px); background: var(--surface-tint, var(--bg-hover)); }
+.reply-suggested { padding: 10px 12px; border-radius: 0; border: 1px solid var(--border); background: var(--bg-subtle); }
 .reply-classified { margin: 12px 0 0; font-size: 12px; }
 .reply-override { display: flex; gap: 8px; flex-wrap: wrap; }
 .reply-label-select { flex: 1 1 180px; min-width: 0; }
 .reply-note { margin: 10px 0 0; font-size: 12px; }
+.rp-meter { gap: 8px; }
+.rp-meter__svg { display: block; width: 96px; height: 4px; }
+.rp-meter__rail { fill: var(--chart-track); }
+.rp-meter__fill { fill: var(--accent); }
+.rp-actionbar { margin-top: 16px; }
+.rp-actionbar .reply-read-form { margin: 0; }
+.rp-actionbar [hidden] { display: none; }
 
 /* Scheduled sends */
 .sched-tabs { margin: 0 0 16px; overflow-x: auto; }

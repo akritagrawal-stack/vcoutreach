@@ -1,7 +1,8 @@
+{% from "_icons.html" import icon, btn_icon %}
 {# Preview of the one test email, then the single send button. Included only when every readiness row passes.
    Needs `campaign.preview`. To is always the test recipient, never the contact. #}
 {% set _p = campaign.preview %}
-<section class="test-preview" id="testPreview" aria-label="Test email preview">
+<section class="pk-card pk-card--flush test-preview cmp-test-preview" id="testPreview" aria-label="Test email preview">
   <dl>
     <dt>To</dt><dd>{{ _p.to }}</dd>
     <dt>From</dt><dd>{% if _p.from_name %}{{ _p.from_name }} {% endif %}&lt;{{ _p.from_email }}&gt;</dd>
@@ -13,6 +14,6 @@
   <form method="post" action="/partners/{{ campaign.first_approved_partner_id }}/send-test" class="campaign-actions">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <input type="hidden" name="next" value="/crm/drafts">
-    <button type="submit" class="crm-button crm-button-small crm-button-primary">Send a test to {{ _p.to }}</button>
+    <button type="submit" class="pk-btn pk-btn--primary pk-btn--sm">{{ icon("send") }}Send a test to {{ _p.to }}</button>
   </form>
 </section>

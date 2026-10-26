@@ -18,6 +18,8 @@ Install: `curl -fsSL https://raw.githubusercontent.com/akritagrawal-stack/vcoutr
 
 The app's workspace is `~/Documents/Publikreach` and it starts in TEST mode every launch.
 
-Gmail: the easy sender setup is a Gmail app password (Settings, Gmail card). Google OAuth sign-in (Choose OAuth client file, then Connect Gmail) is optional and advanced.
+Gmail: connect with your Google OAuth client file (Settings, Gmail card): download your OAuth client file, choose it with Choose OAuth client file, then click Connect Gmail. The simpler alternative, if you do not want a Google Cloud project, is a Gmail app password, under "Alternative: use a Gmail app password instead" on the Gmail card (about two minutes).
+
+SearXNG web-search enrichment is optional, default http://localhost:8080. Start it with: `docker compose -f packaging/searxng/docker-compose.yml up -d`.
 
 Full documentation: [docs/mac-app.md](../../docs/mac-app.md). The older `install-mac.sh` developer installer is documented there too.

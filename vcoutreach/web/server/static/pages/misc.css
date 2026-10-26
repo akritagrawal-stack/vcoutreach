@@ -2,7 +2,6 @@
 
 /* Send plan: stat strip (uses .crm-metrics from style.css, three cells instead of four) */
 .send-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 20px; }
-.send-stats .crm-metric { min-height: 96px; }
 .send-plan-page .crm-panel { margin-top: 16px; }
 .send-plan-table td:first-child { font-family: var(--font-mono); font-size: 12px; }
 .send-plan-table td .badge { vertical-align: middle; }
@@ -12,21 +11,14 @@
 .draft-page .draft-editor-layout { margin-top: 20px; }
 .draft-form { display: grid; gap: 18px; min-width: 0; }
 .draft-form label { display: grid; gap: 7px; min-width: 0; font: 500 13px var(--font-sans); text-transform: none; letter-spacing: 0; color: var(--text-muted); }
-.draft-form input, .draft-form select, .draft-form textarea {
-  width: 100%; min-width: 0; min-height: 39px; padding: 9px 12px;
-  border: 1px solid var(--border); border-radius: 0; background: var(--surface-raised); color: var(--text);
-  font: inherit; font-size: 12px;
-}
-.draft-form input:focus, .draft-form select:focus, .draft-form textarea:focus { outline: 0; border-color: var(--accent); }
 .draft-form textarea { min-height: 360px; font-family: var(--font-mono); line-height: 1.6; resize: vertical; }
 .draft-meta { display: grid; grid-template-columns: minmax(180px, 240px) minmax(0, 1fr); gap: 18px; align-items: start; }
 .draft-thread { min-width: 0; }
-.draft-thread summary { min-height: 39px; display: flex; align-items: center; cursor: pointer; color: var(--text-muted); font: 500 13px var(--font-sans); text-transform: none; letter-spacing: 0; }
+.draft-thread summary { min-height: var(--ctl-md); display: flex; align-items: center; cursor: pointer; color: var(--text-muted); font: 500 13px var(--font-sans); text-transform: none; letter-spacing: 0; }
 .draft-thread[open] summary { color: var(--text); }
 .draft-thread label { margin-top: 12px; }
 .draft-clear { margin: 0 0 16px; color: var(--text-muted); font-size: 12px; }
 .draft-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding-top: 16px; border-top: 1px solid var(--border-muted); }
-.draft-back { margin-left: auto; color: var(--text-muted); font-size: 11px; text-decoration: underline; }
 .draft-page .crm-source-note { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border-muted); }
 
 /* Draft editor: sibling list, one row per draft with the status badge on the right */
@@ -34,7 +26,7 @@
 .draft-siblings li > a { grid-column: 1; grid-row: 1; min-width: 0; overflow-wrap: anywhere; }
 .draft-siblings li > .badge { grid-column: 2; grid-row: 1; justify-self: end; }
 .draft-siblings li > .crm-table-subline { grid-column: 1 / -1; grid-row: 2; }
-.draft-siblings li.is-current { background: var(--surface-soft); }
+.draft-siblings li.is-current { background: var(--accent-dim); }
 
 @media (max-width: 1280px) {
   .draft-meta { grid-template-columns: minmax(160px, 200px) minmax(0, 1fr); }
@@ -45,62 +37,91 @@
 @media (max-width: 800px) {
   .send-stats { grid-template-columns: minmax(0, 1fr); }
   .draft-meta { grid-template-columns: minmax(0, 1fr); }
-  .draft-back { margin-left: 0; }
 }
 @media (min-width: 1600px) {
   .draft-form textarea { min-height: 460px; }
 }
 
-/* Settings page: compact connection cards and workspace accordions. */
+/* Settings page. Square corners, 1px hairlines, hover = scale plus an edge-trace line (no colour change). */
 .settings-page { gap: 0; }
-.settings-page > .svc-grid, .settings-page > .acc, .settings-page > #workspaceSettingsForm { margin-bottom: var(--space-4); }
-.settings-shell .settings-head { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-4); }
+.settings-page > .svc-grid, .settings-page > .acc, .settings-page > #workspaceSettingsForm, .settings-page > .ready-board { margin-bottom: var(--space-4); }
+.settings-shell .settings-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-4); }
 .settings-shell .settings-head h1 { font-size: var(--fs-22); line-height: var(--lh-tight); font-weight: var(--fw-semibold); }
+.settings-page .settings-sub { margin: 0 0 var(--space-3); font-size: var(--fs-16); }
+
+/* Readiness board */
+.ready-board { border: 1px solid var(--border); background: var(--surface); }
+.ready-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--border); }
+.ready-head h2 { flex: 1 1 14em; margin: 0; font-size: var(--fs-14); font-weight: var(--fw-semibold); }
+.ready-count { font-size: var(--fs-12); font-weight: var(--fw-semibold); color: var(--text-muted); }
+.ready-bar { display: inline-flex; gap: var(--space-1); }
+.ready-seg { display: block; width: var(--space-6); height: var(--space-1); background: var(--border); }
+.ready-seg[data-on] { background: var(--success); }
+.ready-list { margin: 0; padding: 0; list-style: none; }
+.ready-row { display: grid; grid-template-columns: var(--space-2) minmax(8em, 12em) minmax(0, 1fr) auto; align-items: center; gap: var(--space-3); min-height: 40px; padding: var(--space-1) var(--space-4); }
+.ready-row + .ready-row { border-top: 1px solid var(--border-muted); }
+.ready-name { font-size: var(--fs-13); font-weight: var(--fw-semibold); }
+.ready-word { min-width: 0; font-size: var(--fs-13); color: var(--text-muted); overflow-wrap: anywhere; }
+.ready-row[data-state="ok"] .ready-word { color: var(--success); }
+.ready-act { justify-self: end; }
+
+/* Status overview and tiles */
+.svc-overview { display: grid; gap: var(--space-2); margin-bottom: var(--space-4); }
 .settings-shell .svc-summary { font-size: var(--fs-12); color: var(--text-muted); }
-.settings-shell .svc-tiles { gap: 6px; }
-.settings-shell .svc-tile { height: var(--ctl-sm); min-height: var(--ctl-sm); padding: 0 10px; font-size: var(--fs-12); border-color: var(--border); border-radius: var(--radius-full); }
+.settings-shell .svc-tiles { flex-wrap: wrap; gap: var(--space-2); }
+.settings-shell .svc-tile { height: var(--ctl-sm); min-height: var(--ctl-sm); padding: 0 var(--space-3); border-color: var(--border); border-radius: 0; font-size: var(--fs-12); }
+.settings-shell .svc-dot { width: var(--space-2); height: var(--space-2); border-radius: 0; }
+
+/* Cards and accordions */
 .settings-shell .svc-grid { gap: var(--space-3); }
-.settings-shell .svc-card { padding: 14px var(--space-4); gap: 10px; border-color: var(--border); border-radius: var(--radius-lg); }
-.settings-shell .svc-grid .svc-card { margin-bottom: 0; }
+.settings-shell .svc-grid[data-required] { grid-template-columns: minmax(0, 1fr); }
+.settings-shell .svc-card { gap: var(--space-3); padding: var(--space-4); border-color: var(--border); border-radius: 0; }
 .settings-shell .svc-head h2 { font-size: var(--fs-14); }
-.settings-shell .svc-mark { width: 24px; height: 24px; }
+.settings-shell .svc-mark { width: var(--space-6); height: var(--space-6); }
 .settings-shell .svc-hint { max-width: 60ch; font-size: var(--fs-13); }
-.settings-shell .fld { gap: var(--space-1); }
-.settings-shell .fld > span, .settings-shell .fld > label { margin-bottom: 0; font-size: var(--fs-12); font-weight: var(--fw-medium); }
-.settings-shell .fld input, .settings-shell .fld select, .settings-shell .settings-fields input { height: var(--ctl-md); min-height: var(--ctl-md); padding: 0 10px; border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); color: var(--text); font-size: var(--fs-13); }
-.settings-shell .fld select { padding-right: 28px; }
-.settings-shell .fld textarea { min-height: 96px; padding: var(--space-2) 10px; border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); color: var(--text); font-size: var(--fs-13); }
-.settings-shell .fld input:focus-visible, .settings-shell .fld select:focus-visible, .settings-shell .fld textarea:focus-visible { border-color: var(--accent); outline: 2px solid var(--focus); outline-offset: 2px; }
-.settings-shell .secret-toggle { height: var(--ctl-md); }
-.settings-shell .fields { gap: 10px var(--space-3); padding: var(--space-3) var(--space-4); }
-.settings-shell .acc { border-color: var(--border); border-radius: var(--radius-lg); }
-.settings-shell .acc > summary { align-items: center; padding: 10px var(--space-4); font-size: var(--fs-13); }
+.settings-shell .svc-steps > p::before { border-radius: 0; }
+.settings-shell .acc { border-color: var(--border); border-radius: 0; }
+.settings-shell .acc > summary { align-items: center; padding: var(--space-3) var(--space-4); font-size: var(--fs-13); }
 .settings-shell .acc > summary b { font-size: var(--fs-13); }
 .settings-shell .acc > summary::before { content: none; }
 .settings-shell details > summary { list-style: none; cursor: pointer; }
 .settings-shell details > summary::-webkit-details-marker { display: none; }
 .settings-shell details > summary .icon-chevron { flex: none; transition: transform var(--transition); }
 .settings-shell details[open] > summary .icon-chevron { transform: rotate(180deg); }
-.settings-shell .svc-actions { gap: var(--space-2); }
+.settings-shell .fields { gap: var(--space-3); padding: var(--space-4); }
+.settings-page #workspaceSettingsForm { display: grid; gap: var(--space-2); }
+
+/* Fields */
+.settings-shell .fld { gap: var(--space-1); }
+.settings-shell .fld > span, .settings-shell .fld > label { margin-bottom: 0; font-size: var(--fs-12); font-weight: var(--fw-medium); }
+.settings-shell .fld input, .settings-shell .fld select, .settings-shell .fld textarea { border: 1px solid var(--border-strong); border-radius: 0; background: var(--surface); color: var(--text); font-size: var(--fs-13); }
+.settings-shell .fld input, .settings-shell .fld select { height: var(--ctl-md); min-height: var(--ctl-md); padding: 0 var(--space-3); }
+.settings-shell .fld select { padding-right: var(--space-7); }
+.settings-shell .fld textarea { min-height: 96px; padding: var(--space-2) var(--space-3); }
+.settings-shell .fld input:focus-visible, .settings-shell .fld select:focus-visible, .settings-shell .fld textarea:focus-visible { border-color: var(--accent); outline: 2px solid var(--focus); outline-offset: 2px; }
+.settings-shell .secret-toggle { height: var(--ctl-md); }
+
+/* Buttons: square, scale plus edge-trace on hover */
+.settings-shell .svc-actions { flex-wrap: wrap; gap: var(--space-2); }
 .settings-shell .svc-actions.save-bar { position: sticky; bottom: 0; z-index: 3; margin-top: var(--space-3); padding: var(--space-3) 0; background: var(--surface); border-top: 1px solid var(--border); }
-.settings-shell .svc-link { display: inline-flex; align-items: center; gap: 6px; color: var(--text-muted); border-radius: var(--radius); text-decoration: none; }
-.settings-shell .svc-link:hover { background: var(--bg-hover); color: var(--text); }
-.settings-shell .svc-link:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-.settings-page #workspaceSettingsForm { display: grid; gap: var(--space-4); }
-.settings-page .settings-sub { margin: 0 0 var(--space-3); font-size: var(--fs-16); }
+.settings-shell :is(.svc-tile, .acc > summary) { position: relative; transition: transform var(--transition); }
+.settings-shell :is(.svc-tile, .acc > summary)::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: var(--accent); transform: scaleX(0); transform-origin: left; transition: transform var(--transition); pointer-events: none; }
+.settings-shell :is(.svc-tile, .acc > summary):hover::after { transform: scaleX(1); }
+.settings-shell .svc-tile:hover { transform: scale(1.02); }
 
-@media (max-width: 768px) {
-  .settings-shell .svc-tile { height: auto; min-height: 40px; flex-wrap: wrap; padding: var(--space-1) 10px; }
+@media (min-width: 721px) {
+  .settings-shell .svc-grid[data-required] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
-
-/* Settings: align controls with the pk- kit (heights, radii, type) without changing markup hooks. */
-.settings-shell .svc-btn { min-height: var(--pk-ctl-h, 32px); height: var(--pk-ctl-h, 32px); padding: 0 12px; border-radius: var(--pk-r-ctl, 6px); font: 500 14px/20px var(--font-sans); }
-.settings-shell .svc-btn:not(.primary):not(.danger) { border-color: var(--border-strong); }
-.settings-shell .svc-btn svg { width: 16px; height: 16px; flex: none; }
-.settings-shell .svc-card, .settings-shell .acc { border-radius: var(--pk-r-card, 8px); border-color: var(--border); }
-.settings-shell .settings-head { flex-wrap: wrap; }
-.settings-shell .svc-tiles { flex-wrap: wrap; }
-.settings-shell .svc-actions { flex-wrap: wrap; }
+@media (max-width: 720px) {
+  .settings-shell .svc-tile { height: auto; min-height: 40px; flex-wrap: wrap; padding: var(--space-1) var(--space-3); }
+  .ready-row { grid-template-columns: var(--space-2) minmax(0, 1fr) auto; row-gap: var(--space-1); }
+  .ready-word { grid-column: 2; }
+  .ready-act { grid-column: 3; grid-row: 1 / span 2; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .settings-shell :is(.svc-tile, .acc > summary), .settings-shell :is(.svc-tile, .acc > summary)::after, .settings-shell details > summary .icon-chevron { transition: none; }
+  .settings-shell .svc-tile:hover { transform: none; }
+}
 
 /* Candidates */
 .cand-count { vertical-align: middle; margin-left: 6px; }
@@ -121,14 +142,14 @@
 .en-filters { align-items: center; row-gap: 8px; }
 .en-filter-label { font-size: 12px; font-weight: 500; color: var(--text-muted); }
 .en-sep { width: 1px; height: 18px; background: var(--border); margin: 0 4px; }
-.pk-chip.chip { padding: 0 10px; border-radius: 999px; }
-.pk-chip.chip:hover { border-color: var(--border-strong); background: var(--pk-surface-2, var(--bg-hover)); color: var(--text); }
+.pk-chip.chip { padding: 0 10px; border-radius: 0; }
+.pk-chip.chip:hover { transform: scale(1.02); }
 .pk-chip.active, .pk-chip.chip.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
 .pk-chip.chip-clear { border-style: dashed; color: var(--text-muted); }
 .en-legend { margin: 0 0 12px; line-height: 22px; }
 .en-dot { display: inline-block; margin: 0 4px 0 10px; color: var(--text-faint); }
 .en-table td, .en-table th { vertical-align: middle; }
-.en-table th .table-sort { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; }
+.en-table th .table-sort { background: none; border: 0; padding: 4px 0; margin: -4px 0; font: inherit; color: inherit; cursor: pointer; }
 .en-c { text-align: center; white-space: nowrap; }
 .en-when { white-space: nowrap; color: var(--text-muted); }
 .en-stats { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
@@ -145,7 +166,7 @@
 .ver-provider__name { margin: 2px 0 0; font-size: 16px; font-weight: 600; }
 .ver-provider__cap { margin: 0; font-size: 13px; }
 .ver-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 0; }
-.ver-metrics > div { padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--pk-r-ctl, 6px); background: var(--surface); min-width: 0; }
+.ver-metrics > div { padding: 8px 10px; border: 1px solid var(--border); border-radius: 0; background: var(--surface); min-width: 0; }
 .ver-metrics dt { font-size: 11px; color: var(--text-muted); font-weight: 500; }
 .ver-metrics dd { margin: 2px 0 0; font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
 .verification-key-hint { margin: 0; }
@@ -160,7 +181,7 @@
 .ver-history .pk-card__head { padding: 0 0 12px; }
 .ver-history__note { margin: 0 0 12px; }
 .ver-attempts { display: grid; gap: 12px; }
-.ver-attempt { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--border); border-radius: var(--pk-r-ctl, 6px); background: var(--surface); min-width: 0; }
+.ver-attempt { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--border); border-radius: 0; background: var(--surface); min-width: 0; }
 .ver-attempt__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .ver-attempt__head > div { display: grid; gap: 2px; min-width: 0; }
 .ver-attempt__head span { font-size: 11px; letter-spacing: .03em; }

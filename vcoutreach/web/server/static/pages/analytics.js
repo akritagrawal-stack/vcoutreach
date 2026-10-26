@@ -28,6 +28,8 @@
         var next = null;
         if (event.key === 'ArrowRight') next = tabs[(index + 1) % tabs.length];
         else if (event.key === 'ArrowLeft') next = tabs[(index - 1 + tabs.length) % tabs.length];
+        else if (event.key === 'Home') next = tabs[0];
+        else if (event.key === 'End') next = tabs[tabs.length - 1];
         if (next) { event.preventDefault(); select(next.getAttribute('data-tab'), true); }
       });
     });

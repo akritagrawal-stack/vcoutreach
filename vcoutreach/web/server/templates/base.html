@@ -1,4 +1,4 @@
-{% from "_icons.html" import icon %}<!doctype html>
+{% from "_icons.html" import icon, btn_icon %}<!doctype html>
 <html lang="en" data-theme="">
 <head>
 <meta charset="utf-8">
@@ -7,23 +7,26 @@
 <meta name="color-scheme" content="light dark">
 <link rel="icon" type="image/svg+xml" href="/favicon.ico">
 <title>{% block title %}{{ g_workspace.workspace_name }}{% endblock %} | Publikreach</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=20261024-ux7">
-<link rel="stylesheet" href="{{ url_for('static', filename='pages/components.css') }}?v=20261024-ux7">
-<link rel="stylesheet" href="{{ url_for('static', filename='pages/analytics.css') }}?v=20261024-ux7">
-<link rel="stylesheet" href="{{ url_for('static', filename='pages/dashboard.css') }}?v=20261024-ux7">
-<link rel="stylesheet" href="{{ url_for('static', filename='pages/campaign.css') }}?v=20261024-ux7">
-<link rel="stylesheet" href="{{ url_for('static', filename='pages/partners.css') }}?v=20261024-ux7">
-<link rel="stylesheet" href="{{ url_for('static', filename='pages/crm.css') }}?v=20261024-ux7">
-<link rel="stylesheet" href="{{ url_for('static', filename='pages/replies.css') }}?v=20261024-ux7">
-<link rel="stylesheet" href="{{ url_for('static', filename='pages/misc.css') }}?v=20261024-ux7">
-<link rel="stylesheet" href="{{ url_for('static', filename='pages/nextstep.css') }}?v=20261024-ux7">
-<script src="{{ url_for('static', filename='app.js') }}?v=20261024-ux7"></script>
-<script src="{{ url_for('static', filename='pages/components.js') }}?v=20261024-ux7" defer></script>
-<script src="{{ url_for('static', filename='pages/partners.js') }}?v=20261024-ux7" defer></script>
-<script src="{{ url_for('static', filename='pages/crm.js') }}?v=20261024-ux7" defer></script>
-<script src="{{ url_for('static', filename='pages/replies.js') }}?v=20261024-ux7" defer></script>
-<script src="{{ url_for('static', filename='pages/misc.js') }}?v=20261024-ux7" defer></script>
-<script src="{{ url_for('static', filename='pages/shell.js') }}?v=20261024-ux7" defer></script>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=20261025-btn1">
+<link rel="stylesheet" href="{{ url_for('static', filename='pages/components.css') }}?v=20261025-btn1">
+<link rel="stylesheet" href="{{ url_for('static', filename='pages/analytics.css') }}?v=20261025-btn1">
+<link rel="stylesheet" href="{{ url_for('static', filename='pages/visuals.css') }}?v=20261025-btn1">
+<link rel="stylesheet" href="{{ url_for('static', filename='pages/dashboard.css') }}?v=20261025-btn1">
+<link rel="stylesheet" href="{{ url_for('static', filename='pages/campaign.css') }}?v=20261025-btn1">
+<link rel="stylesheet" href="{{ url_for('static', filename='pages/partners.css') }}?v=20261025-btn1">
+<link rel="stylesheet" href="{{ url_for('static', filename='pages/crm.css') }}?v=20261025-btn1">
+<link rel="stylesheet" href="{{ url_for('static', filename='pages/replies.css') }}?v=20261025-btn1">
+<link rel="stylesheet" href="{{ url_for('static', filename='pages/misc.css') }}?v=20261025-btn1">
+<link rel="stylesheet" href="{{ url_for('static', filename='pages/nextstep.css') }}?v=20261025-btn1">
+<script src="{{ url_for('static', filename='app.js') }}?v=20261025-btn1"></script>
+<script src="{{ url_for('static', filename='pages/components.js') }}?v=20261025-btn1" defer></script>
+<script src="{{ url_for('static', filename='pages/partners.js') }}?v=20261025-btn1" defer></script>
+<script src="{{ url_for('static', filename='pages/crm.js') }}?v=20261025-btn1" defer></script>
+<script src="{{ url_for('static', filename='pages/replies.js') }}?v=20261025-btn1" defer></script>
+<script src="{{ url_for('static', filename='pages/misc.js') }}?v=20261025-btn1" defer></script>
+<script src="{{ url_for('static', filename='pages/shell.js') }}?v=20261025-btn1" defer></script>
+<script src="{{ url_for('static', filename='pages/visuals.js') }}?v=20261025-btn1" defer></script>
+<script src="{{ url_for('static', filename='pages/glass.js') }}?v=20261025-btn1" defer></script>
 </head>
 <body data-page="{% block page_id %}{% endblock %}">
 <a class="skip-link" href="#main">Skip to content</a>
@@ -34,13 +37,13 @@
   <span><strong>TEST MODE</strong> Sends go to your test recipient only.</span>
   {% if g_test_recipient %}<span class="send-banner-recipient">Test recipient: {{ g_test_recipient }}</span>{% else %}<a class="send-banner-link" href="/settings#svc-test-recipient">Set test recipient</a>{% endif %}
   <span class="banner-toggle-wrap">
-    {% if not g_next_step %}<button class="btn-banner-toggle" id="bannerGoLiveToggle" data-toggle="goLiveForm" aria-controls="goLiveForm" aria-expanded="false">Switch to LIVE mode</button>
+    {% if not g_next_step %}<button class="btn-banner-toggle" id="bannerGoLiveToggle" data-toggle="goLiveForm" aria-controls="goLiveForm" aria-expanded="false">{{ icon("zap") }}Switch to LIVE mode</button>
     {% endif %}<form id="goLiveForm" method="POST" action="/toggle-send-mode" class="banner-confirm-form" hidden>
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <label class="sr-only" for="goLiveConfirmation">Type GO LIVE to confirm live delivery</label>
       <input id="goLiveConfirmation" type="text" name="confirm_text" class="banner-confirm-input" placeholder='Type "GO LIVE" to confirm' required pattern="GO LIVE" autocomplete="off">
-      <button type="submit" class="btn-banner-go-live">Confirm: GO LIVE</button>
-      <button type="button" class="btn-banner-toggle" data-cancel-go-live>Cancel</button>
+      <button type="submit" class="btn-banner-go-live">{{ icon("zap") }}Confirm: GO LIVE</button>
+      <button type="button" class="btn-banner-toggle" data-cancel-go-live>{{ icon("x") }}Cancel</button>
     </form>
   </span>
 </div>
@@ -49,7 +52,7 @@
   <span><strong>LIVE MODE</strong> Real partner delivery is on.</span>
   <form method="POST" action="/toggle-send-mode" class="banner-revert-form">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <button type="submit" class="btn-banner-toggle btn-banner-revert">Switch back to TEST</button>
+    <button type="submit" class="btn-banner-toggle btn-banner-revert">{{ icon("undo") }}Switch back to TEST</button>
   </form>
 </div>
 {% endif %}
@@ -74,7 +77,7 @@
       {% set _analytics_active = active_page in ('analytics', 'tracking') %}
       <li class="nav-solo-item"><a class="nav-link nav-link-solo nav-link-contacts{% if active_page == 'crm' %} active{% endif %}" href="/crm"{% if active_page == 'crm' %} aria-current="page"{% endif %}>{{ icon("users", 16, "nav-icon") }}<span>Contacts</span></a></li>
       <li class="nav-solo-item"><a class="nav-link nav-link-solo nav-link-campaign{% if _campaign_active %} active{% endif %}" href="/crm/drafts"{% if _campaign_active %} aria-current="page"{% endif %}>{{ icon("pencil", 16, "nav-icon") }}<span>Campaign</span></a></li>
-      <li class="nav-solo-item"><a class="nav-link nav-link-solo nav-link-drafts{% if _drafts_active %} active{% endif %}" href="/crm/drafts#drafts"{% if _drafts_active %} aria-current="page"{% endif %}>{{ icon("list", 16, "nav-icon") }}<span>Drafts</span></a></li>
+      <li class="nav-solo-item"><a class="nav-link nav-link-solo nav-link-drafts{% if _drafts_active %} active{% endif %}" href="/crm/drafts#draftsTable"{% if _drafts_active %} aria-current="page"{% endif %}>{{ icon("list", 16, "nav-icon") }}<span>Drafts</span></a></li>
       <li class="nav-solo-item"><a class="nav-link nav-link-solo nav-link-send{% if _send_active %} active{% endif %}" href="/partners"{% if _send_active %} aria-current="page"{% endif %}>{{ icon("play", 16, "nav-icon") }}<span>Send</span></a></li>
       <li class="nav-solo-item"><a class="nav-link nav-link-solo nav-link-replies{% if active_page == 'replies' %} active{% endif %}" href="/replies"{% if active_page == 'replies' %} aria-current="page"{% endif %}>{{ icon("message", 16, "nav-icon") }}<span>Replies</span>
         {% if unread_replies > 0 %}<span class="nav-badge{% if unread_interested > 0 %} nav-badge-hot{% endif %}">{{ unread_replies }}</span>{% endif %}</a></li>
@@ -105,7 +108,7 @@
     {% if messages %}
       <ul class="flash-list" aria-live="polite" aria-label="Notifications">
         {% for category, message in messages %}
-          <li class="flash flash-{{ 'error' if category == 'error' else 'warning' if category == 'warning' else 'info' if category == 'info' else 'success' }}">
+          <li class="flash flash-{{ 'error' if category in ('error', 'deck_error') else 'warning' if category == 'warning' else 'info' if category == 'info' else 'success' }}">
             <span>{{ message }}{% if 'Gmail is not connected.' in message %} <a href="/settings">Open Settings</a>{% endif %}</span>
             <button type="button" class="flash-close" data-dismiss-flash aria-label="Dismiss notification">&times;</button>
           </li>

@@ -1,8 +1,8 @@
 {#- Publik API recommendation card. Self-contained: needs only `csrf_token` and the `publik_card()` context function from mcp_routes.py.
     Included first in Connections on /settings and at the top of /setup/ai. It links its own stylesheet and script (both idempotent). -#}
 {% set pk = publik_card() %}
-<link rel="stylesheet" href="{{ url_for('static', filename='pages/setup_ai.css') }}?v=20261024-ux4">
-{% from "_icons.html" import icon %}
+<link rel="stylesheet" href="{{ url_for('static', filename='pages/setup_ai.css') }}?v=20261025-btn1">
+{% from "_icons.html" import icon, btn_icon %}
 <article class="svc-card pk-card" id="svc-publik" tabindex="-1" data-service="publik" data-state="{{ pk.chip_state }}" data-pk-card data-pk-state="{{ pk.state }}">
   <header class="svc-head">
     <svg class="svc-mark m-publik" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32"/><text x="16" y="21.5" text-anchor="middle">Pk</text></svg>
@@ -11,7 +11,7 @@
     <form class="pk-inline" method="post" action="/settings/publik-recommendation" data-pk-reco data-pk-undo{% if pk.state != 'skipped' %} hidden{% endif %}>
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <input type="hidden" name="state" value="pending">
-      <button type="submit" class="svc-link">Undo</button>
+      <button type="submit" class="svc-link">{{ icon("undo") }}Undo</button>
     </form>
   </header>
 
@@ -28,7 +28,7 @@
       </div>
     </div>
     <div class="svc-actions">
-      <button type="submit" class="svc-btn primary" data-pk-save>Save key</button>
+      <button type="submit" class="svc-btn primary" data-pk-save>{{ icon("save") }}Save key</button>
       <button type="button" class="svc-btn" data-pk-test>{{ icon("check") }} Test</button>
       <a class="svc-btn" href="https://publikhq.com/dashboard/api" rel="noopener" target="_blank">Get key {{ icon("external-link") }}</a>
       <button type="submit" class="svc-btn danger" name="action" value="remove" data-pk-remove{% if pk.state != 'connected' %} hidden{% endif %}>{{ icon("trash") }} Remove key</button>
@@ -41,10 +41,10 @@
   <form class="pk-skip" method="post" action="/settings/publik-recommendation" data-pk-reco data-pk-skip{% if pk.state != 'pending' %} hidden{% endif %}>
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <input type="hidden" name="state" value="skipped">
-    <button type="submit" class="svc-link">Skip, use my own key or the offline template</button>
+    <button type="submit" class="svc-link">{{ icon("arrow-right") }}Skip, use my own key or the offline template</button>
   </form>
 
   <p class="svc-hint">Publik API calls cost real money. See the pricing information on <a href="https://publikhq.com" rel="noopener" target="_blank">https://publikhq.com {{ icon("external-link") }}</a> before you start. Offline mode is free. A contact with no facts never triggers a request.</p>
   <p class="svc-hint"><strong>What leaves your machine.</strong> For each contact: the recipient's name, org, role and facts, and your name and org. Requests go only to the Publik host you configured.</p>
 </article>
-<script src="{{ url_for('static', filename='pages/setup_ai.js') }}?v=20261024-ai3" defer></script>
+<script src="{{ url_for('static', filename='pages/setup_ai.js') }}?v=20261025-btn1" defer></script>

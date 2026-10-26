@@ -16,6 +16,9 @@ from vcoutreach.web.config import get_workspace
 
 MAX_DECK_BYTES = 25 * 1024 * 1024
 PDF_MAGIC = b'%PDF-'
+PDF_EOF = b'%%EOF'
+PDF_TYPE = b'/Type'
+_EOF_WINDOW = 2048
 _STEM_LIMIT = 80
 _BACK_PATH = re.compile(r'^/(?:crm/drafts(?:/[A-Za-z0-9][A-Za-z0-9._-]{0,239})?|settings)$')
 
@@ -34,6 +37,15 @@ def noun(job_search: bool) -> str:
 
 def not_a_pdf(job_search: bool) -> str:
     return f'That file is not a PDF. Upload a PDF {noun(job_search).lower()}.'
+
+
+def damaged_pdf(job_search: bool) -> str:
+    return f'That file looks damaged or incomplete. Export the {noun(job_search).lower()} as a PDF again and upload it.'
+
+
+def looks_complete(data: bytes) -> bool:
+    """Cheap structural check, no parser: a real PDF ends with an %%EOF marker and declares at least one /Type object."""
+    return PDF_EOF in data[-_EOF_WINDOW:] and PDF_TYPE in data
 
 
 def back_path(value: object, default: str = '/crm/drafts') -> str:
@@ -91,7 +103,7 @@ def _set_deck(path: str, label: str) -> None:
 def save_uploaded_deck(storage, job_search: bool = False) -> str:
     """Validate and store one uploaded PDF, make it the configured deck, and return the saved filename.
 
-    Raises DeckUploadError with a flashable message when the file is missing, empty, over 25 MB or not a PDF.
+    Raises DeckUploadError with a flashable message when the file is missing, empty, over 25 MB, not a PDF or damaged (no %%EOF marker or no /Type object).
     """
     if storage is None or not getattr(storage, 'filename', ''):
         raise DeckUploadError(NO_FILE)
@@ -100,6 +112,8 @@ def save_uploaded_deck(storage, job_search: bool = False) -> str:
         raise DeckUploadError(EMPTY_FILE)
     if not data.startswith(PDF_MAGIC):
         raise DeckUploadError(not_a_pdf(job_search))
+    if not looks_complete(data):
+        raise DeckUploadError(damaged_pdf(job_search))
     workspace = get_workspace()
     folder = workspace.path('attachments')
     folder.mkdir(parents=True, exist_ok=True)

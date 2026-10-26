@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% from "_icons.html" import icon %}
+{% from "_icons.html" import icon, btn_icon %}
 {% from '_partner_macros.html' import empty_value %}
 {% block page_id %}partners_list{% endblock %}
 {% block title %}Send{% endblock %}
@@ -22,6 +22,40 @@
   {%- endif -%}
 {%- endmacro %}
 
+{# Email quality bucket for one row: verified, risky, unknown or invalid. #}
+{% macro q_key(row) -%}
+  {%- set es = row.get('email_verification_status') -%}
+  {%- set ev = es in ['valid','deliverable','pb_verified'] -%}
+  {%- set vs = 'verified' if ev else (row.get('verification_status') or 'unverified') -%}
+  {%- if es == 'invalid' -%}invalid
+  {%- elif es == 'catch_all' -%}risky
+  {%- elif ev or vs in ['verified','verified_strong'] -%}verified
+  {%- elif vs == 'weak' or es in ['mx_pattern_match','mx_only'] -%}risky
+  {%- else -%}unknown
+  {%- endif -%}
+{%- endmacro %}
+
+{# Plain-English label for the hook grounding state. The raw state stays in the title attribute only. #}
+{% macro grounding_label(raw) -%}
+  {%- set g = raw or '' -%}
+  {%- if g.startswith('blocked:') and 'ungrounded' in g -%}Blocked: opening line has no matching source
+  {%- elif g.startswith('blocked:') -%}Blocked: {{ g[8:]|trim }}
+  {%- elif g == 'grounded' -%}Opening line backed by research
+  {%- elif g == 'no hook' -%}No opening line yet
+  {%- elif 'has not been checked' in g -%}Opening line not checked yet
+  {%- elif g.startswith('ungrounded') -%}Opening line needs a source
+  {%- else -%}Not checked yet
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro ghost_rows() -%}
+<div class="pl-ghost" aria-hidden="true">
+                <span class="pl-ghost__row"><span class="pl-ghost__box"></span><span class="pl-ghost__bar pl-ghost__bar--wide"></span><span class="pl-ghost__bar"></span><span class="pl-ghost__bar pl-ghost__bar--short"></span></span>
+                <span class="pl-ghost__row"><span class="pl-ghost__box"></span><span class="pl-ghost__bar pl-ghost__bar--wide"></span><span class="pl-ghost__bar"></span><span class="pl-ghost__bar pl-ghost__bar--short"></span></span>
+                <span class="pl-ghost__row"><span class="pl-ghost__box"></span><span class="pl-ghost__bar pl-ghost__bar--wide"></span><span class="pl-ghost__bar"></span><span class="pl-ghost__bar pl-ghost__bar--short"></span></span>
+              </div>
+{%- endmacro %}
+
 {% block content %}
 {% set rows = partners|default(rows|default([])) %}
 {% set tier_filters = [tier_filter] if tier_filter|default('') else [] %}
@@ -32,10 +66,17 @@
 {% set any_filter = tier_filters or status_filters or verif_filters or search|default('') %}
 {% set quality_now = 'verified' if ('verified' in verif_filters or 'verified_strong' in verif_filters) else ('risky' if 'weak' in verif_filters else ('unknown' if 'unverified' in verif_filters else '')) %}
 {% set kpi = namespace(ready=0, bounced=0) %}
+{% set qc = namespace(verified=0, risky=0, unknown=0, invalid=0, approved=0, approved_ok=0) %}
 {% for r in rows %}
+  {% set qk = q_key(r)|trim %}
+  {% if qk == 'verified' %}{% set qc.verified = qc.verified + 1 %}{% elif qk == 'risky' %}{% set qc.risky = qc.risky + 1 %}{% elif qk == 'invalid' %}{% set qc.invalid = qc.invalid + 1 %}{% else %}{% set qc.unknown = qc.unknown + 1 %}{% endif %}
+  {% if r.get('status') == 'approved' %}{% set qc.approved = qc.approved + 1 %}{% if qk == 'verified' %}{% set qc.approved_ok = qc.approved_ok + 1 %}{% endif %}{% endif %}
   {% if r.get('status') == 'approved' and not r.get('blocked_reason') and not r.get('dropped_reason') %}{% set kpi.ready = kpi.ready + 1 %}{% endif %}
   {% if r.get('email_verification_status') == 'invalid' or r.get('status') == 'bounced' %}{% set kpi.bounced = kpi.bounced + 1 %}{% endif %}
 {% endfor %}
+{% set q_total = rows|length %}
+{% set q_segs = [('verified', 'Verified', qc.verified), ('risky', 'Risky', qc.risky), ('unknown', 'Unknown', qc.unknown), ('invalid', 'Invalid', qc.invalid)] %}
+{% set q_pos = namespace(x=0) %}
 {% set sent_total = (counts.get('live_sent', 0) or 0) + (counts.get('sent', 0) or 0) %}
 
 <header class="pk-page-head">
@@ -74,6 +115,29 @@
   </li>
 </ul>
 
+<section class="pk-card pl-quality" aria-label="Email quality of the contacts below">
+  <div class="pl-quality__main">
+    <h2 class="pl-quality__title">Email quality</h2>
+    <svg class="pl-meter{% if not q_total %} pl-meter--ghost{% endif %}" viewBox="0 0 100 6" preserveAspectRatio="none" role="img" aria-label="Verified {{ qc.verified }}, risky {{ qc.risky }}, unknown {{ qc.unknown }}, invalid {{ qc.invalid }}">
+      <rect class="pl-seg pl-seg--track" x="0" y="0" width="100" height="6"/>
+      {% for key, label, n in q_segs %}{% if n %}<rect class="pl-seg pl-seg--{{ key }}" x="{{ q_pos.x|round(2) }}" y="0" width="{{ (n * 100 / q_total)|round(2) }}" height="6"/>{% set q_pos.x = q_pos.x + (n * 100 / q_total) %}{% endif %}{% endfor %}
+    </svg>
+    <ul class="pl-legend">
+      {% for key, label, n in q_segs %}
+      <li><span class="pl-key pl-key--{{ key }}" aria-hidden="true"></span>{{ label }} <strong class="pk-num">{{ n }}</strong></li>
+      {% endfor %}
+    </ul>
+  </div>
+  <div class="pl-quality__ready">
+    <span class="pl-quality__label">Approved and verified</span>
+    <svg class="pl-meter pl-meter--gauge{% if not qc.approved %} pl-meter--ghost{% endif %}" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true">
+      <rect class="pl-seg pl-seg--track" x="0" y="0" width="100" height="6"/>
+      {% if qc.approved %}<rect class="pl-seg pl-seg--verified" x="0" y="0" width="{{ (qc.approved_ok * 100 / qc.approved)|round(2) }}" height="6"/>{% endif %}
+    </svg>
+    <span class="pl-quality__gauge"><strong class="pk-num">{{ qc.approved_ok }}</strong> of <strong class="pk-num">{{ qc.approved }}</strong> approved are verified</span>
+  </div>
+</section>
+
 <div class="pk-filterbar pl-filters">
   <label class="pk-search pl-search" for="partnerSearch">
     <span class="sr-only">Search contacts</span>
@@ -108,12 +172,14 @@
     </select>
   </label>
   {% if tier_filters or status_filters or verif_filters %}
-  <a id="chip-clear" class="pk-btn pk-btn--ghost pk-btn--sm" href="/partners">{{ icon("x", 14) }}Clear filters</a>
+  <a class="pk-btn pk-btn--ghost pk-btn--sm pl-clear" href="/partners">{{ icon("x", 14) }}Clear filters</a>
   {% endif %}
 </div>
 
 <form id="bulkForm" method="POST" action="/send-batch">
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+  <p class="pk-note pl-tick">Tick the approved contacts you want to send to. A send bar appears once you tick one.</p>
 
   <section class="pk-card pk-card--flush pl-card">
     <div class="pk-table-wrap pl-wrap">
@@ -141,13 +207,12 @@
           {% set email_status = row.get('email_verification_status') %}
           {% set email_verified = email_status in ['valid','deliverable','pb_verified'] %}
           {% set verification = 'verified' if email_verified else (row.get('verification_status') or 'unverified') %}
-          {% if email_status == 'invalid' %}{% set q_cls, q_txt, q_tip = 'danger', 'Invalid', 'The address check rejected this email. Do not send.' %}
-          {% elif email_status == 'catch_all' %}{% set q_cls, q_txt, q_tip = 'warning', 'Risky', 'The domain accepts every address, so delivery is not certain.' %}
-          {% elif email_verified or verification in ['verified','verified_strong'] %}{% set q_cls, q_txt, q_tip = 'success', 'Verified', 'This address was checked.' %}
-          {% elif verification == 'weak' or email_status in ['mx_pattern_match','mx_only'] %}{% set q_cls, q_txt, q_tip = 'warning', 'Risky', 'The domain accepts mail but this address is not confirmed.' %}
-          {% else %}{% set q_cls, q_txt, q_tip = 'neutral', 'Unknown', 'This address has not been checked yet.' %}
-          {% endif %}
-          <tr data-verif="{{ verification }}" data-name="{{ (row['partner_name'] or '')|lower }}" data-firm="{{ (row['firm'] or '')|lower }}" data-notes="{{ (row['notes'] or '')|lower }}">
+          {% set qk = q_key(row)|trim %}
+          {% set q_cls = {'invalid': 'danger', 'risky': 'warning', 'verified': 'success', 'unknown': 'neutral'}[qk] %}
+          {% set q_txt = {'invalid': 'Invalid', 'risky': 'Risky', 'verified': 'Verified', 'unknown': 'Unknown'}[qk] %}
+          {% set q_tip = {'invalid': 'The address check rejected this email. Do not send.', 'risky': 'The domain accepts mail but this address is not confirmed, so delivery is not certain.', 'verified': 'This address was checked.', 'unknown': 'This address has not been checked yet.'}[qk] %}
+          {% set ground_raw = hook_grounding_state(row) %}
+          <tr data-verif="{{ verification }}" data-quality="{{ qk }}" data-name="{{ (row['partner_name'] or '')|lower }}" data-firm="{{ (row['firm'] or '')|lower }}" data-notes="{{ (row['notes'] or '')|lower }}">
             <td class="pk-col-check">
               <input aria-label="Select {{ row['partner_name'] }}" type="checkbox" name="draft_ids" value="{{ row.get('draft_id') or row['id'] }}"
                      class="row-check" {% if 'draft_id' in row and row.draft_id is none %}disabled{% endif %} data-action="partners_list-11">
@@ -166,27 +231,36 @@
             </td>
             <td data-label="Status">
               {{ status_pill(row, (sent_to_map|default({})).get(row['id']), g_test_recipient) }}
-              {% if row.get('blocked_reason') and row.get('status') == 'approved' %}<span class="pk-cell-sub pl-blocked">Held back: {{ row['blocked_reason'] }}</span>{% endif %}
-              <span class="pk-cell-sub">{{ hook_grounding_state(row) }}</span>
+              <span class="pk-cell-sub{% if ground_raw.startswith('blocked:') %} pl-blocked{% endif %}" title="{{ ground_raw }}">{{ grounding_label(ground_raw) }}</span>
             </td>
           </tr>
           {% else %}
           <tr>
             <td colspan="4" class="pl-empty-cell">
-              <div class="pk-empty">
+              {{ ghost_rows() }}
+              <div class="pk-empty pl-empty">
                 {% if any_filter %}
-                  <p class="pk-empty__title">No partners match the current filter.</p>
-                  <p>Clear a filter or change the search to see more.</p>
-                  <a class="pk-btn pk-btn--secondary pk-btn--sm" href="/partners">Clear filters</a>
+                  <p class="pk-empty__title">No contacts match the current filter.</p>
+                  <a class="pk-btn pk-btn--secondary pk-btn--sm" href="/partners">{{ icon("x") }}Clear filters</a>
                 {% else %}
-                  <p class="pk-empty__title">No partners yet.</p>
-                  <p>Add a contact to start building your send queue.</p>
-                  <a class="pk-btn pk-btn--primary pk-btn--sm" href="/crm/new">{{ icon("plus", 14) }}Add your first contact</a>
+                  <p class="pk-empty__title">No contacts yet. Add a contact to start building your send queue.</p>
+                  <a class="pk-btn pk-btn--primary pk-btn--sm" href="/crm/new">{{ icon("plus", 14) }}Add a contact</a>
                 {% endif %}
               </div>
             </td>
           </tr>
           {% endfor %}
+          {% if rows %}
+          <tr id="plNoMatch" hidden>
+            <td colspan="4" class="pl-empty-cell">
+              {{ ghost_rows() }}
+              <div class="pk-empty pl-empty">
+                <p class="pk-empty__title">No contacts match the current filter.</p>
+                <a class="pk-btn pk-btn--secondary pk-btn--sm" href="/partners">{{ icon("x") }}Clear filters</a>
+              </div>
+            </td>
+          </tr>
+          {% endif %}
         </tbody>
       </table>
     </div>
@@ -195,6 +269,14 @@
   {# One bulk control, shown only while rows are selected. app.js toggles its display; send and schedule share it. #}
   <div id="bulkBar" class="pk-sticky-bar pl-bulkbar" role="region" aria-label="Selected emails">
     <span id="bulkCount" class="pk-sticky-bar__count"></span>
+    <svg id="bulkMix" class="pl-meter pl-meter--mini" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true">
+      <rect class="pl-seg pl-seg--track" x="0" y="0" width="100" height="6"/>
+      <rect class="pl-seg pl-seg--verified" data-seg="verified" x="0" y="0" width="0" height="6"/>
+      <rect class="pl-seg pl-seg--risky" data-seg="risky" x="0" y="0" width="0" height="6"/>
+      <rect class="pl-seg pl-seg--unknown" data-seg="unknown" x="0" y="0" width="0" height="6"/>
+      <rect class="pl-seg pl-seg--invalid" data-seg="invalid" x="0" y="0" width="0" height="6"/>
+    </svg>
+    <span id="bulkConfirmPhrase" class="pl-phrase"{% if g_send_mode == 'test' %} title="Test mode needs no typing. This is the phrase live mode asks for."{% endif %}>Type SEND BATCH OF N to confirm</span>
     <div class="pk-sticky-bar__actions">
       {% if g_send_mode == 'test' %}
         <button type="submit" class="pk-btn pk-btn--primary pk-btn--sm" title="Test mode: every email goes to your test address">{{ icon("play", 14) }}Send (test mode)</button>
@@ -206,7 +288,7 @@
         </div>
       {% endif %}
       <button type="button" class="pk-btn pk-btn--secondary pk-btn--sm" data-action="partners_list-8">{{ icon("calendar", 14) }}Schedule</button>
-      <button type="button" class="pk-btn pk-btn--ghost pk-btn--sm" data-action="partners_list-9">Cancel</button>
+      <button type="button" class="pk-btn pk-btn--ghost pk-btn--sm" data-action="partners_list-9">{{ icon("x") }}Cancel</button>
     </div>
   </div>
 </form>

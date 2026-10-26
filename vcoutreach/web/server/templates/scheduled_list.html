@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% from "_icons.html" import icon %}
+{% from "_icons.html" import icon, btn_icon %}
 {% block page_id %}scheduled_list{% endblock %}
 {% block title %}Scheduled sends{% endblock %}
 
@@ -23,8 +23,8 @@
   <div class="pk-empty">
     <div class="pk-empty__icon">{{ icon("calendar", 28) }}</div>
     <h2 class="pk-empty__title">{% if sched is defined and sched.total %}Nothing in this tab{% else %}Nothing is scheduled{% endif %}</h2>
-    <p>{% if sched is defined and sched.total %}Try another tab to see the rest of your scheduled sends. All times are UTC.{% else %}Schedule a send from the Send plan once your drafts are ready. All times are UTC.{% endif %}</p>
-    <p class="sched-empty-links"><a class="pk-btn pk-btn--secondary pk-btn--sm" href="/crm/send-plan">Open the Send plan</a> <a class="pk-btn pk-btn--ghost pk-btn--sm" href="/enrichment">Go to Enrichment</a></p>
+    <p>{% if sched is defined and sched.total %}Try another tab to see the rest of your scheduled sends. All times are UTC.{% else %}Schedule a send from the Send page: tick contacts, then choose Schedule. All times are UTC.{% endif %}</p>
+    <p class="sched-empty-links"><a class="pk-btn pk-btn--primary pk-btn--sm" href="/partners">{{ icon("send") }}Open Send</a></p>
   </div>
 </section>
 {% else %}
@@ -66,7 +66,7 @@
             {% if r.status == 'pending' %}
             <form method="POST" action="/scheduled/{{ r.id }}/cancel" class="sched-cancel-form">
               <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-              <button type="submit" class="pk-btn pk-btn--danger pk-btn--sm sched-cancel" data-confirm="Cancel this scheduled send?">Cancel</button>
+              <button type="submit" class="pk-btn pk-btn--danger pk-btn--sm sched-cancel" data-confirm="Cancel this scheduled send?">{{ icon("x") }}Cancel</button>
             </form>
             {% endif %}
           </td>

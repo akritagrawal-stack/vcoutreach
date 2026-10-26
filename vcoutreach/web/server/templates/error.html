@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% from "_icons.html" import icon %}
+{% from "_icons.html" import icon, btn_icon %}
 {% block page_id %}error{% endblock %}
 {% block title %}{{ heading|default('Request unavailable') }}{% endblock %}
 {% block next_step_banner %}{% endblock %}
@@ -9,7 +9,7 @@
     <div class="pk-empty__icon">{{ icon("alert-triangle", 28) }}</div>
     <h1 class="pk-empty__title">{{ heading|default('Request unavailable.') }}</h1>
     <p>{{ message|default(error|default('This request could not be completed.')) }}</p>
-    <p><a class="pk-btn pk-btn--primary" href="{{ back_href|default('/crm') }}">{{ back_label|default('Back to overview') }}</a></p>
+    <p><a class="pk-btn pk-btn--primary" href="{{ back_href|default('/crm') }}">{{ btn_icon(back_label|default('Back to overview')) }}{{ back_label|default('Back to overview') }}</a> <a class="pk-btn pk-btn--ghost" href="/crm/drafts">{{ icon("arrow-right") }}Campaign steps</a></p>
   </div>
 </section>
 {% endblock %}

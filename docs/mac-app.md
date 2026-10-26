@@ -22,15 +22,17 @@ The app creates `~/Documents/Publikreach`, with `.env`, `data/`, `drafts/` and `
 
 ## Gmail setup
 
-Every user needs their own Google Cloud **Desktop app** OAuth client JSON until a shared client is bundled. Follow Google's [Python Gmail quickstart](https://developers.google.com/workspace/gmail/api/quickstart/python), including enabling the Gmail API, configuring the consent screen and test users, and [creating a Desktop OAuth client](https://developers.google.com/workspace/gmail/api/quickstart/python#authorize_credentials_for_a_desktop_application).
+**Primary: Google OAuth with your own client file.** Three steps: download your OAuth client file, choose it in Settings, click **Connect Gmail**. Every user needs their own Google Cloud **Desktop app** OAuth client JSON until a shared client is bundled. Follow Google's [Python Gmail quickstart](https://developers.google.com/workspace/gmail/api/quickstart/python), including enabling the Gmail API, configuring the consent screen and test users, and [creating a Desktop OAuth client](https://developers.google.com/workspace/gmail/api/quickstart/python#authorize_credentials_for_a_desktop_application).
 
 1. In Settings, click **Choose OAuth client file** and select the downloaded JSON using the native dialog.
 2. Click **Connect Gmail**. Complete consent in the system browser, then return to the app. Consent expires locally after three minutes if left unfinished.
 3. Settings shows connected when a local refresh token is saved. Gmail access is verified when used. Consent permits `gmail.modify` for reading, labeling, drafting and sending; the app's existing send gates still apply.
 
+**Simpler alternative: Gmail app password.** If you do not want a Google Cloud project, open **Alternative: use a Gmail app password instead** on the Gmail card. It takes about two minutes. Turn on 2-Step Verification and [create a 16-character app password](https://myaccount.google.com/apppasswords), enter your Gmail address and the password, then click **Connect with app password**. Workspace admins may need to allow app passwords. The password is saved at `data/.gmail_app_password.json` with mode 0600 and is never shown or logged.
+
 The app validates the Desktop client format, nonempty client_id and client_secret, Google's authorization and token endpoints, and loopback redirect URIs. Web clients, service accounts, token files and endpoint substitutions are rejected. The JSON is copied server-side to `data/.gmail_credentials.json`; the token is saved at `data/.gmail_token.json`. Both files have mode 0600. Their contents are never shown or logged. Replacing a client invalidates the old saved token and requires consent again.
 
-If you cannot create an OAuth client, the Gmail card also has a collapsed "Alternative: use a Gmail app password instead" section. It needs 2-Step Verification and, on Workspace, an admin who allows app passwords. The password is saved at `data/.gmail_app_password.json` with mode 0600.
+**Optional: web search enrichment (SearXNG).** Optional, default `http://localhost:8080`. Start it with: `docker compose -f packaging/searxng/docker-compose.yml up -d`.
 
 The same Settings actions work in `vcoutreach ui`: the browser file chooser uploads through an authenticated, same-origin, CSRF-protected route. Connecting uses the same installed-app OAuth flow. The CLI remains available as `vcoutreach auth gmail-web --workspace DIR` after saving the client JSON in that workspace's data folder.
 

@@ -5,20 +5,15 @@
       if (select.form) { select.form.submit(); }
     });
   });
-  document.querySelectorAll('[data-crm-switch-scope]').forEach(function (scope) {
-    var select = scope.querySelector('select[data-crm-switch]');
-    if (!select) { return; }
-    var attr = select.getAttribute('data-crm-switch');
-    var apply = function () {
-      var value = select.value;
-      scope.querySelectorAll('tr[data-' + attr + ']').forEach(function (row) {
-        row.hidden = !!value && row.getAttribute('data-' + attr) !== value;
-      });
-      scope.querySelectorAll('[data-' + attr + '-note]').forEach(function (note) {
-        note.hidden = !!value && note.getAttribute('data-' + attr + '-note') !== value;
-      });
-    };
-    select.addEventListener('change', apply);
-    apply();
+  /* A link or button with data-open-details="<id>" opens that closed <details> block, then lets the jump happen. */
+  document.querySelectorAll('[data-open-details]').forEach(function (trigger) {
+    trigger.addEventListener('click', function () {
+      var target = document.getElementById(trigger.getAttribute('data-open-details'));
+      if (target && target.tagName === 'DETAILS') { target.open = true; }
+    });
   });
+  if (window.location.hash === '#crmImport') {
+    var imp = document.getElementById('crmImport');
+    if (imp && imp.tagName === 'DETAILS') { imp.open = true; }
+  }
 })();

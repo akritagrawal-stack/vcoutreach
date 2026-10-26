@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% from "_icons.html" import icon, btn_icon %}
 {% block page_id %}crm_contact{% endblock %}
 {% block title %}{{ partner.partner_name or partner.name or 'Contact' }}{% endblock %}
 
@@ -15,7 +16,7 @@
       <span class="pk-pill pk-pill--neutral">{{ profile.get('stage')|replace('_', ' ')|title if profile.get('stage') else 'Stage unknown' }}</span>
       <span class="pk-pill pk-pill--neutral">Fit: {{ (profile.get('fit_grade') or 'unknown')|replace('_', ' ')|title }}</span>
       {% if profile.get('fit_rank') %}<span class="pk-pill pk-pill--neutral">Review #{{ profile.get('fit_rank') }}</span>{% endif %}
-      {% if partner.firm %}<a class="pk-btn pk-btn--secondary pk-btn--sm" href="{{ url_for('crm_alternate_investors', partner_id=partner.id) }}">Find more {{ words.people }}</a>{% endif %}
+      {% if partner.firm %}<a class="pk-btn pk-btn--secondary pk-btn--sm" href="{{ url_for('crm_alternate_investors', partner_id=partner.id) }}">{{ icon("search") }}Find more {{ words.people }}</a>{% endif %}
     </div>
   </header>
 
@@ -29,7 +30,7 @@
       <dt>Notes</dt><dd>{{ partner.notes or 'Not recorded' }}</dd>
       <dt>Next action</dt><dd>{{ partner.next_action or 'Not recorded' }}</dd>
     </dl>
-    <h3>Source URLs</h3><ul>{% for source in engine_contact.source_urls %}<li>{{ source }}</li>{% else %}<li>No source URLs recorded.</li>{% endfor %}</ul>
+    <h3>Source URLs</h3><ul class="crm-source-urls">{% for source in engine_contact.source_urls %}<li>{{ source }}</li>{% else %}<li>No source URLs recorded.</li>{% endfor %}</ul>
   </section>
 
   {% if profile.get('is_synthetic') or profile.get('integrity_note') %}
@@ -52,7 +53,7 @@
     </div>
     <p class="crm-source-note">
       {% if profile.get('campaign_qualification_observed_at') %}Reviewed {{ time_tag(profile.get('campaign_qualification_observed_at')) }}. {% endif %}
-      {% if profile.get('campaign_qualification_source_url') and profile.get('campaign_qualification_source_url').startswith('https://') %}<span class="source-reference">Open research source ↗ <span class="text-muted">({{ profile.get('campaign_qualification_source_url') }})</span> <button type="button" class="copy-source" data-copy-text="{{ profile.get('campaign_qualification_source_url') }}">Copy URL</button></span>
+      {% if profile.get('campaign_qualification_source_url') and profile.get('campaign_qualification_source_url').startswith('https://') %}<span class="source-reference">Open research source ↗ <span class="text-muted">({{ profile.get('campaign_qualification_source_url') }})</span> <button type="button" class="pk-btn pk-btn--secondary pk-btn--sm" data-copy-text="{{ profile.get('campaign_qualification_source_url') }}">{{ icon("copy", 14) }}Copy URL</button></span>
       {% elif profile.get('campaign_qualification_source') %}Campaign source: {{ profile.get('campaign_qualification_source') }}
       {% else %}Campaign source not recorded.{% endif %}
     </p>
@@ -71,26 +72,26 @@
       <form method="post" action="{{ url_for('crm_resolve_uncertain_send', partner_id=partner.id) }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <input type="hidden" name="attempt_id" value="{{ attempt.id }}">
-        <button type="submit" name="action" value="allow_retry" class="crm-button crm-button-small crm-button-secondary">I checked Sent, it did not go out, allow retry</button>
+        <button type="submit" name="action" value="allow_retry" class="crm-button crm-button-small crm-button-secondary">{{ icon("refresh") }}I checked Sent, it did not go out, allow retry</button>
       </form>
     </div>
     {% endfor %}
     <form method="post" action="{{ url_for('partner_verify_email_manually', partner_id=partner.id) }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <button type="submit" class="crm-button crm-button-small crm-button-secondary">Mark email verified (I checked it myself)</button>
+      <button type="submit" class="crm-button crm-button-small crm-button-secondary">{{ icon("check") }}Mark email verified (I checked it myself)</button>
     </form>
     <div class="form-actions">
       {% if not has_draft %}
-      <form method="post" action="/partners/{{ partner.id }}/send-test"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit" class="crm-button crm-button-secondary" disabled aria-describedby="contactSendHint">Send test email</button></form>
+      <form method="post" action="/partners/{{ partner.id }}/send-test"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit" class="crm-button crm-button-secondary" disabled aria-describedby="contactSendHint">{{ icon("send") }}Send test email</button></form>
       <p class="crm-source-note" id="contactSendHint">Write a draft first. <a href="/crm/drafts">Open drafts</a></p>
       {% elif g_send_mode == 'live' %}
-      <form method="post" action="/partners/{{ partner.id }}/send-test"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit" class="crm-button crm-button-secondary">Send test to {{ g_test_recipient }}</button></form>
+      <form method="post" action="/partners/{{ partner.id }}/send-test"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit" class="crm-button crm-button-secondary">{{ icon("send") }}Send test to {{ g_test_recipient }}</button></form>
       <form method="post" action="/partners/{{ partner.id }}/send" class="settings-fields"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <label for="contactSendConfirm">Type SEND TO {{ partner.email }}<input id="contactSendConfirm" name="confirm_text" autocomplete="off" required></label>
-        <button type="submit" class="crm-button crm-button-primary">Send to contact</button>
+        <label for="contactSendConfirm">Real send, not a test send. Type SEND TO {{ partner.email }}<input id="contactSendConfirm" name="confirm_text" autocomplete="off" required></label>
+        <button type="submit" class="crm-button crm-button-primary">{{ icon("send") }}Send to contact</button>
       </form>
       {% else %}
-      <form method="post" action="/partners/{{ partner.id }}/send-test"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit" class="crm-button crm-button-primary" title="Sends to {{ g_test_recipient }} (test mode)">Send test email</button></form>
+      <form method="post" action="/partners/{{ partner.id }}/send-test"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit" class="crm-button crm-button-primary" title="Sends to {{ g_test_recipient }} (test mode)">{{ icon("send") }}Send test email</button></form>
       {% endif %}
     </div>
   </section>
@@ -137,11 +138,11 @@
           <label for="contactRole"><span>Role</span><input id="contactRole" name="role" maxlength="200" value="{{ partner.role or '' }}"></label>
           <label for="contactEmail"><span>Email</span><input id="contactEmail" name="email" type="email" required value="{{ partner.email }}"></label>
           {% if stages is defined and stages %}
-          <label for="crm_contact-field-1"><span>Stage</span><select id="crm_contact-field-1" name="stage"><option value="">Keep current stage</option>{% for stage_name in stages %}<option value="{{ stage_name }}" {% if profile.get('stage') == stage_name %}selected{% endif %}>{{ stage_name|replace('_', ' ')|title }}</option>{% endfor %}</select></label>
+          <label for="crm_contact-field-1"><span>Stage</span><select class="pk-select" id="crm_contact-field-1" name="stage"><option value="">Keep current stage</option>{% for stage_name in stages %}<option value="{{ stage_name }}" {% if profile.get('stage') == stage_name %}selected{% endif %}>{{ stage_name|replace('_', ' ')|title }}</option>{% endfor %}</select></label>
           {% else %}
           <div class="crm-readonly-field"><span>Stage</span><strong>{{ profile.get('stage')|replace('_', ' ')|title if profile.get('stage') else 'Unknown' }}</strong></div>
           {% endif %}
-          <label for="crm_contact-field-2"><span>Fit grade</span><select id="crm_contact-field-2" name="fit_grade">{% for grade in ['unreviewed', 'high', 'medium', 'low', 'not_fit'] %}<option value="{{ grade }}" {% if profile.get('fit_grade') == grade %}selected{% endif %}>{{ grade|replace('_', ' ')|title }}</option>{% endfor %}</select></label>
+          <label for="crm_contact-field-2"><span>Fit grade</span><select class="pk-select" id="crm_contact-field-2" name="fit_grade">{% for grade in ['unreviewed', 'high', 'medium', 'low', 'not_fit'] %}<option value="{{ grade }}" {% if profile.get('fit_grade') == grade %}selected{% endif %}>{{ grade|replace('_', ' ')|title }}</option>{% endfor %}</select></label>
           <label class="crm-field-wide" for="crm_contact-field-3"><span>Update list</span><span><input id="crm_contact-field-3" type="checkbox" name="on_update_list" value="1" {% if profile.get('on_update_list') %}checked{% endif %}> Include this contact in your updates</span></label>
           <label class="crm-field-wide" for="crm_contact-field-4"><span>Fit rationale</span><textarea id="crm_contact-field-4" name="fit_rationale" rows="3" placeholder="Add a source-grounded reason or leave unknown">{{ profile.get('fit_rationale') or '' }}</textarea></label>
           <label for="crm_contact-field-5"><span>Check size min</span><input id="crm_contact-field-5" type="number" name="check_size_min" min="0" step="1" value="{{ profile.get('check_size_min') if profile.get('check_size_min') is not none else '' }}" placeholder="Unknown"></label>
@@ -152,7 +153,7 @@
           <label for="contactTags"><span>Tags, comma separated</span><input id="contactTags" name="tags" maxlength="1000" value="{{ partner.tags or '' }}"></label>
           <label for="contactNotes"><span>Notes</span><textarea id="contactNotes" name="notes" maxlength="5000">{{ partner.notes or '' }}</textarea></label>
           <label for="contactNextAction"><span>Next action</span><input id="contactNextAction" name="next_action" maxlength="1000" value="{{ partner.next_action or '' }}"></label>
-          <div class="crm-form-footer"><span>Saving updates this contact only. It does not send email.</span><button class="crm-button crm-button-primary" type="submit">Save profile</button></div>
+          <div class="crm-form-footer"><span>Saving updates this contact only. It does not send email.</span><button class="crm-button crm-button-primary" type="submit">{{ icon("save") }}Save profile</button></div>
         </form>
       </section>
 
@@ -161,7 +162,7 @@
         <form method="post" action="{{ url_for('crm_contact_delete',partner_id=partner.id) }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
           <label><input type="checkbox" name="confirm" value="yes" required> Delete this contact, its drafts, and CRM records</label>
-          <button type="submit" class="crm-button crm-button-secondary">Delete contact</button>
+          <button type="submit" class="crm-button crm-button-secondary">{{ icon("trash") }}Delete contact</button>
         </form>
       </section>
 
@@ -172,10 +173,10 @@
         </div>
         <form class="crm-form" method="post" action="{{ url_for('crm_activity_add', partner_id=partner.id) }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-          <label for="crm_contact-field-10"><span>Type</span><select id="crm_contact-field-10" name="activity_type"><option value="note">Note</option><option value="call">Call</option><option value="meeting">Meeting</option><option value="follow_up">Follow-up</option></select></label>
+          <label for="crm_contact-field-10"><span>Type</span><select class="pk-select" id="crm_contact-field-10" name="activity_type"><option value="note">Note</option><option value="call">Call</option><option value="meeting">Meeting</option><option value="follow_up">Follow-up</option></select></label>
           <label for="crm_contact-field-11"><span>Subject</span><input id="crm_contact-field-11" type="text" name="subject" maxlength="180" placeholder="Short activity title"></label>
           <label class="crm-field-wide" for="crm_contact-field-12"><span>Short summary</span><textarea id="crm_contact-field-12" name="snippet" rows="3" maxlength="600" placeholder="Add a brief CRM note. Do not paste full message bodies."></textarea></label>
-          <div class="crm-form-footer"><span>Only the short summary appears in the timeline.</span><button class="crm-button crm-button-secondary" type="submit">Save activity</button></div>
+          <div class="crm-form-footer"><span>Only the short summary appears in the timeline.</span><button class="crm-button crm-button-secondary" type="submit">{{ icon("save") }}Save activity</button></div>
         </form>
       </section>
 
@@ -207,7 +208,7 @@
             {% if activity.id is defined and activity.status in ['open', 'due', 'pending'] %}
             <form method="post" action="{{ url_for('crm_task_complete', task_id=activity.id) }}">
               <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-              <button class="crm-button crm-button-small crm-button-secondary" type="submit">Mark complete</button>
+              <button class="crm-button crm-button-small crm-button-secondary" type="submit">{{ icon("check") }}Mark complete</button>
             </form>
             {% endif %}
           </article>
@@ -227,13 +228,13 @@
 
       <details class="crm-panel crm-collapse"><summary>Research sources</summary>
         <div class="crm-source-list">
-          <div><span>PitchBook</span>{% if pitchbook_url and pitchbook_url.startswith('https://') %}<span class="source-reference">Open profile ↗ <span class="text-muted">({{ pitchbook_url }})</span> <button type="button" class="copy-source" data-copy-text="{{ pitchbook_url }}">Copy URL</button></span>{% else %}<strong>Unavailable</strong>{% endif %}</div>
-          <div><span>Enrow</span>{% if enrow_url and (enrow_url.startswith('https://') or enrow_url.startswith('/')) %}<span class="source-reference">Open verification workspace ↗ <span class="text-muted">({{ enrow_url }})</span> <button type="button" class="copy-source" data-copy-text="{{ enrow_url }}">Copy URL</button></span>{% else %}<strong>Unavailable</strong>{% endif %}</div>
+          <div><span>PitchBook</span>{% if pitchbook_url and pitchbook_url.startswith('https://') %}<span class="source-reference">Open profile ↗ <span class="text-muted">({{ pitchbook_url }})</span> <button type="button" class="pk-btn pk-btn--secondary pk-btn--sm" data-copy-text="{{ pitchbook_url }}">{{ icon("copy", 14) }}Copy URL</button></span>{% else %}<strong>Unavailable</strong>{% endif %}</div>
+          <div><span>Enrow</span>{% if enrow_url and (enrow_url.startswith('https://') or enrow_url.startswith('/')) %}<span class="source-reference">Open verification workspace ↗ <span class="text-muted">({{ enrow_url }})</span> <button type="button" class="pk-btn pk-btn--secondary pk-btn--sm" data-copy-text="{{ enrow_url }}">{{ icon("copy", 14) }}Copy URL</button></span>{% else %}<strong>Unavailable</strong>{% endif %}</div>
         </div>
       </details>
 
       <details class="crm-panel crm-collapse"><summary>Related people ({{ related_contacts|length }})</summary>
-        <a class="crm-button crm-button-small crm-button-secondary" href="{{ url_for('crm_alternate_investors', partner_id=partner.id) }}">Find more {{ words.people }} at this firm</a>
+        <a class="crm-button crm-button-small crm-button-secondary" href="{{ url_for('crm_alternate_investors', partner_id=partner.id) }}">{{ icon("search") }}Find more {{ words.people }} at this firm</a>
         {% if partner.firm %}<p class="crm-source-note"><a href="{{ url_for('crm_dashboard', view='all', q=partner.firm) }}">Search all contacts at {{ partner.firm }}</a> · <a href="{{ url_for('partners_list', q=partner.firm) }}">Search campaign research</a></p>{% endif %}
         <div class="crm-related-list">
           {% for contact in related_contacts %}
@@ -253,7 +254,7 @@
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
           <label for="contactAddFacts"><span>Add facts</span><textarea id="contactAddFacts" name="facts" rows="3" maxlength="2000" placeholder="your talk on shipping weekly&#10;your essay on small teams"></textarea></label>
           <p class="crm-source-note">One fact per line (a " | " between facts also works). Drafts only use facts you add here or that were found by research.</p>
-          <button type="submit" class="crm-button crm-button-small crm-button-secondary">Add facts</button>
+          <button type="submit" class="crm-button crm-button-small crm-button-secondary">{{ icon("plus") }}Add facts</button>
         </form>
         <div class="crm-fact-list">
           {% for fact in engine_contact.facts %}<article class="crm-fact-card"><p>{{ fact }}</p></article>{% endfor %}
@@ -261,7 +262,7 @@
           <article class="crm-fact-card">
             <div><span>{{ fact.source or 'Source unknown' }}</span>{% if fact.fetched_at %}{{ time_tag(fact.fetched_at) }}{% endif %}</div>
             <p>{{ fact.fact or fact.value or fact.text or 'Fact value unknown' }}</p>
-            {% if fact.source_url and fact.source_url.startswith('https://') %}<span class="source-reference">View source ↗ <span class="text-muted">({{ fact.source_url }})</span> <button type="button" class="copy-source" data-copy-text="{{ fact.source_url }}">Copy URL</button></span>{% endif %}
+            {% if fact.source_url and fact.source_url.startswith('https://') %}<span class="source-reference">View source ↗ <span class="text-muted">({{ fact.source_url }})</span> <button type="button" class="pk-btn pk-btn--secondary pk-btn--sm" data-copy-text="{{ fact.source_url }}">{{ icon("copy", 14) }}Copy URL</button></span>{% endif %}
           </article>
           {% else %}
           <p class="crm-empty-state">{% if not engine_contact.facts %}No enrichment facts are recorded. Source context is unknown.{% else %}Contact facts are recorded above.{% endif %}</p>

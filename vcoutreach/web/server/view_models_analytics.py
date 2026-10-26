@@ -315,6 +315,33 @@ def build_tracking(coverage: dict, snapshot: dict | None) -> dict:
     return out
 
 
+# -- Daily series (feeds the sparklines and the line chart) ------------------------------------------
+
+def build_series(evidence: dict, now: datetime, days: int) -> dict:
+    """Per-day counts for the selected range, from the same evidence and the same `_period` rules as the KPIs.
+
+    Day i is the 24 hour period ending `now - (days - 1 - i)` days, labelled with the UTC date of its last
+    second, so the last point is "today". Every count is cohort based: `replied` for a day counts contacts
+    who wrote back after an email SENT in that period, so the sum of `sent` equals the Sent KPI and recent
+    days can still grow. No estimates are invented: a day with no sends is simply zero.
+    """
+    keys = ("sent", "replied", "opened", "tracked", "interested", "bounced")
+    out: dict = {"days": [], **{key: [] for key in keys}}
+    start = now - timedelta(days=days)
+    for i in range(days):
+        lo = start + timedelta(days=i)
+        hi = now + timedelta(seconds=1) if i == days - 1 else lo + timedelta(days=1)
+        period = _period(evidence, lo, hi)
+        out["days"].append((hi - timedelta(seconds=1)).date().isoformat())
+        out["sent"].append(period["sent"])
+        out["replied"].append(period["replied"])
+        out["opened"].append(period["opened"])
+        out["tracked"].append(period["tracked_sends"])
+        out["interested"].append(period["interested"])
+        out["bounced"].append(period["bounced"])
+    return out
+
+
 # -- Entry point ----------------------------------------------------------------------------------
 
 def build_analytics_view(db_path: Path | str | None, raw_range, now: datetime, *, buckets: dict, segments: dict,
@@ -332,6 +359,7 @@ def build_analytics_view(db_path: Path | str | None, raw_range, now: datetime, *
         "range_options": RANGE_OPTIONS,
         "kpis": build_kpis(cur, prev, classified, days),
         "funnel": build_funnel(cur, classified),
+        "series": build_series(evidence, now, days),
         "has_sends": bool(cur["sent"]),
         "has_any_sends": bool(evidence["sends"]),
         "contact_tabs": build_tabs(buckets),

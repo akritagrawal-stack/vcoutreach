@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% from "_icons.html" import icon %}
+{% from "_icons.html" import icon, btn_icon %}
 {% block page_id %}email_verification{% endblock %}
 {% block title %}Email verification{% endblock %}
 
@@ -14,7 +14,7 @@
       <p class="pk-page-sub">Apollo enriches named contacts and Enrow finds or verifies business email. Every result is kept with its source, status, confidence and effect on the send gate.</p>
     </div>
     <div class="pk-page-head__actions">
-      <a class="pk-btn pk-btn--secondary" href="/settings#svc-enrow">Manage provider keys</a>
+      <a class="pk-btn pk-btn--secondary" href="/settings#svc-enrow">{{ icon("key") }}Manage provider keys</a>
     </div>
   </header>
 
@@ -69,7 +69,7 @@
           <option value="unverified" {% if filters.status == 'unverified' %}selected{% endif %}>Not deliverability verified</option>
           <option value="never_checked" {% if filters.status == 'never_checked' %}selected{% endif %}>No provider history</option>
         </select>
-        <button type="submit" class="pk-btn pk-btn--primary">Filter</button>
+        <button type="submit" class="pk-btn pk-btn--primary">{{ icon("filter") }}Filter</button>
       </form>
     </div>
 
@@ -107,19 +107,19 @@
                   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                   <input type="hidden" name="provider" value="apollo">
                   <input type="hidden" name="operation" value="person_enrich">
-                  <button type="submit" class="pk-btn pk-btn--secondary pk-btn--sm" {% if not key_ready.apollo or not contact.can_apollo_enrich %}disabled{% endif %}{% if not key_ready.apollo %} title="Add an Apollo key in Settings to use this."{% endif %}>Apollo enrich <small class="pk-faint">0 to 1 credit</small></button>
+                  <button type="submit" class="pk-btn pk-btn--secondary pk-btn--sm" {% if not key_ready.apollo or not contact.can_apollo_enrich %}disabled{% endif %}{% if not key_ready.apollo %} title="Add an Apollo key in Settings to use this."{% endif %}>{{ icon("sparkles") }}Apollo enrich <small class="pk-faint">0 to 1 credit</small></button>
                 </form>
                 <form method="post" action="/email-verification/{{ contact.id }}/run">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                   <input type="hidden" name="provider" value="enrow">
                   <input type="hidden" name="operation" value="email_find">
-                  <button type="submit" class="pk-btn pk-btn--secondary pk-btn--sm" {% if not key_ready.enrow or not contact.can_enrow_find %}disabled{% endif %}{% if not key_ready.enrow %} title="Add an Enrow key in Settings to use this."{% endif %}>Enrow find <small class="pk-faint">up to 1 credit</small></button>
+                  <button type="submit" class="pk-btn pk-btn--secondary pk-btn--sm" {% if not key_ready.enrow or not contact.can_enrow_find %}disabled{% endif %}{% if not key_ready.enrow %} title="Add an Enrow key in Settings to use this."{% endif %}>{{ icon("search") }}Enrow find <small class="pk-faint">up to 1 credit</small></button>
                 </form>
                 <form method="post" action="/email-verification/{{ contact.id }}/run">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                   <input type="hidden" name="provider" value="enrow">
                   <input type="hidden" name="operation" value="email_verify">
-                  <button type="submit" class="pk-btn pk-btn--secondary pk-btn--sm" {% if not key_ready.enrow or not contact.can_verify %}disabled{% endif %}{% if not key_ready.enrow %} title="Add an Enrow key in Settings to use this."{% endif %}>Enrow verify <small class="pk-faint">0.25 credit</small></button>
+                  <button type="submit" class="pk-btn pk-btn--secondary pk-btn--sm" {% if not key_ready.enrow or not contact.can_verify %}disabled{% endif %}{% if not key_ready.enrow %} title="Add an Enrow key in Settings to use this."{% endif %}>{{ icon("check") }}Enrow verify <small class="pk-faint">0.25 credit</small></button>
                 </form>
               </div>
             </td>
@@ -184,12 +184,12 @@
               <label for="email_verification-field-1-{{ attempt.id }}">Type the candidate email to apply it</label>
               <div class="ver-review__row">
                 <input class="pk-input" id="email_verification-field-1-{{ attempt.id }}" name="confirmation" type="email" autocomplete="off" required placeholder="{{ attempt.candidate_email }}">
-                <button type="submit" class="pk-btn pk-btn--primary pk-btn--sm">Apply as unverified</button>
+                <button type="submit" class="pk-btn pk-btn--primary pk-btn--sm">{{ icon("check") }}Apply as unverified</button>
               </div>
             </form>
             <form method="post" action="/email-verification/attempts/{{ attempt.id }}/dismiss">
               <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-              <button type="submit" class="pk-btn pk-btn--secondary pk-btn--sm">Dismiss candidate</button>
+              <button type="submit" class="pk-btn pk-btn--secondary pk-btn--sm">{{ icon("x") }}Dismiss candidate</button>
             </form>
           </div>
           {% else %}

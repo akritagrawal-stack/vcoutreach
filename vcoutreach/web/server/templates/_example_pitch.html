@@ -1,3 +1,4 @@
+{% from "_icons.html" import icon, btn_icon %}
 {# Read-only "Example pitch" block: the real Publik email, broken into labeled parts, with a Copy button.
    INCLUDE INTERFACE (lane A):
      {% include '_example_pitch.html' %}
@@ -18,7 +19,7 @@
       <p class="example-pitch-flag"><strong>{{ _ex.label }}.</strong> Read it, then change every part in <a href="/settings#sec-story">Settings</a> so it describes {{ 'your company' if _ex.kind == 'fundraising' else 'you' }}.</p>
       {% if _kind_copy.panel_credibility and campaign_kind_info is defined and campaign_kind_info().chosen %}<p class="example-pitch-proof">{{ _kind_copy.panel_credibility }}</p>{% endif %}
     </div>
-    <button type="button" class="crm-button crm-button-small crm-button-secondary" data-copy-target="examplePitchCopy" data-copy-label="Copy example">Copy example</button>
+    <button type="button" class="crm-button crm-button-small crm-button-secondary" data-copy-target="examplePitchCopy" data-copy-label="Copy example">{{ icon("copy") }}Copy example</button>
   </header>
   <div class="example-pitch-body">
     <div class="example-sheet example-pitch-preview">
@@ -46,4 +47,4 @@
   <textarea id="examplePitchCopy" class="example-pitch-copy" readonly rows="1" tabindex="-1" aria-hidden="true">{{ _ex.copy_text }}</textarea>
   {% if example_pitch_open is not defined or example_pitch_open %}</div>{% else %}</details>{% endif %}
 </section>
-<script src="{{ url_for('static', filename='pages/example_pitch.js') }}?v=20261021-ex1" defer></script>
+<script src="{{ url_for('static', filename='pages/example_pitch.js') }}?v=20261025-btn1" defer></script>

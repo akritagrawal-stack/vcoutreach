@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% from "_icons.html" import icon %}
+{% from "_icons.html" import icon, btn_icon %}
 {% from '_partner_macros.html' import label_badge %}
 {% block page_id %}reply_detail{% endblock %}
 {% block title %}Reply detail{% endblock %}
@@ -24,10 +24,6 @@
     </div>
     <div class="pk-page-head__actions">
       {% if reply['user_reviewed'] %}<span class="pk-pill pk-pill--neutral">Read</span>{% else %}<span class="pk-pill pk-pill--info">Unread</span>{% endif %}
-      <form action="/replies/{{ reply['id'] }}/mark-reviewed" method="post" class="reply-read-form">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <button type="submit" class="pk-btn pk-btn--secondary">{% if reply['user_reviewed'] %}Mark as unread{% else %}Mark as reviewed{% endif %}</button>
-      </form>
     </div>
   </header>
 
@@ -62,7 +58,11 @@
         <div class="reply-label-row">
           {{ label_badge(reply['label']) }}
           {% if reply['classification_confidence'] %}
-            <span class="pk-faint">{{ "%.0f"|format(reply['classification_confidence'] * 100) }}% confidence</span>
+            {%- set conf = (reply['classification_confidence'] * 100)|round|int -%}
+            <span class="pk-meter rp-meter" role="img" aria-label="Classification confidence {{ conf }} percent">
+              <svg class="rp-meter__svg" viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true" focusable="false"><rect class="rp-meter__rail" x="0" y="0" width="100" height="4"/><rect class="rp-meter__fill" x="0" y="0" width="{{ [[conf, 0]|max, 100]|min }}" height="4"/></svg>
+              <span class="pk-faint">{{ conf }}% confidence</span>
+            </span>
           {% endif %}
         </div>
         {% if reply['classification_summary'] %}
@@ -95,10 +95,30 @@
             <option value="{{ lbl }}" {% if reply['user_label'] == lbl %}selected{% endif %}>{{ lbl }}</option>
             {% endfor %}
           </select>
-          <button type="submit" class="pk-btn pk-btn--secondary">Save label</button>
+          <button type="submit" class="pk-btn pk-btn--secondary">{{ icon("save") }}Save label</button>
         </form>
         <p class="pk-faint reply-note">Saving a label also marks this reply reviewed.</p>
       </section>
+    </div>
+  </div>
+
+  {% set pid = reply['partner_id'] %}
+  <div class="pk-sticky-bar rp-actionbar" role="region" aria-label="Reply actions">
+    <span class="pk-sticky-bar__count">{{ 'Unread reply' if not reply['user_reviewed'] else 'Reply' }} from {{ sender }}</span>
+    <div class="pk-sticky-bar__actions">
+      {% if pid %}
+      <a class="pk-btn pk-btn--primary pk-btn--sm" href="{{ url_for('crm_drafts', contact=pid, type='follow_up') }}#writeDrafts">{{ icon("mail", 14) }}Write follow-up</a>
+      <a class="pk-btn pk-btn--ghost pk-btn--sm" href="/partners/{{ pid }}">{{ icon("users") }}Open contact</a>
+      {% else %}
+      <a class="pk-btn pk-btn--primary pk-btn--sm" href="{{ url_for('crm_drafts') }}">{{ icon("mail", 14) }}Write follow-up</a>
+      <span class="pk-btn pk-btn--ghost pk-btn--sm" aria-disabled="true" title="This reply is not linked to a contact yet">Open contact</span>
+      {% endif %}
+      <form action="/replies/{{ reply['id'] }}/mark-reviewed" method="post" class="reply-read-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit" class="pk-btn pk-btn--secondary pk-btn--sm">{% if reply['user_reviewed'] %}{{ icon("check", 14) }}{% endif %}Mark reviewed</button>
+      </form>
+      {% set nxt = next_unread_id|default(none) %}
+      <a class="pk-btn pk-btn--secondary pk-btn--sm" id="rpNextUnread" href="{{ '/replies/%s'|format(nxt) if nxt else '/replies?tab=needs' }}"{% if not nxt %} hidden{% endif %}>Next unread {{ icon("arrow-right") }}</a>
     </div>
   </div>
 </div>

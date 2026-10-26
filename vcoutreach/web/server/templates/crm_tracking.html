@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% from "_icons.html" import icon, btn_icon %}
 {% block page_id %}crm_tracking{% endblock %}
 {% block title %}Open and click tracking{% endblock %}
 
@@ -10,7 +11,7 @@
       <p class="pk-page-sub">What happened to the links and images in your emails. These counts are estimates: mail apps and security scanners load them too, so they do not prove a person read your message.</p>
     </div>
     <div class="pk-page-head__actions">
-      <a class="pk-btn pk-btn--secondary pk-btn--sm" href="{{ url_for('crm_analytics') }}#tracking-card">Back to Analytics</a>
+      <a class="pk-btn pk-btn--secondary pk-btn--sm" href="{{ url_for('crm_analytics') }}#tracking-card">{{ icon("arrow-left") }}Back to Analytics</a>
     </div>
   </header>
 
@@ -19,7 +20,7 @@
     <div class="pk-empty">
       <h2 class="pk-empty__title">Snapshot unavailable</h2>
       <p>{{ error }}. Nothing is counted as zero until tracking is loaded.</p>
-      <a class="pk-btn pk-btn--primary" href="/settings">Set up tracking in Settings</a>
+      <a class="pk-btn pk-btn--primary" href="/settings">{{ icon("bar-chart") }}Set up tracking in Settings</a>
     </div>
   </section>
   {% else %}

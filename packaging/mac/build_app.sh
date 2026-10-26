@@ -20,7 +20,7 @@ unset PYTHONPATH PYTHONHOME
 "$BUILD_PYTHON" -m venv "$BUILD_TEMP/venv"
 BUILD_BIN="$BUILD_TEMP/venv/bin"
 "$BUILD_BIN/python" -m pip install --upgrade pip
-"$BUILD_BIN/python" -m pip install "$REPO_ROOT[web,gmail]" requests beautifulsoup4 anthropic 'pywebview>=6.0,<7' 'pyinstaller>=6.0,<7'
+"$BUILD_BIN/python" -m pip install "$REPO_ROOT[web,gmail]" 'requests>=2.31' 'beautifulsoup4>=4.12' 'anthropic>=0.40' 'pywebview>=6.0,<7' 'pyinstaller>=6.0,<7'
 "$BUILD_BIN/python" "$REPO_ROOT/packaging/mac/app/make_icon.py"
 cd "$REPO_ROOT"
 "$BUILD_BIN/python" -m PyInstaller --noconfirm --clean \
@@ -35,6 +35,27 @@ codesign --verify --deep --strict "$APP"
 mkdir "$BUILD_TEMP/image"
 ditto "$APP" "$BUILD_TEMP/image/Publikreach.app"
 ln -s /Applications "$BUILD_TEMP/image/Applications"
+cat > "$BUILD_TEMP/image/README.txt" <<'README_EOF'
+Publikreach for Mac
+
+Install
+1. Drag Publikreach.app onto the Applications folder, then eject this disk image.
+2. First launch: right-click Publikreach.app in Applications and choose Open,
+   then Open again. Or run this once in Terminal:
+   xattr -dr com.apple.quarantine /Applications/Publikreach.app
+   The app is ad hoc signed and open source, with no Apple Developer ID.
+
+Notes
+- Apple Silicon (arm64) Macs only. Intel Macs are not supported.
+- Publikreach starts in Test Mode every launch. Nothing is sent to real
+  contacts until you turn that off.
+- Your workspace is ~/Documents/Publikreach. Replacing the app keeps it.
+- Gmail: in Settings, on the Gmail card, download your Google OAuth client file,
+  choose it, then click Connect Gmail. If you do not want a Google Cloud project,
+  open "Alternative: use a Gmail app password instead" on the same card.
+
+More help: see docs/mac-app.md in the Publikreach repository.
+README_EOF
 hdiutil create -volname 'Publikreach' -srcfolder "$BUILD_TEMP/image" \
     -format UDZO -ov "$REPO_ROOT/dist/Publikreach.dmg"
 printf '%s\n' 'Built dist/Publikreach.app and dist/Publikreach.dmg (ad-hoc signed).'

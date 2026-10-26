@@ -1,29 +1,58 @@
 /* Publikreach campaign page styles. Page-specific rules only; shared kit lives in components.css (pk- classes).
-   Loaded before crm.css and misc.css, so overrides of legacy rules use a .cmp-* parent for extra specificity. */
+   Loaded before crm.css and misc.css, so overrides of legacy rules use a .cmp-* parent for extra specificity.
+   Rules here: radius 0, no color or background change on pointer hover (motion is scale plus an edge trace), no hex colors. */
 
 /* Link-styled buttons: the legacy `.crm-shell a` accent color would otherwise beat the kit button colors */
-.crm-shell a.pk-btn--primary, .crm-shell a.pk-btn--primary:hover, .crm-shell a.pk-btn--primary:visited { color: var(--on-accent); text-decoration: none; }
-.crm-shell a.pk-btn--secondary, .crm-shell a.pk-btn--secondary:hover, .crm-shell a.pk-btn--secondary:visited { color: var(--text); text-decoration: none; }
+.crm-shell a.pk-btn--primary, .crm-shell a.pk-btn--primary:visited { color: var(--on-accent); text-decoration: none; }
+.crm-shell a.pk-btn--secondary, .crm-shell a.pk-btn--secondary:visited { color: var(--text); text-decoration: none; }
 .crm-shell a.pk-btn--ghost, .crm-shell a.pk-btn--ghost:visited { color: var(--text-muted); text-decoration: none; }
-.crm-shell a.pk-btn--ghost:hover { color: var(--text); }
 
-/* Stepper: finished and upcoming steps collapse to one line, only the current step shows its body */
-.cmp-stepper { margin: 16px 0; }
+/* Page layout: steps and the drafts table on the left, funnel and readiness board in the right rail */
+.cmp-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 360px); gap: 24px; align-items: start; }
+.cmp-main { min-width: 0; }
+.cmp-rail { display: grid; gap: 16px; align-content: start; position: sticky; top: 84px; min-width: 0; }
+
+/* Progress strip: five labelled squares above the stepper. Done = green square plus a tick, current = accent-outlined
+   square plus an accent bar under the label, to do = dashed square. The shapes differ, so state never relies on colour. */
+.cmp-progress { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; list-style: none; margin: 0 0 12px; padding: 0; }
+.cmp-progress__item { display: grid; justify-items: center; gap: 4px; margin: 0; min-width: 0; }
+.cmp-progress__sq { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: 1px dashed var(--border-strong); background: var(--surface); color: var(--text-muted); font: 600 12px/1 var(--font-sans); font-variant-numeric: tabular-nums; text-decoration: none; }
+.cmp-progress__label { display: inline-flex; align-items: center; gap: 2px; max-width: 100%; padding-bottom: 2px; border-bottom: 2px solid transparent; color: var(--text-muted); font: 500 12px/16px var(--font-sans); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cmp-progress__tick { display: none; color: var(--success); }
+.cmp-progress__tick svg { display: block; }
+.cmp-progress__item.is-done .cmp-progress__sq { border-style: solid; background: var(--success-dim); border-color: var(--success); color: var(--text); }
+.cmp-progress__item.is-done .cmp-progress__tick { display: inline-flex; }
+.cmp-progress__item.is-current .cmp-progress__sq { border-style: solid; background: var(--surface); border-color: var(--accent); color: var(--text); }
+.cmp-progress__item.is-current .cmp-progress__label { border-bottom-color: var(--accent); color: var(--text); font-weight: 600; }
+.crm-shell a.cmp-progress__sq, .crm-shell a.cmp-progress__sq:visited { color: var(--text-muted); text-decoration: none; }
+.crm-shell .cmp-progress__item.is-done a.cmp-progress__sq, .crm-shell .cmp-progress__item.is-current a.cmp-progress__sq { color: var(--text); }
+
+/* Stepper: every step keeps its header; only the open step shows a body that ends in a Back / primary row */
+.cmp-stepper { margin: 0 0 16px; }
 .cmp-stepper .cmp-step { min-width: 0; }
 .cmp-stepper .cmp-step__head { min-width: 0; }
-.cmp-stepper .cmp-step__head .pk-step__title { margin: 0; }
-.cmp-stepper .cmp-step__head .pk-step__sub { margin: 2px 0 0; }
+.cmp-stepper .cmp-step__head .pk-step__title { margin: 0; font-size: 16px; line-height: 24px; }
+.cmp-stepper .cmp-step__head .pk-step__title:focus { outline: none; }
+.cmp-stepper .cmp-step__head .pk-step__title:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.cmp-stepper .cmp-step__head .pk-step__sub { margin: 2px 0 0; font-size: 13px; line-height: 18px; }
 .cmp-stepper .cmp-step__edit { white-space: nowrap; }
+.cmp-stepper .cmp-step__edit[hidden] { display: none; }
 .cmp-stepper .cmp-step__body { min-width: 0; padding-top: 8px; display: grid; gap: 10px; align-content: start; }
 .cmp-stepper .cmp-step--collapsed .cmp-step__body { display: none; }
-.cmp-stepper .cmp-step--collapsed.cmp-step--open .cmp-step__body,
-.cmp-stepper .cmp-step--collapsed:target .cmp-step__body,
-.cmp-stepper .cmp-step--collapsed:has(:target) .cmp-step__body { display: grid; }
+.cmp-stepper .cmp-step--open .cmp-step__body { display: grid; }
 .cmp-stepper .cmp-step--collapsed { padding-block: 8px; }
-.cmp-stepper .cmp-step--collapsed.cmp-step--open { padding-block: 12px; }
+.cmp-stepper .cmp-step--open { padding-block: 12px; }
 .cmp-stepper .pk-step__badge svg { display: block; }
 .cmp-stepper .svc-hint, .cmp-stepper .crm-source-note { margin: 0; color: var(--text-muted); font-size: 13px; line-height: 1.5; }
 .cmp-stepper .campaign-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; }
+.cmp-step__nav { display: flex; align-items: center; gap: 8px; margin-top: 8px; padding-top: 12px; border-top: 1px solid var(--border-muted); }
+.cmp-step__nav [hidden] { display: none; }
+.cmp-step__nav-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.cmp-disabled { opacity: 0.5; cursor: not-allowed; }
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes cmp-open { from { max-height: 0; opacity: 0; overflow: hidden; } to { max-height: 1600px; opacity: 1; overflow: hidden; } }
+  .cmp-stepper .cmp-step--open .cmp-step__body { animation: cmp-open 180ms ease-out; }
+}
 
 /* Campaign type switch */
 .cmp-kind.campaign-kind-switch { margin: 0 0 12px; }
@@ -40,16 +69,34 @@
 .cmp-stepper .campaign-sender-form { margin: 0; }
 .cmp-stepper .campaign-sender-form input { width: 100%; }
 
-/* Readiness checklist (inside step 4) */
-.cmp-readiness .readiness-summary { margin-top: 0; }
-.cmp-readiness .readiness-list { margin-top: 8px; gap: 6px; }
-.cmp-readiness .readiness-row { padding: 6px 12px; min-height: var(--pk-row-h); border-radius: var(--pk-r-ctl); }
-.cmp-readiness .readiness-row.is-ok .readiness-mark { background: var(--success); border-color: var(--success); color: var(--on-success); }
-.cmp-readiness .readiness-name a { color: inherit; text-decoration: none; }
-.cmp-readiness .readiness-name a:hover { color: var(--accent); text-decoration: underline; }
+/* Draft funnel (right rail): vz-bars, one row per state. The pill carries the state color. */
+.cmp-funnel .pk-bars__row { grid-template-columns: 112px minmax(0, 1fr) 28px; gap: 10px; }
+.cmp-funnel .pk-bars__label { overflow: visible; }
+.cmp-funnel .pk-bars__val { min-width: 0; }
+.cmp-empty__bars .pk-bars__val { min-width: 0; }
+
+/* Readiness board (right rail): four rows, the blocking row is marked and is the only one with a Fix button */
+.cmp-readiness .pk-card__head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.cmp-readiness .cmp-board { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
+.cmp-readiness .cmp-board .cmp-board__row { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: center; gap: 4px 10px; padding: 8px 0; border: 0; border-bottom: 1px solid var(--border-muted); border-radius: 0; background: none; }
+.cmp-readiness .cmp-board .cmp-board__row:last-child { border-bottom: 0; }
+.cmp-readiness .cmp-board .cmp-board__mark { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border: 1px solid var(--border-strong); border-radius: 0; color: var(--text-muted); }
+.cmp-readiness .cmp-board .cmp-board__row.is-ok .cmp-board__mark { background: var(--success); border-color: var(--success); color: var(--on-success); }
+.cmp-readiness .cmp-board .cmp-board__row.is-blocking .cmp-board__mark { background: var(--warning-dim); border-color: var(--warning); color: var(--warning); }
+.cmp-readiness .cmp-board__mark svg { display: block; width: 14px; height: 14px; }
+.cmp-readiness .cmp-board__name { flex: none; font-size: 13px; font-weight: 600; color: var(--text); min-width: 0; }
+.cmp-readiness .cmp-board__name a { color: inherit; text-decoration: none; }
+.cmp-readiness .cmp-board__state { grid-column: 2 / -1; font-size: 13px; line-height: 1.4; color: var(--text-muted); overflow-wrap: anywhere; flex: none; }
+.cmp-readiness .cmp-board__fix { grid-column: 3; grid-row: 1; justify-self: end; }
+.cmp-readiness .cmp-board .cmp-board__row.is-blocking { box-shadow: inset 2px 0 0 var(--warning); padding-left: 8px; }
+.cmp-board__alert { margin: 8px 0 0; font-size: 13px; color: var(--danger); }
+.cmp-board__count { margin: 8px 0 0; font-size: 13px; color: var(--text-muted); }
+.cmp-board__unlock { margin: 8px 0 0; font-size: 13px; color: var(--text-muted); }
+.cmp-test-preview { margin-top: 12px; }
 
 /* Drafts table card */
 .cmp-drafts { margin-bottom: 16px; }
+.cmp-drafts .pk-table-wrap { position: relative; }
 .cmp-drafts .cmp-drafts__head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
 .cmp-drafts .cmp-search { display: flex; align-items: center; gap: 8px; margin: 0; }
 .cmp-drafts .cmp-search .pk-input { width: 200px; max-width: 100%; }
@@ -58,48 +105,85 @@
 .cmp-table .cmp-subject { max-width: 360px; }
 .cmp-table .cmp-subject .pk-cell-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
 .cmp-table tr[data-href] { cursor: pointer; }
-.cmp-table tr[data-href]:hover td { background: var(--row-hover); }
-.cmp-table tr[data-href]:focus-visible { outline: 2px solid var(--focus, var(--accent)); outline-offset: -2px; }
+.cmp-table tr[data-href]:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 .cmp-table .pk-col-actions { white-space: nowrap; }
 .cmp-table .pk-col-actions a { display: inline-flex; align-items: center; gap: 6px; margin-right: 12px; }
+@media (prefers-reduced-motion: no-preference) {
+  .cmp-table tr[data-href] { transition: transform var(--dur-hover) ease-out; }
+  .cmp-table tr[data-href]:hover { transform: scale(1.01); }
+  .cmp-table tr[data-href]:hover td { box-shadow: inset 0 1px 0 var(--trace), inset 0 -1px 0 var(--trace); }
+}
 .cmp-check { font-size: 12px; font-weight: 500; }
 .cmp-check--ok { color: var(--success); }
-.cmp-check--bad { color: var(--danger); cursor: help; text-decoration: underline dotted; text-underline-offset: 3px; }
+.cmp-check--bad { color: var(--danger); cursor: help; display: inline-flex; align-items: center; gap: 6px; }
+.pk-count.cmp-count { min-width: 12px; height: 12px; padding: 0 4px; font-size: 12px; line-height: 12px; box-sizing: content-box; border-radius: 0; }
 .cmp-table .cmp-empty { text-align: center; color: var(--text-muted); padding: 32px 16px; }
 .cmp-table .cmp-empty svg { display: block; margin: 0 auto 8px; color: var(--text-faint); }
+.cmp-empty__bars { width: 240px; max-width: 100%; margin: 12px auto 8px; padding: 0; list-style: none; }
+.cmp-empty__bars .pk-bars__label, .cmp-empty__bars .pk-bars__val { display: none; }
+.cmp-empty__bars .pk-bars__row { grid-template-columns: minmax(0, 1fr); }
+.cmp-empty__hint { display: block; margin: 0 0 12px; font-size: 13px; color: var(--text-muted); }
 
-/* Draft editor: two panes */
+/* Draft editor: back link, two panes, checks panel, sibling strip, sticky action bar */
+.cmp-editor .crm-breadcrumb .cmp-backlink { display: inline-flex; align-items: center; gap: 4px; }
 .cmp-editor .cmp-panes.draft-editor-layout { grid-template-columns: minmax(0, 1fr) minmax(300px, 420px); gap: 16px; margin-top: 8px; }
 .cmp-editor .cmp-pane { min-width: 0; }
 .cmp-editor .cmp-pane--side { display: grid; gap: 16px; align-content: start; }
 .cmp-editor .cmp-pane--editor > .pk-card__body { display: grid; gap: 14px; }
 .cmp-editor .cmp-banner { display: flex; align-items: flex-start; gap: 8px; margin: 0 0 12px; }
 .cmp-editor .cmp-banner__icon { flex: none; display: inline-flex; padding-top: 2px; }
-.cmp-editor .lint-issues { margin: 0; border-radius: var(--pk-r-ctl); }
+.cmp-editor .cmp-lint { margin: 0; padding: 12px 16px; list-style: none; display: grid; gap: 6px; border-radius: 0; font-size: 13px; }
+.cmp-editor .cmp-lint li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.cmp-editor .pk-tag { display: inline-block; padding: 0 6px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text-muted); font: 500 12px/18px var(--font-mono); border-radius: 0; }
 .cmp-editor .draft-form { gap: 14px; }
 .cmp-editor .draft-meta { display: block; }
 .cmp-editor .draft-meta > .cmp-advanced__body { max-width: none; }
 .cmp-editor .draft-meta > summary { cursor: pointer; font-size: 13px; font-weight: 500; color: var(--text-muted); min-height: 32px; display: flex; align-items: center; }
 .cmp-editor .draft-actions { padding-top: 12px; }
-.cmp-editor .cmp-approval { display: grid; gap: 8px; padding-top: 12px; border-top: 1px solid var(--border-muted); }
-.cmp-editor .cmp-approve-row, .cmp-editor .cmp-approve-form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0; }
-.cmp-editor .cmp-approve-reason { font-size: 13px; color: var(--text-muted); margin: 0; }
 .cmp-editor .cmp-preview { position: sticky; top: 84px; }
-.cmp-editor .cmp-preview .draft-preview-email { padding: 12px; border: 1px solid var(--border-muted); border-radius: var(--pk-r-ctl); background: var(--bg-subtle); }
+.cmp-editor .cmp-preview .draft-preview-email { padding: 12px; border: 1px solid var(--border-muted); border-radius: 0; background: var(--bg-subtle); }
 .cmp-editor .cmp-preview .cmp-preview__subject { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 10px; }
 .cmp-editor .cmp-preview .attachment-chip { margin-left: 0; }
+.cmp-editor .cmp-preview [data-preview-body] p { white-space: pre-line; }
+.cmp-editor .cmp-panes.draft-editor-layout { padding-bottom: 96px; }
 .cmp-editor .cmp-preview .draft-preview-deck { margin-top: 14px; }
-.cmp-editor .cmp-siblings { position: static; max-height: none; }
-.cmp-editor .cmp-siblings ul { margin: 0; padding: 0 16px 8px; list-style: none; }
-.cmp-editor .cmp-siblings li > .pk-pill { grid-column: 2; grid-row: 1; justify-self: end; }
-.cmp-editor .cmp-siblings li > .crm-table-subline { grid-column: 1 / -1; grid-row: 2; }
 
+.cmp-meter { display: block; height: 4px; margin: 0 0 10px; }
+.cmp-meter__svg { display: block; width: 100%; height: 4px; }
+.cmp-meter__rail { fill: var(--chart-track); }
+.cmp-meter__fill { fill: var(--success); }
+.cmp-ticks { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 13px; }
+.cmp-ticks li { display: flex; align-items: flex-start; gap: 8px; }
+.cmp-ticks li svg { flex: none; margin-top: 2px; }
+.cmp-ticks li.is-bad { color: var(--warning); }
+.cmp-ticks li.is-ok { color: var(--success); }
+.cmp-ticks li span:last-child { color: var(--text); }
+
+.cmp-strip { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.cmp-strip__link { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 4px 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 12px; line-height: 16px; text-decoration: none; }
+.crm-shell .cmp-strip__link, .crm-shell .cmp-strip__link:visited { color: var(--text); text-decoration: none; }
+.cmp-strip__item.is-current .cmp-strip__link { border-color: var(--accent); }
+.cmp-strip__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 140px; }
+.cmp-sq { flex: none; width: 10px; height: 10px; background: var(--chart-neutral); }
+.cmp-sq--needs-review { background: var(--warning); }
+.cmp-sq--approved { background: var(--success); }
+.cmp-sq--blocked { background: var(--danger); }
+.cmp-sq--rejected { background: var(--chart-neutral); }
+.cmp-sq--sent, .cmp-sq--test-sent { background: var(--info); }
+
+.cmp-actionbar .pk-pill { flex: none; }
+.cmp-actionbar .cmp-approve-form { display: inline-flex; margin: 0; }
+.cmp-actionbar .cmp-approve-reason { flex: 1 1 100%; order: 5; margin: 0; font-size: 13px; line-height: 18px; color: var(--text-muted); }
+
+@media (max-width: 1100px) {
+  .cmp-grid { grid-template-columns: minmax(0, 1fr); }
+  .cmp-rail { position: static; }
+}
 @media (max-width: 960px) {
   .cmp-editor .cmp-panes.draft-editor-layout { grid-template-columns: minmax(0, 1fr); }
   .cmp-editor .cmp-preview { position: static; }
 }
 @media (max-width: 640px) {
-  .cmp-stepper .pk-step { grid-template-columns: 24px minmax(0, 1fr); }
   .cmp-stepper .cmp-step__edit { grid-column: 2; justify-self: start; }
   .cmp-drafts .cmp-search { width: 100%; }
   .cmp-drafts .cmp-search .pk-search { flex: 1 1 auto; min-width: 0; }
@@ -108,3 +192,11 @@
   .cmp-table .cmp-subject { max-width: 200px; }
   .cmp-editor .cmp-pane--editor > .pk-card__body { padding: 12px; }
 }
+
+.cmp-focus { margin: 0; padding: 8px 12px; border: 1px solid var(--border-strong); font-size: 13px; }
+
+/* Draft funnel bars use the status tokens: needs review grey, approved green, blocked red, sent blue. */
+.cmp-funnel .vz-bars .pk-bars__row--needs-review .vz-bars__fill { fill: var(--chart-neutral); }
+.cmp-funnel .vz-bars .pk-bars__row--approved .vz-bars__fill { fill: var(--success); }
+.cmp-funnel .vz-bars .pk-bars__row--blocked .vz-bars__fill { fill: var(--danger); }
+.cmp-funnel .vz-bars .pk-bars__row--sent .vz-bars__fill { fill: var(--info); }

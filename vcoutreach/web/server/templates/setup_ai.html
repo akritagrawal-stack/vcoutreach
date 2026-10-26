@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% from "_icons.html" import icon %}
+{% from "_icons.html" import icon, btn_icon %}
 {% block page_id %}setup_ai{% endblock %}
 {% block title %}Set up with AI{% endblock %}
 
@@ -18,7 +18,7 @@
 <div class="settings-shell ai-page">
   <header class="settings-head">
     <h1>Set up with AI</h1>
-    <a class="svc-link" href="/settings">Back to Settings</a>
+    <a class="svc-link" href="/settings">{{ icon("arrow-left") }}Back to Settings</a>
   </header>
 
   <p class="ai-intro">Let an AI assistant (Claude, Codex or any MCP client) walk you through setup and run the safe parts for you: it can check connections, import contacts, research, write and edit drafts, and send a copy to your own test inbox; it cannot see or enter your keys, and it cannot send a real email.</p>

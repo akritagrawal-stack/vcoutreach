@@ -1,6 +1,20 @@
 /* Publikreach interactions. Page data stays in escaped HTML attributes. */
 (function () {
   'use strict';
+  // Glyph-safe label swap: keeps the icon span and replaces only the text.
+  function ensureEyeGlyph(button) {
+    if (button.querySelector('.icon')) return;
+    var holder = document.createElement('span');
+    holder.className = 'icon';
+    holder.setAttribute('aria-hidden', 'true');
+    holder.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/></svg>';
+    button.insertBefore(holder, button.firstChild);
+  }
+  function setBtnLabel(button, text) {
+    var nodes = Array.prototype.slice.call(button.childNodes);
+    nodes.forEach(function (node) { if (node.nodeType === 3) button.removeChild(node); });
+    button.appendChild(document.createTextNode(text));
+  }
   // Early theme (this script runs in <head> before first paint): a saved Toggle theme choice wins, else follow the OS setting.
   var saved = null;
   try { saved = localStorage.getItem('publik-signal-theme'); } catch (error) { saved = null; }
@@ -26,6 +40,18 @@
     }
     window.addEventListener('hashchange', openHashDetails);
     openHashDetails();
+    // A deck error is shown beside the file input; drop the identical message from the top list so it is not said twice.
+    document.querySelectorAll('[data-deck-error]').forEach(function (note) {
+      var text = note.textContent.trim();
+      document.querySelectorAll('.flash-list .flash').forEach(function (item) {
+        var span = item.querySelector('span');
+        if (span && span.textContent.trim() === text) {
+          var list = item.parentNode;
+          list.removeChild(item);
+          if (!list.children.length && list.parentNode) list.parentNode.removeChild(list);
+        }
+      });
+    });
 
     function fmtDur(secs) {
       if (secs < 60) return secs + ' sec';
@@ -115,9 +141,9 @@
     document.querySelectorAll('[data-copy-text]').forEach(function (button) {
       button.addEventListener('click', function () {
         navigator.clipboard.writeText(button.dataset.copyText).then(function () {
-          button.textContent = 'Copied';
-          window.setTimeout(function () { button.textContent = 'Copy URL'; }, 1400);
-        }).catch(function () { button.textContent = 'Select the URL to copy'; });
+          setBtnLabel(button, 'Copied');
+          window.setTimeout(function () { setBtnLabel(button, 'Copy URL'); }, 1400);
+        }).catch(function () { setBtnLabel(button, 'Select the URL to copy'); });
       });
     });
     var goLiveForm = document.getElementById('goLiveForm');
@@ -148,7 +174,7 @@
         if (!button) return;
         window.setTimeout(function () {
           button.disabled = true;
-          button.textContent = form.dataset.busy;
+          setBtnLabel(button, form.dataset.busy);
         }, 0);
       });
     });
@@ -452,7 +478,8 @@ if (page === 'settings') {
   }
   function setSecretShown(input, button, shown) {
     input.type = shown ? 'text' : 'password';
-    button.textContent = shown ? 'Hide' : 'Show';
+    ensureEyeGlyph(button);
+    setBtnLabel(button, shown ? 'Hide' : 'Show');
     button.setAttribute('aria-pressed', String(shown));
     button.setAttribute('aria-label', (shown ? 'Hide ' : 'Show ') + button.dataset.secretName);
   }
@@ -799,49 +826,6 @@ if (page === 'settings') {
 
 if (page === 'partners_list') {
 
-// ── Multi-select filter chips (URL toggle) ──────────────────────────────────
-
-function getParams() {
-  return new URLSearchParams(window.location.search);
-}
-
-function toggleFilter(key, value) {
-  var params = getParams();
-  var existing = params.getAll(key);
-  if (existing.includes(value)) {
-    // Remove this value
-    params.delete(key);
-    existing.filter(function(v) { return v !== value; }).forEach(function(v) {
-      params.append(key, v);
-    });
-  } else {
-    params.append(key, value);
-  }
-  window.location.search = params.toString();
-}
-
-function clearFilter(key) {
-  var params = getParams();
-  params.delete(key);
-  window.location.search = params.toString();
-}
-
-function toggleSingle(key, value) {
-  var params = getParams();
-  if (params.get(key) === value) {
-    params.delete(key);
-  } else {
-    params.set(key, value);
-  }
-  window.location.search = params.toString();
-}
-
-function clearAllFilters() {
-  var params = getParams();
-  ['tier', 'status', 'verif', 'channel'].forEach(function(k) { params.delete(k); });
-  window.location.search = params.toString();
-}
-
 // ── Bulk select + floating action bar ──────────────────────────────────────
 
 var bulkBar = document.getElementById('bulkBar');
@@ -858,13 +842,37 @@ function getVisibleChecks() {
   });
 }
 
+function bulkMix(checked) {
+  var mix = {verified: 0, risky: 0, unknown: 0, invalid: 0};
+  checked.forEach(function(cb) {
+    var tr = cb.closest('tr');
+    var k = tr ? tr.getAttribute('data-quality') : 'unknown';
+    mix[k in mix ? k : 'unknown'] += 1;
+  });
+  return mix;
+}
+
 function updateBulkBar() {
   var checked = getChecked();
   var n = checked.length;
   if (n > 0) {
     bulkBar.style.display = 'flex';
-    bulkCount.textContent = n + ' selected';
-    // Update live confirm placeholder if present
+    var mix = bulkMix(checked);
+    var parts = [mix.verified + ' verified', mix.risky + ' risky'];
+    if (mix.unknown) parts.push(mix.unknown + ' unknown');
+    if (mix.invalid) parts.push(mix.invalid + ' invalid');
+    bulkCount.textContent = n + ' selected: ' + parts.join(', ');
+    var x = 0;
+    ['verified', 'risky', 'unknown', 'invalid'].forEach(function(k) {
+      var rect = document.querySelector('#bulkMix rect[data-seg="' + k + '"]');
+      if (!rect) return;
+      var w = mix[k] * 100 / n;
+      rect.setAttribute('x', String(x));
+      rect.setAttribute('width', String(w));
+      x += w;
+    });
+    var phrase = document.getElementById('bulkConfirmPhrase');
+    if (phrase) phrase.textContent = 'Type SEND BATCH OF ' + n + ' to confirm';
     var inp = document.getElementById('bulkConfirmInput');
     if (inp) inp.placeholder = 'SEND BATCH OF ' + n;
   } else {
@@ -919,7 +927,7 @@ function openBulkSchedule() {
   });
 
   // Update submit button and phrase
-  document.getElementById('bulkSchedSubmitBtn').textContent = 'Schedule ' + n + ' sends';
+  setBtnLabel(document.getElementById('bulkSchedSubmitBtn'), 'Schedule ' + n + ' sends');
   var phrase = 'SCHEDULE LIVE FOR ' + n;
   var phraseEl = document.getElementById('bulkSchedPhrase');
   if (phraseEl) phraseEl.textContent = phrase;
@@ -978,7 +986,14 @@ function rowMatchesVerification(row) {
   var verification = params.getAll('verif');
   return !verification.length || verification.includes(row.dataset.verif);
 }
+function syncNoMatch() {
+  var none = document.getElementById('plNoMatch');
+  if (!none) return;
+  var shown = Array.from(tableRows).some(function (tr) { return tr.style.display !== 'none'; });
+  none.hidden = shown;
+}
 tableRows.forEach(function (row) { if (!rowMatchesVerification(row)) row.style.display = 'none'; });
+syncNoMatch();
 if (searchInput) {
   searchInput.addEventListener('input', function() {
     var q = this.value.toLowerCase().trim();
@@ -988,15 +1003,11 @@ if (searchInput) {
       var notes = tr.getAttribute('data-notes') || '';
       tr.style.display = ((!q || name.includes(q) || firm.includes(q) || notes.includes(q)) && rowMatchesVerification(tr)) ? '' : 'none';
     });
+    syncNoMatch();
     updateBulkBar();
   });
 }
 
-document.querySelectorAll('[data-action="partners_list-0"]').forEach(function (element) { element.addEventListener('click', function (event) { clearFilter('tier'); }); });
-document.querySelectorAll('[data-action="partners_list-1"]').forEach(function (element) { element.addEventListener('click', function (event) { toggleSingle('tier',this.dataset.arg0); }); });
-document.querySelectorAll('[data-action="partners_list-2"]').forEach(function (element) { element.addEventListener('click', function (event) { toggleSingle('status',this.dataset.arg0); }); });
-document.querySelectorAll('[data-action="partners_list-3"]').forEach(function (element) { element.addEventListener('click', function (event) { toggleFilter('verif',this.dataset.arg0); }); });
-document.querySelectorAll('[data-action="partners_list-5"]').forEach(function (element) { element.addEventListener('click', function (event) { clearAllFilters(); }); });
 document.querySelectorAll('[data-action="partners_list-6"]').forEach(function (element) { element.addEventListener('click', function (event) { document.getElementById('bulkLiveConfirm').style.display='flex'; }); });
 document.querySelectorAll('[data-action="partners_list-7"]').forEach(function (element) { element.addEventListener('click', function (event) { submitBulkLive(); }); });
 document.querySelectorAll('[data-action="partners_list-8"]').forEach(function (element) { element.addEventListener('click', function (event) { openBulkSchedule(); }); });
@@ -1035,3 +1046,19 @@ function bindSearxngTest() {
     });
   });
 }
+
+/* Campaign and Drafts share /crm/drafts: the #draftsTable hash decides which nav item is current. */
+document.addEventListener('DOMContentLoaded', function () {
+  var campaign = document.querySelector('.nav-link-campaign');
+  var drafts = document.querySelector('.nav-link-drafts');
+  if (!campaign || !drafts || window.location.pathname !== '/crm/drafts') return;
+  function sync() {
+    var onTable = window.location.hash === '#draftsTable';
+    campaign.classList.toggle('active', !onTable);
+    drafts.classList.toggle('active', onTable);
+    if (onTable) { campaign.removeAttribute('aria-current'); drafts.setAttribute('aria-current', 'page'); }
+    else { drafts.removeAttribute('aria-current'); campaign.setAttribute('aria-current', 'page'); }
+  }
+  sync();
+  window.addEventListener('hashchange', sync);
+});

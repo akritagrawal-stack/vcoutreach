@@ -31,30 +31,32 @@ page before you run a batch.
 ## Gmail
 
 **Needs.** The Gmail extra (`pip install -e ".[gmail]"`, already part of the Mac
-installer), and a Gmail account to connect. The recommended way is Google sign-in
-(OAuth) with a Desktop app OAuth client from your own Google Cloud project with the
-Gmail API enabled. The client file is yours; none ships here.
+installer), and a Gmail account to connect. The primary way is Google sign-in
+(OAuth) with a Desktop app OAuth client file from your own Google Cloud project with
+the Gmail API enabled. The client file is yours; none ships here. A Gmail app
+password is the simpler alternative if you do not want a Google Cloud project; setup
+takes about two minutes.
 
 **What it does.** Sends your messages (test sends, live sends, scheduled sends),
 reads replies when you click "Poll replies" or refresh the inbox, and checks the
 Sent folder after a send. Gmail is the first setup step and it is required for a
 test send.
 
-**Connect with Google sign-in (recommended).** In Settings, click **Choose OAuth
-client file** and pick the Desktop client JSON, then click **Connect Gmail**. Google
-opens a sign-in in your browser and this app never sees your password. The client is
-saved as `data/.gmail_credentials.json` and the token as `data/.gmail_token.json`
-in your workspace, both with mode 0600. The scope is `gmail.modify`, so the app can
-send, read replies and check Sent. Consent expires locally after three minutes if
-left unfinished.
+**Connect with your Google OAuth client file (primary).** Three steps in the Gmail
+card in Settings: (1) download your Google OAuth client file (Desktop app) from your
+own Google Cloud project, (2) click **Choose OAuth client file** and pick that JSON,
+then (3) click **Connect Gmail**. Google opens a sign-in in your browser and this app
+never sees your password. The client is saved as `data/.gmail_credentials.json` and
+the token as `data/.gmail_token.json` in your workspace, both with mode 0600. The
+scope is `gmail.modify`, so the app can send, read replies and check Sent. Consent
+expires locally after three minutes if left unfinished.
 
-**Alternative: a Gmail app password.** Only if you cannot use an OAuth client file.
-In Settings, open the collapsed "Alternative: use a Gmail app password instead"
-section, enter your Gmail address and a 16 character app password, and click
-**Connect with app password**. Google requires 2-Step Verification for this, and a
-Workspace admin must allow app passwords. The password is stored in
-`data/.gmail_app_password.json` in your workspace with mode 0600 and is never shown
-or logged.
+**Simpler alternative: a Gmail app password.** If you do not want a Google Cloud
+project, open **Alternative: use a Gmail app password instead** on the Gmail card,
+enter your Gmail address and a 16 character app password, and click **Connect with app
+password**. Google requires 2-Step Verification for this, and a Workspace admin must
+allow app passwords. The password is stored in `data/.gmail_app_password.json` in your
+workspace with mode 0600 and is never shown or logged.
 
 **The command line.** The command line uses a separate, send-only setup, because it
 asks for a narrower permission:

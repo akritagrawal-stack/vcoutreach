@@ -9,7 +9,7 @@ import re
 import sqlite3
 
 from web_helpers import *  # noqa: F401,F403
-from web_helpers import STANDARD_ROWS, body, page_text
+from web_helpers import STANDARD_ROWS, body, go_live, page_text, send_batch
 
 
 def _db(w):
@@ -85,8 +85,14 @@ def test_tracking_window_note_says_utc(web):
     assert "Read 2026-01-31 12:30 UTC." in text
 
 
-def test_analytics_send_hour_label_names_utc(web):
-    text = page_text(body(web.get("/crm/analytics", follow_redirects=True)))
+def test_analytics_send_hour_label_names_utc(send_web):
+    w = send_web(STANDARD_ROWS)
+    empty = page_text(body(w.get("/crm/analytics", follow_redirects=True)))
+    assert "No sends yet" in empty
+    go_live(w)
+    send_batch(w, "SEND BATCH OF 3")
+    assert len(w.transport.calls) == 3, "setup: three live sends"
+    text = page_text(body(w.get("/crm/analytics", follow_redirects=True)))
     assert "Send hour (UTC)" in text
 
 

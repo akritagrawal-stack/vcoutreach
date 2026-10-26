@@ -77,6 +77,13 @@
         var el = document.querySelector('[data-count-for="' + key + '"]');
         if (el) el.textContent = String(data.counts[key]);
       });
+      var put = function (name, value) {
+        var el = document.querySelector('[data-kpi-value="' + name + '"]');
+        if (el && typeof value === 'number' && isFinite(value)) el.textContent = String(value);
+      };
+      put('unread', data.unread);
+      put('needs', data.counts.needs);
+      put('interested', data.interested);
     }
 
     function saveLabel(select) {

@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% from "_icons.html" import icon %}
+{% from "_icons.html" import icon, btn_icon %}
 {% block page_id %}crm_drafts{% endblock %}
 {% block title %}Campaign{% endblock %}
 {% block content %}
@@ -13,21 +13,30 @@
 {% set rows = campaign_vm.decorate(drafts) %}
 {% set short_kind = {'fundraising': 'Raising money', 'job_search': 'Looking for a role'} %}
 
-{#- One stepper step. State comes from st (campaign_vm.stepper): done steps and todo steps collapse to a title, a one-line
-    summary and an Edit/Open link; only the current step shows its body. -#}
-{% macro step(n, sid, hid, title, sub, st, act_label, act_href, act_toggle=true) %}
-{% from "_icons.html" import icon %}
+{#- One stepper step. State comes from st (campaign_vm.stepper). Every step keeps its header (title, one-line summary, Edit/Open
+    button) visible; only the open step shows its body, which ends in a Back / primary action row. -#}
+{% macro step(n, sid, hid, title, sub, st, act_label) %}
+{% from "_icons.html" import icon, btn_icon %}
 {% set is_done = st.done[n] %}
 {% set is_current = st.current == n %}
-<section class="pk-step cmp-step {{ 'pk-step--done' if is_done }} {{ 'pk-step--current' if is_current }} {{ 'pk-step--todo' if (not is_done and not is_current) }} {{ '' if is_current else 'cmp-step--collapsed' }}" id="{{ sid }}" aria-labelledby="{{ hid }}"{% if is_current %} aria-current="step"{% endif %}>
-  <span class="pk-step__badge" aria-hidden="true">{% if is_done %}{{ icon("check", 14) }}{% else %}{{ n }}{% endif %}</span>
+<section class="pk-step cmp-step {{ 'pk-step--done' if is_done }} {{ 'pk-step--current' if is_current }} {{ 'pk-step--todo' if (not is_done and not is_current) }} {{ 'cmp-step--open' if is_current else 'cmp-step--collapsed' }}" id="{{ sid }}" data-step="{{ n }}" data-done="{{ 1 if is_done else 0 }}" aria-labelledby="{{ hid }}"{% if is_current %} aria-current="step"{% endif %}>
+  <span class="pk-step__badge cmp-step__badge" aria-hidden="true">{% if is_done %}{{ icon("check", 14) }}{% else %}{{ n }}{% endif %}</span>
   <div class="cmp-step__head">
-    <h2 class="pk-step__title" id="{{ hid }}"><span class="sr-only">{{ n }}. </span>{{ title }}</h2>
+    <h2 class="pk-step__title" id="{{ hid }}" tabindex="-1"><span class="sr-only">{{ n }}. </span>{{ title }}</h2>
     <p class="pk-step__sub">{{ sub }}</p>
   </div>
-  {% if not is_current and act_href %}<a class="pk-btn pk-btn--ghost pk-btn--sm cmp-step__edit" href="{{ act_href }}"{% if act_toggle %} data-step-edit="{{ sid }}"{% endif %}>{{ act_label }}</a>{% endif %}
-  <div class="pk-step__body cmp-step__body">{{ caller() }}</div>
+  <button type="button" class="pk-btn pk-btn--ghost pk-btn--sm pk-btn--small cmp-step__edit" data-step-edit="{{ n }}" aria-expanded="{{ 'true' if is_current else 'false' }}" aria-controls="{{ sid }}Body"{% if is_current %} hidden{% endif %}>{{ btn_icon(act_label) }}{{ act_label }}</button>
+  <div class="pk-step__body cmp-step__body" id="{{ sid }}Body">{{ caller() }}</div>
 </section>
+{% endmacro %}
+
+{#- Bottom row of an open step: Back on the left (hidden on step 1), the step's primary action on the right. -#}
+{% macro nav(n) %}
+<div class="pk-step__nav cmp-step__nav">
+  <button type="button" class="pk-btn pk-btn--ghost" data-step-back{% if n == 1 %} hidden{% endif %}>{{ icon("arrow-left") }}Back</button>
+  <span class="pk-spacer"></span>
+  <div class="cmp-step__nav-actions">{{ caller() }}</div>
+</div>
 {% endmacro %}
 
 {% set drafts_card %}
@@ -40,7 +49,7 @@
       <label class="sr-only" for="draftSearch">Search drafts</label>
       <span class="pk-search"><input class="pk-input" id="draftSearch" type="search" name="q" value="{{ query }}" placeholder="Search drafts"></span>
       {% if status_filter %}<input type="hidden" name="status" value="{{ status_filter }}">{% endif %}
-      <button type="submit" class="pk-btn pk-btn--secondary pk-btn--sm">Search</button>
+      <button type="submit" class="pk-btn pk-btn--secondary pk-btn--sm">{{ icon("search") }}Search</button>
     </form>
   </div>
   <nav class="pk-tabs cmp-tabs" aria-label="Filter drafts by status">
@@ -53,9 +62,12 @@
       <td><span class="pk-cell-title">{{ item.recipient_name or item.recipient_email }}</span><span class="pk-cell-sub">{{ item.recipient_email }}</span></td>
       <td class="cmp-subject"><span class="pk-cell-title">{{ item.subject }}</span><span class="pk-cell-sub">{{ item.word_count }} words</span></td>
       <td><span class="{{ item.pill.cls }}">{{ item.pill.label }}</span></td>
-      <td>{% if item.checks.ok %}<span class="cmp-check cmp-check--ok">OK</span>{% else %}<span class="cmp-check cmp-check--bad" title="{{ item.checks.hover }}">{{ item.checks.label }}</span>{% for raw in item.checks.raw %}<span class="sr-only"> {{ raw }}</span>{% endfor %}{% endif %}</td>
-      <td class="pk-col-actions"><a href="/crm/drafts/{{ item.slug|urlencode }}">{{ icon("pencil", 14) }}Open draft</a>{% if item.partner_id %}<a class="pk-cell-sub" href="/crm/{{ item.partner_id }}">Contact profile</a>{% endif %}</td>
-    </tr>{% else %}<tr><td colspan="5" class="crm-empty-row cmp-empty">{{ icon("mail", 20) }}{% if (total_draft_count|default(0)) > 0 %}<span>No drafts match these filters.</span>{% else %}<span>No drafts yet. <a href="/crm/new">Add a contact</a>, then use Write drafts above.</span>{% endif %}</td></tr>{% endfor %}</tbody>
+      <td>{% if item.checks.ok %}<span class="cmp-check cmp-check--ok">OK</span>{% else %}<span class="cmp-check cmp-check--bad" title="{{ item.checks.hover }}"><span class="pk-count cmp-count">{{ item.checks.count }}</span> {{ item.checks.label }}</span>{% for raw in item.checks.raw %}<span class="sr-only"> {{ raw }}</span>{% endfor %}{% endif %}</td>
+      <td class="pk-col-actions"><a href="/crm/drafts/{{ item.slug|urlencode }}">{{ icon("pencil", 14) }}Open draft</a>{% if item.partner_id %}<a class="pk-cell-sub pk-btn pk-btn--ghost pk-btn--sm" href="/crm/{{ item.partner_id }}">{{ icon("users", 14) }}Contact profile</a>{% endif %}</td>
+    </tr>{% else %}<tr><td colspan="5" class="crm-empty-row cmp-empty">{{ icon("mail", 20) }}{% if (total_draft_count|default(0)) > 0 %}<span>No drafts match these filters.</span>{% else %}<span>No drafts yet. <a href="/crm/new">Add a contact</a>, then use Write drafts above.</span>
+      <ul class="pk-bars vz-bars cmp-empty__bars" aria-hidden="true">{% for _n in range(3) %}<li class="pk-bars__row is-low"><span class="pk-bars__label"></span><span class="pk-bars__track"><svg class="vz-bars__svg" viewBox="0 0 100 20" preserveAspectRatio="none" focusable="false"><rect class="vz-bars__rail" x="0" y="0" width="100" height="20"/><line class="vz-bars__tick" x1="25" y1="0" x2="25" y2="20"/><line class="vz-bars__tick" x1="50" y1="0" x2="50" y2="20"/><line class="vz-bars__tick" x1="75" y1="0" x2="75" y2="20"/><rect class="vz-bars__fill" x="0" y="0" width="{{ [60, 38, 20][_n] }}" height="20"/></svg></span><span class="pk-bars__val"></span></li>{% endfor %}</ul>
+      <span class="cmp-empty__hint">Write drafts to fill this board.</span>
+      <a class="pk-btn pk-btn--secondary pk-btn--sm" href="#writeDrafts">{{ icon("pencil") }}Go to Write drafts</a>{% endif %}</td></tr>{% endfor %}</tbody>
   </table></div>
 </section>
 {% endset %}
@@ -81,16 +93,23 @@
   </form>
   {% else %}
   <div class="campaign-kind-choices cmp-kind-choices" role="group" aria-label="Campaign type">
-    {% for choice in c.choices %}<form method="post" action="/settings/campaign-kind"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="kind" value="{{ choice.kind }}"><button type="submit" class="pk-btn pk-btn--primary campaign-kind-button">{{ choice.label }}</button></form>{% endfor %}
+    {% for choice in c.choices %}<form method="post" action="/settings/campaign-kind"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="kind" value="{{ choice.kind }}"><button type="submit" class="pk-btn campaign-kind-button">{{ btn_icon(choice.label) }}{{ choice.label }}</button></form>{% endfor %}
   </div>
   {% endif %}
 
+  <ol class="cmp-progress" aria-label="Campaign progress">
+    {% set _chip_labels = {1: 'Contacts', 2: 'Pitch', 3: 'Drafts', 4: 'Review', 5: 'Send'} %}
+    {% for sq in st.strip %}<li class="cmp-progress__item{{ ' is-done' if sq.done }}{{ ' is-current' if sq.current }}"><a class="cmp-progress__sq" href="#step-{{ sq.n }}" data-step-jump="{{ sq.n }}"{% if sq.current %} aria-current="step"{% endif %}><span class="sr-only">Step </span>{{ sq.n }}<span class="sr-only"> {{ ': done' if sq.done else (': current' if sq.current else ': to do') }}</span><span class="sr-only"> {{ _chip_labels[sq.n] }}</span></a><span class="cmp-progress__label" aria-hidden="true"><span class="cmp-progress__tick">{{ icon("check", 12) }}</span>{{ _chip_labels[sq.n] }}</span></li>{% endfor %}
+  </ol>
+
+  <div class="cmp-grid">
+  <div class="cmp-main">
   {% if st.table_first %}{{ drafts_card }}{% endif %}
 
-  <div class="pk-stepper cmp-stepper" role="group" aria-label="Campaign steps">
+  <div class="pk-stepper cmp-stepper" role="group" aria-label="Campaign steps" data-current="{{ st.current }}" data-first-todo="{{ st.current }}">
     {% call step(1, 'campaignContacts', 'stage1Heading', 'Add contacts',
                  ((c.contact_count ~ ' ' ~ ('contact' if c.contact_count == 1 else 'contacts')) if c.contact_count > 0 else 'Import a CSV or add one person by hand.'),
-                 st, ('Edit' if st.done[1] else 'Open'), '#campaignContacts') %}
+                 st, ('Edit' if st.done[1] else 'Open')) %}
     <p class="svc-hint">{% if c.contact_count > 0 %}You have {{ c.contact_count }} {{ 'contact' if c.contact_count == 1 else 'contacts' }} in this workspace. Add more any time.{% else %}No contacts yet. Import a CSV of {{ k.audience_word_plural }}, or add one person by hand.{% endif %}</p>
     <details class="crm-collapse" id="campaignImport"{% if c.contact_count == 0 %} open{% endif %}><summary>{{ icon("upload") }}Import contacts from a CSV{{ icon("chevron-down", 16, "icon-chevron") }}</summary>
       <form method="post" action="/crm/import" enctype="multipart/form-data" class="settings-fields import-form">
@@ -102,25 +121,27 @@
         <button type="submit" class="pk-btn pk-btn--primary pk-btn--sm">{{ icon("upload") }}Import contacts</button>
       </form>
     </details>
-    <p class="campaign-actions"><a class="pk-btn pk-btn--secondary pk-btn--sm" href="/crm/new">{{ icon("plus") }}Add one contact</a></p>
+    <p class="campaign-actions"><a class="pk-btn pk-btn--secondary pk-btn--sm" href="/crm/new?next=campaign">{{ icon("plus") }}Add one contact</a></p>
     {% if c.can_sample %}<form method="post" action="/sample/load" class="campaign-actions"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="next" value="/crm/drafts"><button type="submit" class="pk-btn pk-btn--secondary pk-btn--sm">{{ icon("upload") }}Or load the fictional sample</button></form>{% endif %}
+    {% call nav(1) %}<button type="button" class="pk-btn pk-btn--primary" data-step-next>Next: Template {{ icon("arrow-right") }}</button>{% endcall %}
     {% endcall %}
 
     {% call step(2, 'campaignPitch', 'stage2Heading', k.step2_heading,
                  (('Note and resume attached' if c.kind == 'job_search' else 'Template and attachment ready') if st.done[2] else ('Add your template and attachment.' if c.kind_chosen else 'Choose a campaign type first.')),
-                 st, ('Edit' if st.done[2] else 'Open'), '#campaignPitch') %}
+                 st, ('Edit' if st.done[2] else 'Open')) %}
     {% if c.kind_chosen %}
     <p class="svc-hint">{{ k.step2_hint }}</p>
     {% else %}
     <p class="svc-hint" id="pitchChooseFirst">Choose what you are doing above to see an example.</p>
     {% endif %}
     {% set deck_collapsed = c.kind_chosen and (total_draft_count|default(draft_count)) > 0 %}{% include '_template_deck_panel.html' %}
-    {% if c.kind_chosen %}<p class="campaign-actions"><a class="pk-btn pk-btn--primary pk-btn--sm" href="/settings#sec-package">{{ 'Edit your note and resume' if c.kind == 'job_search' else 'Edit your template and deck' }}</a></p>{% endif %}
+    {% if c.kind_chosen %}<p class="campaign-actions"><a class="pk-btn pk-btn--primary pk-btn--sm" href="/settings#sec-package">{{ btn_icon('Edit your note and resume' if c.kind == 'job_search' else 'Edit your template and deck') }}{{ 'Edit your note and resume' if c.kind == 'job_search' else 'Edit your template and deck' }}</a></p>{% endif %}
+    {% call nav(2) %}<button type="button" class="pk-btn pk-btn--primary" data-step-next>Next: Write drafts {{ icon("arrow-right") }}</button>{% endcall %}
     {% endcall %}
 
     {% call step(3, 'writeDrafts', 'writeDraftsHeading', 'Write drafts',
                  ((c.draft_count ~ ' ' ~ ('draft written' if c.draft_count == 1 else 'drafts written')) if c.draft_count > 0 else 'Write one draft for each contact.'),
-                 st, ('Edit' if st.done[3] else 'Open'), '#writeDrafts') %}
+                 st, ('Edit' if st.done[3] else 'Open')) %}
     {% if c.draft_count > 0 %}<p class="svc-hint">{{ c.draft_count }} {{ 'draft is' if c.draft_count == 1 else 'drafts are' }} written. Open Advanced and tick Replace existing drafts to rewrite them.</p>{% endif %}
     {% if c.contact_count == 0 %}<p class="svc-hint">Add contacts first (step 1), then write one draft for each.</p>{% endif %}
     {% if not c.has_sender %}
@@ -131,13 +152,17 @@
       <label for="senderName">Your name<input id="senderName" type="text" name="name" autocomplete="name" required></label>
       <label for="senderEmail">Your email address<input id="senderEmail" type="email" name="sender_email" autocomplete="email" required></label>
       <label for="senderSignature">Signature<textarea id="senderSignature" name="signature" rows="3" required placeholder="Your name&#10;Your role"></textarea></label>
-      <button type="submit" class="pk-btn pk-btn--secondary pk-btn--sm">Save sender profile</button>
+      <button type="submit" class="pk-btn pk-btn--secondary pk-btn--sm">{{ icon("save") }}Save sender profile</button>
     </form>
     {% endif %}
     <form method="post" action="/crm/drafts/write" class="cmp-write" data-busy="Writing drafts..." data-existing="{{ c.draft_count }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      {% if focus_contact %}
+      <input type="hidden" name="slug" value="{{ focus_contact.slug }}">
+      <p class="cmp-focus" id="focusContact">{{ 'Follow-up' if focus_contact.kind == 'follow_up' else 'Draft' }} for <strong>{{ focus_contact.name }}</strong> only.{% if focus_contact.draft_slug %} A draft already exists: <a href="/crm/drafts/{{ focus_contact.draft_slug|urlencode }}">open it</a>, or tick Replace existing drafts under Advanced to rewrite it.{% endif %} <a href="/crm/drafts#writeDrafts">Write for all contacts instead</a>.</p>
+      {% endif %}
       <div class="cmp-write__main">
-        <button class="pk-btn pk-btn--primary" type="submit">{{ icon("play") }}{{ wb.label }}</button>
+        <button class="pk-btn pk-btn--primary" type="submit">{{ icon("play") }}{% if focus_contact %}Write {{ 'follow-up' if focus_contact.kind == 'follow_up' else 'draft' }} for {{ focus_contact.name }}{% else %}{{ wb.label }}{% endif %}</button>
         <span class="pk-muted">Each draft uses your template plus one fact you saved about the person.</span>
       </div>
       <details class="cmp-advanced">
@@ -150,30 +175,48 @@
     </form>
     <p class="crm-source-note" id="draftingHow">Write drafts builds each email from your template. Generate hook on a contact page adds a researched opening line from enrichment facts, and creates a template draft first if none exists. Approve needs a grounded hook.</p>
     <p class="crm-source-note">{{ provider_status }}</p>
+    {% call nav(3) %}<button type="button" class="pk-btn pk-btn--primary" data-step-next>Next: Review {{ icon("arrow-right") }}</button>{% endcall %}
     {% endcall %}
 
     {% call step(4, 'campaignReview', 'stage4Heading', 'Review and send a test',
                  (st.step4_note if st.step4_note else ('Test sent' if st.done[4] else 'Check each draft, then send one to yourself.')),
-                 st, ('Send a test' if st.step4_note else ('Edit' if st.done[4] else 'Open')), '#campaignReview') %}
+                 st, ('Send a test' if st.step4_note else ('Edit' if st.done[4] else 'Open'))) %}
     <p class="svc-hint">A test send goes only to your own test recipient, never to the {{ k.audience_word }}.</p>
-    {% include '_campaign_readiness.html' %}
+    <p class="svc-hint">The readiness board on this page shows what blocks a test send.</p>
     <p class="campaign-actions">
-      {% if c.draft_count > 0 and not c.approved %}<a class="pk-btn pk-btn--primary pk-btn--sm" href="/crm/drafts/{{ c.first_slug|urlencode }}#approve">Review and approve a draft</a>{% endif %}
-      <a class="pk-btn pk-btn--secondary pk-btn--sm" href="/crm/send-plan">Check the send plan</a>
+      {% if c.draft_count > 0 and approved_n == 0 %}<a class="pk-btn pk-btn--primary pk-btn--sm" href="/crm/drafts/{{ c.first_slug|urlencode }}#approve">{{ icon("eye") }}Review and approve a draft</a>{% endif %}
+      <a class="pk-btn pk-btn--secondary pk-btn--sm" href="/crm/send-plan">{{ icon("list") }}Check the send plan</a>
     </p>
+    {% call nav(4) %}<button type="button" class="pk-btn pk-btn--primary" data-step-next>Next: Send {{ icon("arrow-right") }}</button>{% endcall %}
     {% endcall %}
 
     {% call step(5, 'campaignSend', 'stage5Heading', 'Send to contacts',
                  ((approved_n ~ ' approved ' ~ ('draft is' if approved_n == 1 else 'drafts are') ~ ' ready to send.') if approved_n > 0 else 'Approve a draft to unlock sending.'),
-                 st, (st.send_label if approved_n > 0 else 'Send'), '/partners', false) %}
-    <p class="svc-hint">Send. You pick the contacts there and confirm by typing SEND TO. Nothing is sent from this page.</p>
-    <p class="campaign-actions">{% if approved_n > 0 %}<a class="pk-btn pk-btn--primary" href="/partners">{{ st.send_label }}</a>{% else %}<a class="pk-btn pk-btn--secondary" href="/partners">Send</a>{% endif %}</p>
+                 st, (st.send_label if approved_n > 0 else 'Open')) %}
+    <p class="svc-hint">Send to contacts. Opens the Send page where you tick contacts and confirm by typing SEND BATCH OF {{ approved_n }} (test mode sends to your test recipient).</p>
+    {% call nav(5) %}{% if approved_n > 0 %}<a class="pk-btn pk-btn--primary" href="{{ st.send_href }}">{{ btn_icon(st.send_label) }}{{ st.send_label }} <span class="pk-count cmp-count">{{ st.send_count }}</span></a>{% else %}<a class="pk-btn pk-btn--primary cmp-disabled" href="{{ st.send_href }}" aria-disabled="true" tabindex="-1" title="Approve at least one draft first">{{ btn_icon(st.send_label) }}{{ st.send_label }} <span class="pk-count cmp-count">0</span></a>{% endif %}{% endcall %}
     {% endcall %}
   </div>
 
   <p class="campaign-more pk-faint">More: <a href="/crm/send-plan">Send plan</a>, <a href="/scheduled">Scheduled sends</a>, <a href="/enrichment">Enrichment</a></p>
 
   {% if not st.table_first %}{{ drafts_card }}{% endif %}
+  </div>
+
+  {% set fn = campaign_vm.funnel(all_rows) %}
+  <aside class="cmp-rail" aria-label="Campaign status">
+    <section class="pk-card pk-card--flush cmp-funnel" aria-labelledby="funnelHeading">
+      <div class="pk-card__head"><h2 class="pk-card__title" id="funnelHeading">Draft funnel</h2><span class="pk-card__sub">{{ fn.total }} {{ 'draft' if fn.total == 1 else 'drafts' }}</span></div>
+      <div class="pk-card__body">
+        <ul class="pk-bars vz-bars">{% for row in fn.rows %}
+          <li class="pk-bars__row pk-bars__row--{{ row.key }}{{ ' is-low' if fn.empty }}"><span class="pk-bars__label"><span class="{{ row.pill_cls }}">{{ row.label }}</span></span><span class="pk-bars__track"><svg class="vz-bars__svg" viewBox="0 0 100 20" preserveAspectRatio="none" aria-hidden="true" focusable="false"><rect class="vz-bars__rail" x="0" y="0" width="100" height="20"/><line class="vz-bars__tick" x1="25" y1="0" x2="25" y2="20"/><line class="vz-bars__tick" x1="50" y1="0" x2="50" y2="20"/><line class="vz-bars__tick" x1="75" y1="0" x2="75" y2="20"/>{% if row.width > 0 %}<rect class="vz-bars__fill" x="0" y="0" width="{{ [row.width, 0.8]|max }}" height="20"/>{% endif %}</svg></span><span class="pk-bars__val">{{ row.n }}</span></li>{% endfor %}
+        </ul>
+        {% if fn.empty %}<p class="svc-hint">Write drafts to fill this board.</p>{% endif %}
+      </div>
+    </section>
+    {% include '_campaign_readiness.html' %}
+  </aside>
+  </div>
 </div>
 {% endblock %}
-{% block scripts %}<script src="{{ url_for('static', filename='pages/campaign.js') }}?v=20261024-cp1" defer></script>{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='pages/campaign.js') }}?v=20261025-btn1" defer></script>{% endblock %}
