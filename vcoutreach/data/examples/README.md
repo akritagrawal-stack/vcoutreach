@@ -8,5 +8,5 @@ as Ready. Replace it with your own PDF in Settings (Local pitch deck path) befor
 send real email.
 
 Rebuild it from the full deck with `packaging/tools/make_example_deck.py SOURCE_PDF`.
-After a rebuild, repaint the cover headline as "Skip software subscriptions." (same
-typeface and colors) so the example carries no profanity.
+The cover headline stays "F*ck software subscriptions." exactly as in the original deck
+(owner request, 2026-10-26). Do not reword or repaint it.

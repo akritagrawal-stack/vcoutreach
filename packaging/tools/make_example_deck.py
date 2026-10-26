@@ -42,9 +42,9 @@ What it does:
        layer, no link annotations, no metadata and no hidden objects.
 
 Dropped page: 8 (founder bios and personal claims). Layout is that of
-Publik_Pitch_Deck_2026-09-24.pdf. The bundled example's cover headline was
-repainted afterwards to read "Skip software subscriptions." (same typeface and
-colors) so the sample carries no profanity. Edit KEEP_PAGES, COVERS and PATCHES below
+Publik_Pitch_Deck_2026-09-24.pdf. The cover headline "F*ck software
+subscriptions." is kept exactly as in the original (owner request, 2026-10-26).
+Edit KEEP_PAGES, COVERS and PATCHES below
 to process a different deck.
 """
 from __future__ import annotations
