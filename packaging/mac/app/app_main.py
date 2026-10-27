@@ -1,9 +1,17 @@
 """Publikreach macOS entry point. GUI imports stay outside headless helpers."""
 from __future__ import annotations
 
+import os
+import sys
+
+if os.environ.get('PUBLIK_SELF_TEST'):
+    # First thing at startup: before runtime imports, any window, server or TEST mode logic.
+    from vcoutreach import publik_api
+    print(publik_api.self_test())
+    sys.exit(0)
+
 import argparse
 import secrets
-import sys
 import tempfile
 from pathlib import Path
 from urllib.parse import urlsplit

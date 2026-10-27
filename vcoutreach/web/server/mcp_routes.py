@@ -136,11 +136,25 @@ def _write_setting(name: str, value: str) -> None:
 # Publik card state
 # ---------------------------------------------------------------------------
 
-def _publik_key() -> str:
+def _own_publik_key() -> str:
+    """The key the user pasted (workspace .env or environment). Excludes the no-key credential file."""
     try:
         return str(_workspace().value('PUBLIK_API_KEY', '') or '').strip()
     except Exception:
         return ''
+
+
+def _publik_credential() -> dict:
+    """The saved no-key credential (never leaves this module), or an empty dict."""
+    try:
+        from vcoutreach import publik_api
+        return publik_api.read_credential() or {}
+    except Exception:
+        return {}
+
+
+def _publik_key() -> str:
+    return _own_publik_key() or str(_publik_credential().get('key') or '').strip()
 
 
 def publik_state() -> str:
@@ -156,7 +170,10 @@ def publik_card() -> dict:
     state = publik_state()
     return {
         'state': state,
-        'has_key': state == 'connected',
+        'has_key': bool(_own_publik_key()),
+        'publik_api': publik_api_status(),
+        'disclosure': _publik_disclosure(),
+        'has_credential': bool(_publik_credential()),
         'chip_state': 'ok' if state == 'connected' else 'unset',
         'chip_word': {'connected': 'Connected', 'pending': 'Not connected', 'skipped': 'Skipped'}[state],
         'key_url': PUBLIK_KEY_URL,
@@ -166,6 +183,33 @@ def publik_card() -> dict:
 @bp.app_context_processor
 def _inject_publik_card():
     return {'publik_card': publik_card}
+
+
+def _publik_disclosure() -> str:
+    from vcoutreach import publik_api
+    return publik_api.DISCLOSURE
+
+
+def _safe_top_up(url) -> str:
+    """One https link from the provider, or an empty string."""
+    text = str(url or '').strip()
+    return text if text.startswith('https://') and len(text) <= 500 and not any(c.isspace() for c in text) else ''
+
+
+def publik_api_status() -> dict:
+    """{configured, balance_line, claim_url, claim_state, add_credit_url, cost_sentence}. Never the key."""
+    from vcoutreach import publik_api
+    cred = _publik_credential()
+    claim_state = str(cred.get('claim_state') or 'anonymous')
+    micros = cred.get('balance_micros')
+    return {
+        'configured': bool(cred),
+        'balance_line': publik_api.balance_line(micros, claim_state) if cred and isinstance(micros, int) else '',
+        'claim_url': _safe_top_up(cred.get('claim_url')),
+        'claim_state': claim_state if cred else '',
+        'add_credit_url': _safe_top_up(cred.get('add_credit_url')),
+        'cost_sentence': str(cred.get('cost_sentence') or '') if cred else '',
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -405,8 +449,9 @@ def _run_probe(key: str) -> dict:
         return {'ok': True, 'message': PROBE_OK}
     except ProviderAuthError:
         return {'ok': False, 'message': PROBE_AUTH}
-    except ProviderCreditError:
-        return {'ok': False, 'message': PROBE_CREDIT}
+    except ProviderCreditError as exc:
+        # A 402 shows the fixed message plus exactly one top-up link (when the provider sent one).
+        return {'ok': False, 'message': PROBE_CREDIT, 'top_up_url': _safe_top_up(getattr(exc, 'top_up_url', ''))}
     except ProviderRateLimitError:
         return {'ok': False, 'message': PROBE_RATE}
     except ProviderTransportError:
@@ -430,10 +475,40 @@ def publik_test():
         cached = _probe_cache['result']
         if (cached is not None and _probe_cache['fingerprint'] == fingerprint
                 and now - _probe_cache['at'] < PROBE_WINDOW_SECONDS):
-            return jsonify({'ok': cached['ok'], 'message': cached['message'], 'cached': True})
+            return jsonify({'ok': cached['ok'], 'message': cached['message'],
+                            'top_up_url': cached.get('top_up_url', ''), 'cached': True})
         result = _run_probe(key)
         _probe_cache.update(fingerprint=fingerprint, at=time.monotonic(), result=result)
-    return jsonify({'ok': result['ok'], 'message': result['message']})
+    return jsonify({'ok': result['ok'], 'message': result['message'], 'top_up_url': result.get('top_up_url', '')})
+
+
+# ---------------------------------------------------------------------------
+# GET /api/publik/status and POST /api/publik/provision (no-key publik API)
+# ---------------------------------------------------------------------------
+
+PROVISION_FALLBACK = 'Or paste your own publik API key below.'
+PROVISION_NETWORK = 'Could not reach publik to set up this computer.'
+
+
+@bp.get('/api/publik/status')
+def publik_status():
+    status = publik_api_status()
+    return jsonify({k: status[k] for k in ('configured', 'balance_line', 'claim_url', 'claim_state',
+                                           'add_credit_url', 'cost_sentence')})
+
+
+@bp.post('/api/publik/provision')
+def publik_provision():
+    """Set up publik API for this install. The button is the user's consent to DISCLOSURE."""
+    from vcoutreach import publik_api
+    try:
+        publik_api.provision()
+    except RuntimeError as exc:
+        return jsonify({'ok': False, 'message': str(exc), 'hint': PROVISION_FALLBACK}), 200
+    except Exception:
+        return jsonify({'ok': False, 'message': PROVISION_NETWORK, 'hint': PROVISION_FALLBACK}), 200
+    _probe_cache.update(fingerprint=None, at=0.0, result=None)
+    return jsonify(dict(publik_api_status(), ok=True))
 
 
 # ---------------------------------------------------------------------------

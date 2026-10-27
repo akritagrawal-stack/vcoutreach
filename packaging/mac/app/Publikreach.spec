@@ -7,6 +7,13 @@ root = source.parents[2]
 datas = collect_data_files('vcoutreach') + collect_data_files('webview')
 datas += collect_data_files('vcoutreach', includes=['web/scripts/*.py'], include_py_files=True)
 datas += collect_data_files('googleapiclient')
+# The publik app token is committed by design. Bundle it at the bundle root (sys._MEIPASS), where
+# vcoutreach.publik_api._app_token() looks. Absent file: the build still works and provision()
+# raises its readable "no app token" error.
+for _token in (root / 'publik-app-token.txt', root / 'vcoutreach' / 'publik-app-token.txt'):
+    if _token.is_file():
+        datas.append((str(_token), '.'))
+        break
 for distribution in ('pywebview', 'google-auth', 'google-auth-oauthlib', 'google-api-python-client', 'requests', 'certifi'):
     datas += copy_metadata(distribution)
 hidden = collect_submodules('vcoutreach')

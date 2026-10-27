@@ -17,6 +17,28 @@
 
   <p class="svc-hint pk-lead">{% if pk_variant|default("") == "setup" %}Recommended: connect the Publik API for better personalization. It is optional and the built-in default.{% else %}Optional, but recommended for AI drafts: connect the Publik API for better personalization. It is the built-in default.{% endif %} You can instead use your own OpenAI, Anthropic or OpenRouter key, or the free offline template.</p>
 
+
+  {% set nk = pk.publik_api %}
+  <section class="pk-nokey" data-pk-nokey aria-labelledby="pk-nokey-title">
+    <h3 id="pk-nokey-title" class="pk-nokey-title">publik API, no key needed</h3>
+    <p class="svc-hint" data-pk-disclosure>{{ pk.disclosure }}</p>
+    <div class="svc-actions" data-pk-nokey-setup{% if nk.configured %} hidden{% endif %}>
+      <button type="button" class="svc-btn primary" data-pk-provision>{{ icon("zap") }}Set up publik API</button>
+    </div>
+    <div class="pk-nokey-done" data-pk-nokey-done{% if not nk.configured %} hidden{% endif %}>
+      <p class="svc-hint pk-balance" data-pk-balance>{{ nk.balance_line }}</p>
+      <p class="svc-hint pk-cost" data-pk-cost>{{ nk.cost_sentence }}</p>
+      <div class="svc-actions" data-pk-nokey-links>
+        {% if nk.claim_state == 'claimed' and nk.add_credit_url %}
+        <a class="svc-btn primary" href="{{ nk.add_credit_url }}" rel="noopener" target="_blank" data-pk-claim>{{ icon("plus") }}Add a plan or pack</a>
+        {% elif nk.claim_url %}
+        <a class="svc-btn primary" href="{{ nk.claim_url }}" rel="noopener" target="_blank" data-pk-claim>{{ icon("link") }}Sign in with publik</a>
+        {% endif %}
+      </div>
+    </div>
+    <p class="svc-hint pk-note" data-pk-nokey-note role="status" aria-live="polite"></p>
+  </section>
+
   <form class="svc-form pk-form" method="post" action="/api/model-provider/key" data-pk-form>
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <input type="hidden" name="provider" value="publik">
@@ -31,7 +53,7 @@
       <button type="submit" class="svc-btn primary" data-pk-save>{{ icon("save") }}Save key</button>
       <button type="button" class="svc-btn" data-pk-test>{{ icon("check") }} Test</button>
       <a class="svc-btn" href="https://publikhq.com/dashboard/api" rel="noopener" target="_blank">{{ icon("key") }}Get key</a>
-      <button type="submit" class="svc-btn danger" name="action" value="remove" data-pk-remove{% if pk.state != 'connected' %} hidden{% endif %}>{{ icon("trash") }} Remove key</button>
+      <button type="submit" class="svc-btn danger" name="action" value="remove" data-pk-remove{% if not pk.has_key %} hidden{% endif %}>{{ icon("trash") }} Remove key</button>
     </div>
   </form>
 
@@ -49,5 +71,7 @@
   <p class="svc-hint"><strong>What leaves your machine.</strong> For each contact: the recipient's name, org, role and facts, and your name and org. Requests go only to the Publik host you configured.</p>
   </details>
 </article>
+<template id="pkGlyphLink">{{ icon("link") }}</template>
+<template id="pkGlyphPlus">{{ icon("plus") }}</template>
 <template id="pkGlyphEye">{{ icon("eye") }}</template>
 <script src="{{ url_for('static', filename='pages/setup_ai.js') }}?v=20261026-ds1" defer></script>

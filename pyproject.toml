@@ -40,6 +40,7 @@ include = ["vcoutreach*"]
 
 [tool.setuptools.package-data]
 vcoutreach = [
+    "publik-app-token.txt",
     "data/templates/*.txt",
     "data/examples/*",
     "web/schema.sql",

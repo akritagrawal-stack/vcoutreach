@@ -17,6 +17,12 @@
 .pk-card .svc-hint a { color: var(--accent); overflow-wrap: anywhere; }
 .pk-card .pk-note { min-height: 0; }
 .pk-card .pk-note:empty { display: none; }
+.pk-nokey { display: grid; gap: var(--space-2); border: 1px solid var(--border-muted); padding: var(--space-3); }
+.pk-nokey-title { margin: 0; color: var(--text); font-size: var(--fs-13); font-weight: var(--fw-semibold); }
+.pk-nokey-done { display: grid; gap: var(--space-2); }
+.pk-nokey [hidden] { display: none; }
+.pk-balance { color: var(--text); font-weight: var(--fw-semibold); }
+.pk-nokey .svc-actions .svc-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .pk-card .pk-note[data-tone="ok"] { color: var(--success); }
 .pk-card .pk-note[data-tone="fail"] { color: var(--danger); }
 .pk-card .svc-actions .svc-btn { flex: 0 1 auto; }

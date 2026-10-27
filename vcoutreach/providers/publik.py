@@ -1,6 +1,7 @@
 """Publik API provider."""
 from __future__ import annotations
 
+import os
 import random
 import re
 import time
@@ -37,8 +38,26 @@ ALLOWED_MODELS = ("publik-fast", "publik-balanced", "publik-smart", "publik-defa
 
 MISSING_KEY_MESSAGE = (
     "PUBLIK_API_KEY is not set. Create an API key at " + DASHBOARD_URL + " and add PUBLIK_API_KEY=... "
-    "to your .env file, or use --provider template for the free offline mode."
+    "to your .env file, or use --provider template for the free offline mode. "
+    "The Settings page can also set up publik API with no key."
 )
+
+
+def _resolve_key_and_base(settings: "Settings") -> tuple[str, str]:
+    """Key order: settings publik_api_key (own key), PUBLIK_API_KEY env, then the credential file."""
+    raw_key = setting_text(settings, "publik_api_key")
+    base = setting_text(settings, "publik_api_base_url", DEFAULT_BASE_URL)
+    if raw_key:
+        return raw_key, base
+    env_key = os.environ.get("PUBLIK_API_KEY", "").strip()
+    if env_key:
+        return env_key, os.environ.get("PUBLIK_API_BASE_URL", "").strip() or base
+    from vcoutreach import publik_api
+
+    cred = publik_api.read_credential()
+    if cred:
+        return str(cred["key"]).strip(), str(cred.get("base_url") or "").strip() or DEFAULT_BASE_URL
+    return "", base
 
 _PLAIN_INTEGER = re.compile(r"[0-9]{1,30}")
 _META_HEADERS = (
@@ -73,7 +92,7 @@ class PublikProvider(HttpProviderBase):
         sleep: Callable[[float], None] = time.sleep,
         rng: Callable[[], float] = random.random,
     ) -> None:
-        raw_key = setting_text(settings, "publik_api_key")
+        raw_key, base_text = _resolve_key_and_base(settings)
         if not raw_key:
             raise ProviderConfigError(MISSING_KEY_MESSAGE)
         model = setting_text(settings, "publik_model", DEFAULT_MODEL)
@@ -82,7 +101,7 @@ class PublikProvider(HttpProviderBase):
                 f"PUBLIK_MODEL {model!r} is not supported. Use one of: " + ", ".join(ALLOWED_MODELS)
             )
         base = normalize_base_url(
-            setting_text(settings, "publik_api_base_url", DEFAULT_BASE_URL), "PUBLIK_API_BASE_URL"
+            base_text, "PUBLIK_API_BASE_URL"
         )
         super().__init__(
             api_key=clean_api_key(raw_key, "PUBLIK_API_KEY"),

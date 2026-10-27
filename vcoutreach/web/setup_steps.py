@@ -94,7 +94,11 @@ def stored_provider_preference(workspace=None) -> str:
 
 
 def publik_key_configured(workspace=None) -> bool:
-    return bool(_workspace(workspace).value("PUBLIK_API_KEY", "").strip())
+    if _workspace(workspace).value("PUBLIK_API_KEY", "").strip():
+        return True
+    from vcoutreach import publik_api
+
+    return bool(publik_api.read_credential())
 
 
 def publik_recommendation_state(workspace=None) -> str:

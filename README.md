@@ -1050,3 +1050,7 @@ cannot be created or written. Pick another folder with `--out`.
 - Security reports: see [SECURITY.md](SECURITY.md).
 - Third-party notices: see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 - License: [MIT](LICENSE).
+
+## AI with no key (publik API)
+
+Publikreach can draft with publik API without pasting a key. Open Settings (or Set up with AI), find the "publik API, no key needed" card, read the disclosure, and choose "Set up publik API". The app registers this computer with publik, saves a credential in your user config folder (mode 0600), and shows your balance. A new install starts at $0.00; choose "Sign in with publik" to link this computer for $0.05 of free use, and "Add a plan or pack" afterwards to top up. Your prompts go through publik's servers. A key you paste yourself always wins, and you can switch back at any time. Contract: https://publikhq.com/developers.

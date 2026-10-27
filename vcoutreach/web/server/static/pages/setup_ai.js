@@ -281,6 +281,15 @@
             if (chip) chip.textContent = CHIP_WORDS.connected;
           }
           say(note, d.message || d.error || (ok ? 'Connected.' : 'The test did not pass.'), ok ? 'ok' : 'fail');
+          if (!ok && d.top_up_url && String(d.top_up_url).indexOf('https://') === 0) {
+            /* A 402 shows its message plus exactly one top-up link. */
+            var a = document.createElement('a');
+            a.href = d.top_up_url;
+            a.target = '_blank';
+            a.rel = 'noopener';
+            a.textContent = ' Add credit';
+            note.appendChild(a);
+          }
         }, function () {
           say(note, FAIL_NET, 'fail');
         }).then(function () { setBusy(false); });
@@ -312,7 +321,64 @@
     });
   }
 
+  /* ---------- publik API, no key needed ---------- */
+  function glyphClone(id) {
+    var t = document.getElementById(id);
+    return t && t.content ? t.content.cloneNode(true) : null;
+  }
+
+  function claimLink(links, d) {
+    while (links.firstChild) links.removeChild(links.firstChild);
+    var claimed = d.claim_state === 'claimed';
+    var href = claimed ? d.add_credit_url : d.claim_url;
+    if (!href) return;
+    var a = document.createElement('a');
+    a.className = 'svc-btn primary';
+    a.href = href;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    a.setAttribute('data-pk-claim', '');
+    var g = glyphClone(claimed ? 'pkGlyphPlus' : 'pkGlyphLink');
+    if (g) a.appendChild(g);
+    a.appendChild(document.createTextNode(claimed ? 'Add a plan or pack' : 'Sign in with publik'));
+    links.appendChild(a);
+  }
+
+  function wireNoKey() {
+    var box = document.querySelector('[data-pk-nokey]');
+    if (!box) return;
+    var btn = box.querySelector('[data-pk-provision]');
+    var setup = box.querySelector('[data-pk-nokey-setup]');
+    var done = box.querySelector('[data-pk-nokey-done]');
+    var links = box.querySelector('[data-pk-nokey-links]');
+    var balance = box.querySelector('[data-pk-balance]');
+    var cost = box.querySelector('[data-pk-cost]');
+    var note = box.querySelector('[data-pk-nokey-note]');
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+      if (btn.disabled) return;
+      btn.disabled = true;
+      say(note, 'Setting up...');
+      post('/api/publik/provision').then(function (r) {
+        var d = r.data || {};
+        if (!d.ok) {
+          say(note, (d.message || 'publik API could not be set up.') + ' ' + (d.hint || 'Or paste your own publik API key below.'), 'fail');
+          return;
+        }
+        if (balance) balance.textContent = d.balance_line || '';
+        if (cost) cost.textContent = d.cost_sentence || '';
+        if (links) claimLink(links, d);
+        if (setup) setup.hidden = true;
+        if (done) done.hidden = false;
+        say(note, '');
+      }, function () {
+        say(note, FAIL_NET + ' Or paste your own publik API key below.', 'fail');
+      }).then(function () { btn.disabled = false; });
+    });
+  }
+
   function init() {
+    wireNoKey();
     wireCopy();
     wireSelfTest();
     wirePublik();

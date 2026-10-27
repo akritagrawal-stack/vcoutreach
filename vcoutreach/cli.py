@@ -424,6 +424,11 @@ def _error(exc: Exception) -> None:
 
 def main(argv=None) -> int:
     """Run the CLI and return its process exit code."""
+    if os.environ.get("PUBLIK_SELF_TEST"):
+        from vcoutreach import publik_api
+
+        print(publik_api.self_test())
+        raise SystemExit(0)
     parser = _parser()
     try:
         args = parser.parse_args(argv)
