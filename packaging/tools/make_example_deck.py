@@ -30,7 +30,10 @@ What it does:
        "X%", "Y%", "Z%", "W%".
        Pages 5, 6, 7 and 9 have figures covered: the TAM/SAM figures, the
        launch targets, the revenue split and the "cheaper" claim, the raise
-       amount, the runway and the allocation percentages. Page 8 is dropped.
+       amount, the runway and the allocation percentages. Page 8 (the founder
+       profile slide) is kept with its personal info redacted: both photos,
+       both names and every bio bullet are painted over with plain grey
+       blocks and bars. The headline, role titles and role descriptors stay.
        Everything else is shown as is: the "Watch the demo" button (page 4),
        the view count in the page 2 thumbnail and the publikhq.com link
        (page 10). The page 10 "Let's talk" link only shows the words, its
@@ -41,7 +44,8 @@ What it does:
     3. Writes a new PDF whose pages are only images. The result has no text
        layer, no link annotations, no metadata and no hidden objects.
 
-Dropped page: 8 (founder bios and personal claims). Layout is that of
+The founder profile slide (page 8) is kept, fully redacted (owner request,
+2026-10-28). Layout is that of
 Publik_Pitch_Deck_2026-09-24.pdf. The cover headline "F*ck software
 subscriptions." is kept exactly as in the original (owner request, 2026-10-26).
 Edit KEEP_PAGES, COVERS and PATCHES below
@@ -60,7 +64,7 @@ from pathlib import Path
 DPI = 130
 PAGE_W_PT = 1152.0
 PAGE_H_PT = 648.0
-KEEP_PAGES = [1, 2, 3, 4, 5, 6, 7, 9, 10]
+KEEP_PAGES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
 # Cover rectangles per source page, in raster pixels at DPI (origin top left):
 # (x0, y0, x1, y1, (r, g, b) fill with each channel 0..1).
@@ -79,6 +83,32 @@ def box60(x0, y0, x1, y1, fill=WHITE):
 def pad60(x0, y0, x1, y1, fill=WHITE):
     """box60 with PAD60 added on every side (inputs are tight 60 dpi boxes)."""
     return box60(x0 - PAD60, y0 - PAD60, x1 + PAD60, y1 + PAD60, fill)
+
+
+def px2000(x0, y0, x1, y1, fill=WHITE):
+    """Box measured on a 2000x1125 preview, converted to DPI pixels."""
+    s = (PAGE_W_PT * DPI / 72.0) / 2000.0
+    return (round(x0 * s), round(y0 * s), round(x1 * s), round(y1 * s), fill)
+
+
+def founder_covers():
+    """Page 8: grey photo blocks, name bars and bullet bars (all info gone)."""
+    out = []
+    for x in (84, 1038):  # photo, then a name bar on a clean white strip
+        out.append(px2000(x - 6, 209, x + 182, 437, GREY))
+        nx = x + 206
+        out.append(px2000(nx - 6, 212, nx + 370, 288))
+        out.append(px2000(nx, 236, nx + 250, 272, GREY))
+    # Bullets: keep the dot, replace the text with one grey bar per line.
+    left = [(480, 760), (552, 560), (624, 745), (696, 640), (768, 660),
+            (841, 440)]
+    right = [(480, 520), (552, 640), (624, 520), (696, 690), (768, 740),
+             (814, 200), (885, 760)]
+    for x, rows in ((84, left), (1038, right)):
+        for cy, w in rows:
+            out.append(px2000(x + 28, cy - 30, x + 880, cy + 30))
+            out.append(px2000(x + 30, cy - 15, x + 30 + w, cy + 15, GREY))
+    return out
 
 
 COVERS = {
@@ -108,6 +138,7 @@ _NEW_COVERS = {
     9: [pad60(40, 148, 220, 205), pad60(36, 222, 130, 243),
         pad60(40, 342, 78, 445), pad60(40, 318, 253, 328)],
 }
+_NEW_COVERS[8] = founder_covers()
 for _page, _boxes in _NEW_COVERS.items():
     COVERS.setdefault(_page, []).extend(_boxes)
 

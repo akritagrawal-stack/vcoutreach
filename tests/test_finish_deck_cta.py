@@ -551,10 +551,10 @@ def pdf_text() -> str:
         pytest.skip("neither pdftotext nor pypdf is available")
 
 
-def test_example_deck_is_a_real_pdf_with_nine_pages():
+def test_example_deck_is_a_real_pdf_with_ten_pages():
     assert EXAMPLE_DECK.is_file(), EXAMPLE_DECK
     assert EXAMPLE_DECK.read_bytes().startswith(b"%PDF-")
-    assert pdf_page_count() == 9
+    assert pdf_page_count() == 10
 
 
 def _old_deck_md5s():
@@ -566,13 +566,15 @@ def test_example_deck_is_the_new_image_only_deck_not_the_old_one():
     """The example deck is image-only on purpose (redaction is burned into the pixels), so no text is
     extractable. Check page count and that it is not the known older bundled deck."""
     import hashlib
-    assert pdf_page_count() == 9
+    assert pdf_page_count() == 10
     digest = hashlib.md5(EXAMPLE_DECK.read_bytes()).hexdigest()
     assert digest not in _old_deck_md5s(), "bundled example deck is still the old known deck"
+    # The previous 9 page build (no redacted founder profile slide) must stay listed so stale copies refresh.
+    assert "30589ce65165e964b296cbc057e5ffab" in _old_deck_md5s()
 
 
 def test_example_deck_pixels_show_placeholders_not_real_numbers(tmp_path):
-    """OCR the TAM page (5) and the raise page (8); skipped when OCR tooling is absent."""
+    """OCR the TAM page (5) and the raise page (9); skipped when OCR tooling is absent."""
     if not shutil.which("pdftoppm"):
         pytest.skip("pdftoppm is not on PATH, cannot render deck pages for OCR")
     if not shutil.which("tesseract"):
@@ -591,10 +593,10 @@ def test_example_deck_pixels_show_placeholders_not_real_numbers(tmp_path):
         out = subprocess.run(["tesseract", str(png), "-"], capture_output=True, text=True, timeout=120)
         return " ".join(out.stdout.split())
 
-    page5, page8 = ocr(5), ocr(8)
+    page5, page9 = ocr(5), ocr(9)
     assert "TAM" in page5 and "SAM" in page5, page5
-    assert "Raising" in page8, page8
-    combined = page5 + " " + page8
+    assert "Raising" in page9, page9
+    combined = page5 + " " + page9
     assert re.search(r"\b[XY]\b", combined), "placeholders X or Y must be visible in the deck pixels"
     assert "25M+" not in combined
 
