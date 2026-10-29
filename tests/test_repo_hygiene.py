@@ -239,19 +239,74 @@ def engine_files(root: Path):
         yield path
 
 
+# One narrow, explicit exemption. vcoutreach/publik_api.py builds the documented per-user location where the Publik SDK
+# keeps THIS app's own install credential (macOS Application Support, Windows LOCALAPPDATA, Linux XDG config). That is a
+# public, documented path convention, not an owner-private path, third-party data or an OS credential store. So that one
+# file may trip these two location labels and nothing else: every other rule still applies to it, and no other file is
+# exempt. Do not add files or labels here without a spec change.
+PACKAGE_EXEMPTIONS = {
+    "vcoutreach/publik_api.py": frozenset({"path under a user Library folder", "per-user application data folder"}),
+}
+
+
+def package_offender_labels(rel: str, text: str) -> list[str]:
+    """Labels of every engine rule that `text` (the content of the engine file at repo-relative `rel`) breaks."""
+    names = {label: re.compile(r"\b" + re.escape(word) + r"\b", re.I) for label, word in PRIVATE_DATA_NAMES.items()}
+    exempt = PACKAGE_EXEMPTIONS.get(rel, frozenset())
+    return [label for label, pattern in {**PACKAGE_FORBIDDEN, **names}.items()
+            if label not in exempt and pattern.search(text)]
+
+
 def test_package_source_has_no_private_paths_third_party_data_ties_or_credential_store_access(root):
     """The strict engine rule: it applies to the engine package only. The bundled web app has its own rules below."""
-    names = {label: re.compile(r"\b" + re.escape(word) + r"\b", re.I) for label, word in PRIVATE_DATA_NAMES.items()}
     offenders = []
     for path in engine_files(root):
+        rel = path.relative_to(root).as_posix()
         if path.suffix.lower() in PACKAGE_FORBIDDEN_SUFFIXES or path.name.endswith(("-wal", "-shm")):
-            offenders.append(f"{path.relative_to(root)} (private data file)")
+            offenders.append(f"{rel} (private data file)")
             continue
         text = path.read_text(encoding="utf-8", errors="ignore")
-        for label, pattern in {**PACKAGE_FORBIDDEN, **names}.items():
-            if pattern.search(text):
-                offenders.append(f"{path.relative_to(root)} ({label})")
+        for label in package_offender_labels(rel, text):
+            offenders.append(f"{rel} ({label})")
     assert not offenders, ", ".join(offenders)
+
+
+def test_the_credential_location_exemption_is_one_file_and_two_labels_and_not_stale(root):
+    assert set(PACKAGE_EXEMPTIONS) == {"vcoutreach/publik_api.py"}
+    assert PACKAGE_EXEMPTIONS["vcoutreach/publik_api.py"] == {"path under a user Library folder",
+                                                              "per-user application data folder"}
+    assert set(PACKAGE_EXEMPTIONS["vcoutreach/publik_api.py"]) <= set(PACKAGE_FORBIDDEN)
+    # Not stale: the exempt file really does trip exactly those labels without the exemption.
+    text = (root / "vcoutreach" / "publik_api.py").read_text(encoding="utf-8")
+    raw = {label for label, pattern in PACKAGE_FORBIDDEN.items() if pattern.search(text)}
+    assert raw == set(PACKAGE_EXEMPTIONS["vcoutreach/publik_api.py"])
+
+
+def test_the_exempt_file_still_passes_every_other_rule(root):
+    text = (root / "vcoutreach" / "publik_api.py").read_text(encoding="utf-8")
+    assert package_offender_labels("vcoutreach/publik_api.py", text) == []
+    # Every non-exempt rule still bites inside the exempt file.
+    for label, sample in {
+        "private home path": "p = '" + "/Us" + "ers/someone/x'",
+        "windows user profile path": "p = 'C:" + "\\Us" + "ers\\someone'",
+        "OS credential store access": "import " + "key" + "chain",
+        "credential store command line": "security find-generic-" + "password -s x",
+        "embedded database": "import " + "sqlite3",
+        "third-party data vendor A": PRIVATE_DATA_NAMES["third-party data vendor A"],
+        "third-party data vendor B": PRIVATE_DATA_NAMES["third-party data vendor B"],
+    }.items():
+        assert label in package_offender_labels("vcoutreach/publik_api.py", text + "\n" + sample), label
+
+
+def test_the_credential_location_exemption_applies_to_no_other_file():
+    for sample in ("base = Path.home() / 'Library' / 'Application Support'", "~/Library/Application Support/x",
+                   "C:/Users/x/AppData/Local", "AppData/Local"):
+        for rel in ("vcoutreach/config.py", "vcoutreach/send/gmail.py", "vcoutreach/publik_api_extra.py",
+                    "vcoutreach/other/publik_api.py", "vcoutreach/mcp/server.py"):
+            labels = package_offender_labels(rel, sample)
+            assert labels, (rel, sample)
+    both = package_offender_labels("vcoutreach/config.py", "~/Library/Application Support/x")
+    assert {"path under a user Library folder", "per-user application data folder"} <= set(both)
 
 
 # ----- the bundled web app (vcoutreach/web/) and the tracking worker (tracking_worker/) ---------------------------------
