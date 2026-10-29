@@ -23,8 +23,18 @@ from web_gap_helpers import (
 LIVE_ONE = "SCHEDULE LIVE FOR 1"
 
 
+def asked_wall_time(in_seconds: float) -> dt.datetime:
+    """The local wall-clock time (what the form's date and time inputs hold) of the instant `in_seconds` from now.
+
+    The instant is added in real elapsed seconds and only then shown as wall-clock time, so a window that crosses a
+    daylight-saving change still means "in_seconds from now" (adding the seconds to a naive local clock would not).
+    """
+    instant = dt.datetime.now(dt.timezone.utc) + dt.timedelta(seconds=in_seconds)
+    return instant.astimezone().replace(tzinfo=None, microsecond=0)
+
+
 def schedule(w: Web, slugs, mode: str, phrase: str, in_seconds: float = 300):
-    when = dt.datetime.now() + dt.timedelta(seconds=in_seconds)
+    when = asked_wall_time(in_seconds)
     ids = [draft_row_id(w, s) for s in slugs]
     return w.post("/schedule-send", schedule_form(ids, when, mode, phrase), follow=True)
 
@@ -125,6 +135,7 @@ def test_a_run_time_61_seconds_or_more_ahead_is_accepted(make_web, mode, seconds
     when = dt.datetime.fromisoformat(rows[0]["scheduled_for"])
     ahead = (when - dt.datetime.now(dt.timezone.utc)).total_seconds()
     assert seconds - 5 <= ahead <= seconds + 5, f"stored time is {ahead:.0f}s ahead, asked for {seconds}s"
+    assert when.utcoffset() == dt.timedelta(0), "the stored run time is a UTC instant"
 
 
 def test_a_schedule_with_an_unreadable_date_or_unknown_mode_creates_no_row(make_web):
