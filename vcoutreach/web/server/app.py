@@ -515,9 +515,10 @@ def first_run_next_step(app) -> dict | None:
 _SERVICE_MARKS = {'pitchbook': 'Pb', 'apollo': 'Ap', 'enrow': 'En', 'gemini': 'Ge', 'openai': 'Oa', 'anthropic': 'An', 'openrouter': 'Or', 'tracking': 'Tr'}
 
 FAVICON_SVG = (
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">'
-    '<rect width="32" height="32" rx="7" fill="#17181a"/>'
-    '<path d="M11 8h6.5a5.5 5.5 0 0 1 0 11H15v5h-4z M15 12v3.5h2.3a1.75 1.75 0 0 0 0-3.5z" fill="#f6f6f3" fill-rule="evenodd"/>'
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">'
+    '<rect width="64" height="64" rx="14" fill="#4256e8"/>'
+    '<path d="M14 20H27A11 11 0 0 1 27 42H22V52H14Z M22 27H27A4 4 0 0 1 27 35H22Z" fill="#f7f8ff" fill-rule="evenodd"/>'
+    '<path d="M29.95 14.26A17 17 0 0 1 43.74 28.05M31 8.35A23 23 0 0 1 49.65 27.01" fill="none" stroke="#aab8ff" stroke-width="3.5" stroke-linecap="round"/>'
     '</svg>'
 )
 _TRACKING_URL_NAMES = ('TRACKING_WORKER_URL', 'CLOUDFLARE_TRACKING_URL', 'TRACKER_PUBLIC_URL', 'TRACKING_ORIGIN')

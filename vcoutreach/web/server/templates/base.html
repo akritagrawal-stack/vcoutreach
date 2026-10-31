@@ -7,7 +7,7 @@
 <meta name="color-scheme" content="light dark">
 <link rel="icon" type="image/svg+xml" href="/favicon.ico">
 <title>{% block title %}{{ g_workspace.workspace_name }}{% endblock %} | Publikreach</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=20261026-deslop1">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=20261026-brand1">
 <link rel="stylesheet" href="{{ url_for('static', filename='pages/components.css') }}?v=20261026-deslop1">
 <link rel="stylesheet" href="{{ url_for('static', filename='pages/analytics.css') }}?v=20261026-deslop1">
 <link rel="stylesheet" href="{{ url_for('static', filename='pages/visuals.css') }}?v=20261026-deslop1">
@@ -61,7 +61,11 @@
 <nav class="nav" aria-label="Primary">
   <div class="nav-inner">
     <a class="nav-brand" href="/">
-      <span class="logo-mark" aria-hidden="true">P</span>
+      <span class="logo-mark" aria-hidden="true"><svg class="logo-svg" viewBox="0 0 64 64" focusable="false">
+        <rect class="logo-tile" width="64" height="64" rx="14"/>
+        <path class="logo-glyph" fill-rule="evenodd" d="M14 20H27A11 11 0 0 1 27 42H22V52H14Z M22 27H27A4 4 0 0 1 27 35H22Z"/>
+        <path class="logo-ping" fill="none" stroke-width="3.5" stroke-linecap="round" d="M29.95 14.26A17 17 0 0 1 43.74 28.05M31 8.35A23 23 0 0 1 49.65 27.01"/>
+      </svg></span>
       <span class="brand-word">Publikreach</span>
     </a>
 

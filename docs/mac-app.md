@@ -1,6 +1,6 @@
 # Publikreach.app
 
-The end-user deliverable is `dist/Publikreach.dmg`. Or open it, drag **Publikreach.app** onto **Applications**, eject the image, and double-click the app. The target Mac needs no Python installation. This is a native Cocoa WKWebView window hosting the existing Flask application, with a bundled Python runtime, Flask and Gmail libraries. The source checkout does not contain a prebuilt release or promise an available download.
+The end-user deliverable is `dist/Publikreach.dmg`. Or open it, drag **Publikreach.app** onto **Applications**, eject the image, and double-click the app. The target Mac needs no Python installation. This is a native Cocoa WKWebView window hosting the existing Flask application, with a bundled Python runtime, Flask and Gmail libraries. The source checkout does not contain a prebuilt binary; the DMG is published on the GitHub Releases page as `Publikreach-0.1.0-mac-arm64.dmg`, with `Publikreach.dmg` kept for the curl installer.
 
 Apple Silicon (arm64) only. The bundle declares macOS 12.0 as its minimum and supports high resolution displays. Actual macOS 12 compatibility still requires a run on that OS: the build host's Python and binary wheels must also support it. Intel Macs are not supported by this build.
 
