@@ -2,6 +2,10 @@
 
 The Mac distribution is **Publikreach.dmg**, containing **Publikreach.app** for Apple Silicon (arm64), with macOS 12 or later declared as the minimum. The app bundles Python, Flask and the Gmail libraries and opens its own native WKWebView window. No Python installation or Terminal launcher is needed on the target Mac. The DMG is published on the GitHub Releases page as `Publikreach-0.1.0-mac-arm64.dmg`, with `Publikreach.dmg` kept for the curl installer; to build it yourself, see [build the app and DMG](packaging/mac/README.md).
 
+![Publikreach demo: from contacts to a reviewed draft, in test mode](docs/media/demo.gif)
+
+The demo uses fictional sample contacts and runs in TEST mode, so nothing is sent.
+
 The app stores `.env`, `data/`, `drafts/` and `outputs/` in `~/Documents/Publikreach`. Every launch starts in TEST mode. Closing its window quits the local server. Keep this workspace when replacing the app to update it.
 
 ## Install
